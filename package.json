@@ -1,0 +1,34 @@
+{
+  "name": "ai-agent-trpg-gm",
+  "version": "1.0.0",
+  "description": "AI-powered TRPG campaign management and game master assistance tool",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "build:frontend": "turbo run build --filter=frontend",
+    "build:proxy": "turbo run build --filter=proxy-server",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "test:e2e": "cd apps/frontend && pnpm playwright test",
+    "test:e2e:ui": "cd apps/frontend && pnpm playwright test --ui",
+    "test:trpg-session": "cd apps/frontend && pnpm playwright test e2e/pages/trpg-session-page.spec.ts",
+    "test:ai-enhanced": "cd apps/frontend && pnpm playwright test e2e/ai-enhanced/",
+    "storybook": "cd apps/frontend && pnpm storybook",
+    "build-storybook": "cd apps/frontend && pnpm build-storybook",
+    "clean": "turbo run clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "turbo": "^1.10.12",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "packageManager": "pnpm@8.6.2"
+}

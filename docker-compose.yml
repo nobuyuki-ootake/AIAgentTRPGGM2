@@ -1,0 +1,40 @@
+services:
+  proxy-server-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.proxy-server
+    container_name: aiagenttrpggm-proxy-server-dev-1
+    volumes:
+      - ./apps/proxy-server/src:/app/apps/proxy-server/src
+      - ./packages/types:/app/packages/types
+      - ./apps/proxy-server/data:/app/apps/proxy-server/data
+    ports:
+      - "4001:4001"
+    environment:
+      - NODE_ENV=development
+      - PORT=4001
+      - DATABASE_PATH=/app/apps/proxy-server/data/trpg.db
+    networks:
+      - trpg-dev
+
+  frontend-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: aiagenttrpggm-frontend-dev-1
+    volumes:
+      - ./apps/frontend/src:/app/apps/frontend/src
+      - ./packages/types:/app/packages/types
+    ports:
+      - "5173:5173"
+    environment:
+      - NODE_ENV=development
+      - VITE_API_BASE_URL=http://localhost:4001/api
+    depends_on:
+      - proxy-server-dev
+    networks:
+      - trpg-dev
+
+networks:
+  trpg-dev:
+    driver: bridge
