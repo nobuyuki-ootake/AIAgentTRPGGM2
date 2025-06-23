@@ -1,7 +1,7 @@
 import { Router } from 'express';
-import { SessionState, APIResponse } from '@ai-agent-trpg/types';
-import { sessionService } from '../services/sessionService';
-import { socketService } from '../services/socketService';
+import { SessionState, APIResponse, SessionDurationConfig } from '@ai-agent-trpg/types';
+import { getSessionService } from '../services/sessionService';
+import { getTimeManagementService } from '../services/timeManagementService';
 import { asyncHandler, ValidationError, NotFoundError } from '../middleware/errorHandler';
 
 export const sessionRouter = Router();
@@ -14,7 +14,7 @@ sessionRouter.get('/', asyncHandler(async (req, res) => {
     throw new ValidationError('Campaign ID is required');
   }
 
-  const sessions = await sessionService.getSessionsByCampaign(campaignId);
+  const sessions = await getSessionService().getSessionsByCampaign(campaignId);
 
   const response: APIResponse<SessionState[]> = {
     success: true,
@@ -29,7 +29,7 @@ sessionRouter.get('/', asyncHandler(async (req, res) => {
 sessionRouter.get('/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  const session = await sessionService.getSessionById(id);
+  const session = await getSessionService().getSessionById(id);
 
   if (!session) {
     throw new NotFoundError('Session', id);
@@ -52,7 +52,7 @@ sessionRouter.post('/', asyncHandler(async (req, res) => {
     throw new ValidationError('Campaign ID is required');
   }
 
-  const session = await sessionService.createSession(sessionData);
+  const session = await getSessionService().createSession(sessionData);
 
   const response: APIResponse<SessionState> = {
     success: true,
@@ -66,16 +66,31 @@ sessionRouter.post('/', asyncHandler(async (req, res) => {
 // セッション状態更新
 sessionRouter.patch('/:id/status', asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { status } = req.body;
+  const { status, timeConfig } = req.body;
 
   if (!status) {
     throw new ValidationError('Status is required');
   }
 
-  const session = await sessionService.updateSessionStatus(id, status);
+  const session = await getSessionService().updateSessionStatus(id, status);
 
   if (!session) {
     throw new NotFoundError('Session', id);
+  }
+
+  // セッション開始時に時間管理システムを初期化
+  if (status === 'active' && timeConfig) {
+    try {
+      await getTimeManagementService().initializeTurnState(
+        session.id,
+        session.campaignId,
+        timeConfig as SessionDurationConfig
+      );
+      console.log('時間管理システムを初期化しました:', timeConfig);
+    } catch (error) {
+      console.error('時間管理システムの初期化に失敗しました:', error);
+      // エラーが発生してもセッション開始は継続
+    }
   }
 
   const response: APIResponse<SessionState> = {
@@ -96,7 +111,7 @@ sessionRouter.post('/:id/chat', asyncHandler(async (req, res) => {
     throw new ValidationError('Speaker and message are required');
   }
 
-  const session = await sessionService.addChatMessage(id, messageData);
+  const session = await getSessionService().addChatMessage(id, messageData);
 
   if (!session) {
     throw new NotFoundError('Session', id);
@@ -120,34 +135,13 @@ sessionRouter.post('/:id/dice-roll', asyncHandler(async (req, res) => {
     throw new ValidationError('Roller and dice are required');
   }
 
-  const session = await sessionService.addDiceRoll(id, diceData);
+  const session = await getSessionService().addDiceRoll(id, diceData);
 
   if (!session) {
     throw new NotFoundError('Session', id);
   }
 
-  // WebSocket companion reaction analysis
-  try {
-    const companions = await sessionService.getSessionCompanions(id);
-    const rollResult = session.diceRolls[session.diceRolls.length - 1];
-    
-    await socketService.analyzeAndReact(
-      id,
-      {
-        type: 'dice_roll',
-        result: rollResult.success ? 'success' : 'failure',
-        content: `${diceData.dice} rolled: ${rollResult.total}`,
-      },
-      {
-        recentEvents: session.chatMessages.slice(-5).map(m => m.content),
-        sessionMode: session.combatState?.isActive ? 'combat' : 'exploration',
-        dangerLevel: 'medium'
-      },
-      companions
-    );
-  } catch (error) {
-    console.warn('Companion reaction failed:', error);
-  }
+  // Note: Companion reaction system temporarily disabled
 
   const response: APIResponse<SessionState> = {
     success: true,
@@ -167,7 +161,7 @@ sessionRouter.post('/:id/combat/start', asyncHandler(async (req, res) => {
     throw new ValidationError('Participants array is required');
   }
 
-  const session = await sessionService.startCombat(id, participants);
+  const session = await getSessionService().startCombat(id, participants);
 
   if (!session) {
     throw new NotFoundError('Session', id);
@@ -186,7 +180,7 @@ sessionRouter.post('/:id/combat/start', asyncHandler(async (req, res) => {
 sessionRouter.post('/:id/combat/end', asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  const session = await sessionService.endCombat(id);
+  const session = await getSessionService().endCombat(id);
 
   if (!session) {
     throw new NotFoundError('Session', id);
@@ -195,6 +189,118 @@ sessionRouter.post('/:id/combat/end', asyncHandler(async (req, res) => {
   const response: APIResponse<SessionState> = {
     success: true,
     data: session,
+    timestamp: new Date().toISOString(),
+  };
+
+  res.json(response);
+}));
+
+// 時間管理関連エンドポイント
+
+// アクション実行
+sessionRouter.post('/:id/time-management/action', asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { characterId, description, metadata = {} } = req.body;
+
+  if (!characterId || !description) {
+    throw new ValidationError('Character ID and description are required');
+  }
+
+  const session = await getSessionService().getSessionById(id);
+  if (!session) {
+    throw new NotFoundError('Session', id);
+  }
+
+  const result = await getTimeManagementService().executeAction(
+    session.campaignId,
+    characterId,
+    description,
+    metadata
+  );
+
+  const response: APIResponse<typeof result> = {
+    success: true,
+    data: result,
+    timestamp: new Date().toISOString(),
+  };
+
+  res.json(response);
+}));
+
+// 時間進行
+sessionRouter.post('/:id/time-management/advance', asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const session = await getSessionService().getSessionById(id);
+  if (!session) {
+    throw new NotFoundError('Session', id);
+  }
+
+  const result = await getTimeManagementService().advanceTime(session.campaignId);
+
+  const response: APIResponse<typeof result> = {
+    success: true,
+    data: result,
+    timestamp: new Date().toISOString(),
+  };
+
+  res.json(response);
+}));
+
+// 休息実行
+sessionRouter.post('/:id/time-management/rest', asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const session = await getSessionService().getSessionById(id);
+  if (!session) {
+    throw new NotFoundError('Session', id);
+  }
+
+  const result = await getTimeManagementService().takeRest(session.campaignId);
+
+  const response: APIResponse<typeof result> = {
+    success: true,
+    data: result,
+    timestamp: new Date().toISOString(),
+  };
+
+  res.json(response);
+}));
+
+// ターン状態取得
+sessionRouter.get('/:id/time-management/turn-state', asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const session = await getSessionService().getSessionById(id);
+  if (!session) {
+    throw new NotFoundError('Session', id);
+  }
+
+  const turnState = await getTimeManagementService().getTurnStateByCompaign(session.campaignId);
+
+  const response: APIResponse<typeof turnState> = {
+    success: true,
+    data: turnState,
+    timestamp: new Date().toISOString(),
+  };
+
+  res.json(response);
+}));
+
+// 現在の日取得
+sessionRouter.get('/:id/time-management/current-day', asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const session = await getSessionService().getSessionById(id);
+  if (!session) {
+    throw new NotFoundError('Session', id);
+  }
+
+  const currentDay = await getTimeManagementService().getCurrentGameDay(session.campaignId);
+
+  const response: APIResponse<typeof currentDay> = {
+    success: true,
+    data: currentDay,
     timestamp: new Date().toISOString(),
   };
 

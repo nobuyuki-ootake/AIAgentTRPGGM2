@@ -349,6 +349,60 @@ async function createTables(): Promise<void> {
       tone TEXT,
       FOREIGN KEY (conversation_id) REFERENCES conversations (id) ON DELETE CASCADE,
       FOREIGN KEY (speaker_id) REFERENCES characters (id) ON DELETE CASCADE
+    )`,
+
+    // ターン状態管理テーブル
+    `CREATE TABLE IF NOT EXISTS turn_states (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      campaign_id TEXT NOT NULL,
+      current_day INTEGER NOT NULL DEFAULT 1,
+      max_days INTEGER NOT NULL DEFAULT 30,
+      current_phase TEXT NOT NULL DEFAULT 'planning',
+      active_character_id TEXT,
+      turn_order TEXT NOT NULL DEFAULT '[]', -- JSON array
+      phase_start_time TEXT NOT NULL,
+      settings TEXT NOT NULL, -- JSON
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE CASCADE,
+      FOREIGN KEY (campaign_id) REFERENCES campaigns (id) ON DELETE CASCADE,
+      FOREIGN KEY (active_character_id) REFERENCES characters (id)
+    )`,
+
+    // ゲーム内日数管理テーブル
+    `CREATE TABLE IF NOT EXISTS game_days (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      campaign_id TEXT NOT NULL,
+      day_number INTEGER NOT NULL,
+      current_period TEXT NOT NULL,
+      remaining_actions INTEGER NOT NULL DEFAULT 0,
+      events TEXT NOT NULL DEFAULT '[]', -- JSON array
+      status TEXT NOT NULL DEFAULT 'active',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE CASCADE,
+      FOREIGN KEY (campaign_id) REFERENCES campaigns (id) ON DELETE CASCADE
+    )`,
+
+    // 日次イベント管理テーブル
+    `CREATE TABLE IF NOT EXISTS day_events (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      game_day_id TEXT NOT NULL,
+      day_number INTEGER NOT NULL,
+      period TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      character_ids TEXT DEFAULT '[]', -- JSON array
+      outcome TEXT,
+      metadata TEXT DEFAULT '{}', -- JSON
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE CASCADE,
+      FOREIGN KEY (game_day_id) REFERENCES game_days (id) ON DELETE CASCADE
     )`
   ];
 

@@ -51,6 +51,22 @@ class CharacterService {
       throw new ValidationError('Name, character type, and campaign ID are required');
     }
 
+    // Check if campaign exists, if not, use the most recent valid campaign
+    const db = getDatabase();
+    const campaignExists = db.prepare('SELECT id FROM campaigns WHERE id = ?').get(characterData.campaignId);
+    
+    if (!campaignExists) {
+      // Get the most recent campaign as fallback
+      const latestCampaign = db.prepare('SELECT id FROM campaigns ORDER BY created_at DESC LIMIT 1').get() as { id: string } | undefined;
+      
+      if (latestCampaign) {
+        logger.warn(`Campaign ${characterData.campaignId} not found, using latest campaign ${latestCampaign.id} instead`);
+        characterData.campaignId = latestCampaign.id;
+      } else {
+        throw new ValidationError(`Campaign ${characterData.campaignId} does not exist and no fallback campaign available`);
+      }
+    }
+
     const now = new Date().toISOString();
     const baseCharacter = {
       id: uuidv4(),
@@ -58,7 +74,7 @@ class CharacterService {
       description: characterData.description || '',
       age: characterData.age || 25,
       race: characterData.race || 'Human',
-      class: characterData.class || 'Fighter',
+      characterClass: characterData.characterClass || 'Fighter',
       level: characterData.level || 1,
       experience: characterData.experience || 0,
       baseStats: characterData.baseStats || DEFAULT_BASE_STATS,
@@ -253,7 +269,7 @@ class CharacterService {
           character.description,
           character.age,
           character.race,
-          character.class,
+          character.characterClass,
           character.level,
           character.experience,
           JSON.stringify(character.baseStats),
@@ -311,7 +327,7 @@ class CharacterService {
         updatedCharacter.description,
         updatedCharacter.age,
         updatedCharacter.race,
-        updatedCharacter.class,
+        updatedCharacter.characterClass,
         updatedCharacter.level,
         updatedCharacter.experience,
         JSON.stringify(updatedCharacter.baseStats),
@@ -402,7 +418,7 @@ class CharacterService {
       description: row.description,
       age: row.age,
       race: row.race,
-      class: row.class,
+      characterClass: row.class,
       level: row.level,
       experience: row.experience,
       baseStats: JSON.parse(row.base_stats),
@@ -413,6 +429,8 @@ class CharacterService {
       statusEffects: JSON.parse(row.status_effects),
       appearance: JSON.parse(row.appearance),
       background: JSON.parse(row.background),
+      currentLocationId: row.current_location_id,
+      locationHistory: JSON.parse(row.location_history || '[]'),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
@@ -472,4 +490,11 @@ class CharacterService {
   }
 }
 
-export const characterService = new CharacterService();
+// Lazy initialization to avoid early instantiation
+let _characterService: CharacterService | null = null;
+export function getCharacterService(): CharacterService {
+  if (!_characterService) {
+    _characterService = new CharacterService();
+  }
+  return _characterService;
+}

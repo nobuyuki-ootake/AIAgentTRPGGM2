@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { TRPGCampaign, APIResponse, PaginatedResponse } from '@ai-agent-trpg/types';
-import { campaignService } from '../services/campaignService';
+import { getCampaignService } from '../services/campaignService';
 import { asyncHandler, ValidationError, NotFoundError } from '../middleware/errorHandler';
 
 export const campaignRouter = Router();
@@ -12,7 +12,7 @@ campaignRouter.get('/', asyncHandler(async (req, res) => {
   const status = req.query.status as string;
   const search = req.query.search as string;
 
-  const campaigns = await campaignService.getCampaigns({
+  const campaigns = await getCampaignService().getCampaigns({
     page,
     limit,
     status,
@@ -36,7 +36,7 @@ campaignRouter.get('/:id', asyncHandler(async (req, res) => {
     throw new ValidationError('Campaign ID is required');
   }
 
-  const campaign = await campaignService.getCampaignById(id);
+  const campaign = await getCampaignService().getCampaignById(id);
 
   if (!campaign) {
     throw new NotFoundError('Campaign', id);
@@ -59,7 +59,7 @@ campaignRouter.post('/', asyncHandler(async (req, res) => {
     throw new ValidationError('Campaign name and settings are required');
   }
 
-  const campaign = await campaignService.createCampaign(campaignData);
+  const campaign = await getCampaignService().createCampaign(campaignData);
 
   const response: APIResponse<TRPGCampaign> = {
     success: true,
@@ -79,7 +79,7 @@ campaignRouter.put('/:id', asyncHandler(async (req, res) => {
     throw new ValidationError('Campaign ID is required');
   }
 
-  const campaign = await campaignService.updateCampaign(id, updateData);
+  const campaign = await getCampaignService().updateCampaign(id, updateData);
 
   if (!campaign) {
     throw new NotFoundError('Campaign', id);
@@ -102,7 +102,7 @@ campaignRouter.delete('/:id', asyncHandler(async (req, res) => {
     throw new ValidationError('Campaign ID is required');
   }
 
-  const deleted = await campaignService.deleteCampaign(id);
+  const deleted = await getCampaignService().deleteCampaign(id);
 
   if (!deleted) {
     throw new NotFoundError('Campaign', id);
@@ -126,7 +126,7 @@ campaignRouter.patch('/:id/status', asyncHandler(async (req, res) => {
     throw new ValidationError('Campaign ID and status are required');
   }
 
-  const campaign = await campaignService.updateCampaignStatus(id, status);
+  const campaign = await getCampaignService().updateCampaignStatus(id, status);
 
   if (!campaign) {
     throw new NotFoundError('Campaign', id);

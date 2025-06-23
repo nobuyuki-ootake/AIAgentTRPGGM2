@@ -4,6 +4,7 @@ import { logger } from './utils/logger';
 import { initializeDatabase } from './database/database';
 import { Server as SocketIOServer } from 'socket.io';
 import { createServer } from 'http';
+import { getSessionService } from './services/sessionService';
 
 const PORT = process.env.PORT || 3001;
 const NODE_ENV = process.env.NODE_ENV || 'development';
@@ -56,9 +57,9 @@ async function startServer(): Promise<void> {
     // Socket.IOインスタンスをappとサービスに追加
     app.set('socketio', io);
     
-    // SocketServiceを初期化
-    const { socketService } = await import('./services/socketService');
-    socketService.setSocketIO(io);
+    // SessionServiceにSocket.IOインスタンスを設定
+    getSessionService().setSocketIO(io);
+    logger.info('SessionService configured with Socket.IO instance');
 
     // サーバー起動
     server.listen(PORT, () => {

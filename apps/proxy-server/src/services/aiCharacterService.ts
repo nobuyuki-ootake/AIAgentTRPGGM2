@@ -13,64 +13,7 @@ import {
 } from '@ai-agent-trpg/types';
 import { database } from '../database/database';
 import { v4 as uuidv4 } from 'uuid';
-// AI Agent Service は一時的にスタブとして実装
-// import { aiAgentService } from './aiAgentService';
-
-// 一時的なAI Agent Service スタブ
-const aiAgentService = {
-  async processRequest(request: {
-    prompt: string;
-    category: string;
-    context: Record<string, any>;
-  }): Promise<string> {
-    // 簡単なルールベースの応答生成
-    const { context } = request;
-    
-    // アクションタイプに基づく基本的な応答
-    if (context.actionType === 'dialogue') {
-      const responses = [
-        '「こんにちは、冒険者さん。今日はどちらへ？」',
-        '「何かお手伝いできることはありますか？」',
-        '「この辺りは最近物騒でして...」',
-        '「良い天気ですね。冒険日和です。」',
-      ];
-      const response = responses[Math.floor(Math.random() * responses.length)];
-      
-      return JSON.stringify({
-        description: response,
-        target: null,
-        parameters: { mood: 'friendly' },
-        confidence: 0.7,
-        reasoning: 'NPCの友好的な対話パターン',
-        alternatives: ['黙る', '別の話題に移る'],
-        personalityFactors: ['友好的', '親しみやすい'],
-      });
-    }
-    
-    if (context.actionType === 'combat') {
-      return JSON.stringify({
-        description: '最も近い敵に向かって武器で攻撃する',
-        target: 'nearest_enemy',
-        parameters: { attackType: 'melee' },
-        confidence: 0.8,
-        reasoning: '戦闘時の基本攻撃行動',
-        alternatives: ['防御する', '呪文を使う'],
-        personalityFactors: ['攻撃的', '戦闘重視'],
-      });
-    }
-    
-    // デフォルト応答
-    return JSON.stringify({
-      description: '周囲の状況を警戒しながら適切に行動する',
-      target: null,
-      parameters: {},
-      confidence: 0.5,
-      reasoning: 'デフォルトの慎重な行動',
-      alternatives: ['待機', '移動'],
-      personalityFactors: ['慎重'],
-    });
-  }
-};
+import { getAIService } from './aiService';
 
 class AICharacterService {
   private sessionControllers: Map<ID, AISessionController> = new Map();
@@ -412,18 +355,23 @@ class AICharacterService {
       );
 
       // AI サービスを呼び出し
-      const response = await aiAgentService.processRequest({
-        prompt,
-        category: 'npc_behavior',
-        context: {
-          characterId,
+      const aiService = getAIService();
+      const response = await aiService.generateNPCBehavior({
+        provider: 'openai', // デフォルトプロバイダー
+        apiKey: '', // 環境変数から取得される（aiService内部で処理）
+        npcId: characterId,
+        npcData: character,
+        situation: prompt,
+        campaignContext: {
           sessionId: context.sessionId,
           actionType: actionTemplate.type,
         },
       });
+      
+      const aiResponse = response.behavior;
 
       // レスポンスを解析
-      return this.parseActionGenerationResponse(response, context);
+      return this.parseActionGenerationResponse(aiResponse, context);
     } catch (error) {
       console.error('Action generation error:', error);
       
@@ -794,7 +742,7 @@ ${actionTemplate.type}
       description: row.description || '',
       age: row.age || 25,
       race: row.race || 'Human',
-      class: row.class || 'Fighter',
+      characterClass: row.class || 'Fighter',
       level: row.level || 1,
       experience: row.experience || 0,
       characterType: row.character_type,
@@ -815,6 +763,7 @@ ${actionTemplate.type}
         backstory: '', personality: '', ideals: '', bonds: '', flaws: '',
         languages: ['Common'], proficiencies: []
       },
+      locationHistory: [],
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       // タイプ固有データ（NPCとEnemyの場合）

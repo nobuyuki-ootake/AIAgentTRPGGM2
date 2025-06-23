@@ -1,8 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { aiCharacterService } from '../services/aiCharacterService';
-import { characterService } from '../services/characterService';
-import { sessionService } from '../services/sessionService';
+import { getCharacterService } from '../services/characterService';
+import { getSessionService } from '../services/sessionService';
 import { ValidationError } from '../middleware/errorHandler';
 import { APIResponse, AIDecisionContext } from '@ai-agent-trpg/types';
 
@@ -20,13 +20,13 @@ aiCharacterRouter.post('/sessions/:sessionId/start', asyncHandler(async (req: Re
   const { aiSettings } = req.body;
 
   // セッション存在確認
-  const session = await sessionService.getSessionById(sessionId);
+  const session = await getSessionService().getSessionById(sessionId);
   if (!session) {
     throw new ValidationError('Session not found');
   }
 
   // セッションのキャラクターを取得
-  const characters = await characterService.getCharactersByCampaign(session.campaignId);
+  const characters = await getCharacterService().getCharactersByCampaign(session.campaignId);
 
   // AI制御を開始
   const aiController = await aiCharacterService.startAIControlForSession(
@@ -77,7 +77,7 @@ aiCharacterRouter.post('/characters/:characterId/trigger-action', asyncHandler(a
   }
 
   // キャラクター存在確認
-  const character = await characterService.getCharacterById(characterId);
+  const character = await getCharacterService().getCharacterById(characterId);
   if (!character) {
     throw new ValidationError('Character not found');
   }

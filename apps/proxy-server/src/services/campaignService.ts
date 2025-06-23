@@ -313,4 +313,11 @@ class CampaignService {
   }
 }
 
-export const campaignService = new CampaignService();
+// Lazy initialization to avoid early instantiation
+let _campaignService: CampaignService | null = null;
+export function getCampaignService(): CampaignService {
+  if (!_campaignService) {
+    _campaignService = new CampaignService();
+  }
+  return _campaignService;
+}

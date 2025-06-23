@@ -3,13 +3,24 @@ import { SessionState, TRPGCharacter } from '@ai-agent-trpg/types';
 import { getDatabase, withTransaction } from '../database/database';
 import { DatabaseError, ValidationError } from '../middleware/errorHandler';
 import { logger } from '../utils/logger';
-import { characterService } from './characterService';
+import { getCharacterService } from './characterService';
+import { Server as SocketIOServer } from 'socket.io';
 
 // Use types from SessionState.chatLog and SessionState.diceRolls
 type ChatMessage = SessionState['chatLog'][0];
 type DiceRoll = SessionState['diceRolls'][0];
 
 class SessionService {
+  private io: SocketIOServer | null = null;
+
+  /**
+   * Socket.IOインスタンスを設定
+   */
+  setSocketIO(io: SocketIOServer): void {
+    this.io = io;
+    logger.info('SessionService initialized with Socket.IO server');
+  }
+
   async getSessionsByCampaign(campaignId: string): Promise<SessionState[]> {
     const db = getDatabase();
     
@@ -308,19 +319,20 @@ class SessionService {
       }
 
       // キャンペーンの全キャラクターを取得
-      const allCharacters = await characterService.getCharactersByCampaign(session.campaignId);
+      const allCharacters = await getCharacterService().getCharactersByCampaign(session.campaignId);
       
       // 仲間キャラクターを抽出（NPCタイプで重要度が高く、敵対的でない）
       const companions = allCharacters.filter(character => {
-        if (character.characterType !== 'companion') {
+        if (character.characterType !== 'NPC') {
           return false;
         }
         
-        // アクティブな仲間のみ
-        return character.isActive !== false;
+        // アクティブな仲間のみ（NPCCharacterとしてキャスト）
+        const npcCharacter = character as any;
+        return npcCharacter.isActive !== false;
       });
 
-      return companions;
+      return companions as any[];
       
     } catch (error) {
       logger.error(`Failed to get session companions for session ${sessionId}:`, error);
@@ -364,6 +376,30 @@ class SessionService {
         updatedSession.updatedAt,
         sessionId
       );
+
+      // WebSocketでセッション更新をブロードキャスト
+      if (this.io) {
+        this.io.to(`session-${sessionId}`).emit('session-updated', {
+          sessionId: sessionId,
+          updatedData: updates,
+          timestamp: new Date().toISOString(),
+        });
+        
+        // チャットログが更新された場合は専用イベントも送信
+        if (updates.chatLog) {
+          const latestMessage = updates.chatLog[updates.chatLog.length - 1];
+          this.io.to(`session-${sessionId}`).emit('chat-message', {
+            sessionId: sessionId,
+            message: latestMessage,
+            timestamp: new Date().toISOString(),
+          });
+          logger.info(`💬 WebSocket: Chat message broadcasted to session ${sessionId}`);
+        }
+        
+        logger.info(`📡 WebSocket: Session update broadcasted to session ${sessionId}`);
+      } else {
+        logger.warn('⚠️ WebSocket: No Socket.IO instance available for broadcasting');
+      }
 
       return updatedSession;
       
@@ -449,4 +485,11 @@ class SessionService {
   }
 }
 
-export const sessionService = new SessionService();
+// Lazy initialization to avoid early instantiation
+let _sessionService: SessionService | null = null;
+export function getSessionService(): SessionService {
+  if (!_sessionService) {
+    _sessionService = new SessionService();
+  }
+  return _sessionService;
+}

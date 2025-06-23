@@ -1,12 +1,17 @@
 import { Router } from 'express';
-import { aiAgentRouter } from './aiAgent';
-import { aiCharacterRouter } from './aiCharacters';
 import { campaignRouter } from './campaigns';
 import { characterRouter } from './characters';
 import { sessionRouter } from './sessions';
-import { eventRouter } from './events';
-import { locationRouter } from './locations';
-import conversationRouter from './conversations';
+import { questRouter } from './quests';
+import { milestoneRouter } from './milestones';
+import { timeManagementRouter } from './timeManagement';
+import { approachAnalysisRouter } from './approachAnalysis';
+import { aiAgentRouter } from './aiAgent';
+import { aiGameMasterRouter } from './aiGameMaster';
+import aiCharacterGenerationRouter from './aiCharacterGeneration';
+import aiMilestoneGenerationRouter from './aiMilestoneGeneration';
+import { interactiveEventsRouter } from './interactiveEvents';
+import healthRouter from './health';
 
 export const router = Router();
 
@@ -18,15 +23,22 @@ router.use((_req, res, next) => {
 
 // AI統合エンドポイント
 router.use('/ai-agent', aiAgentRouter);
-router.use('/ai-characters', aiCharacterRouter);
+router.use('/ai-game-master', aiGameMasterRouter);
+router.use('/ai-character-generation', aiCharacterGenerationRouter);
+router.use('/ai-milestone-generation', aiMilestoneGenerationRouter);
 
 // TRPG機能エンドポイント
 router.use('/campaigns', campaignRouter);
 router.use('/characters', characterRouter);
 router.use('/sessions', sessionRouter);
-router.use('/events', eventRouter);
-router.use('/locations', locationRouter);
-router.use('/conversations', conversationRouter);
+router.use('/quests', questRouter);
+router.use('/milestones', milestoneRouter);
+router.use('/time-management', timeManagementRouter);
+router.use('/approach-analysis', approachAnalysisRouter);
+router.use('/interactive-events', interactiveEventsRouter);
+
+// ヘルスチェック・システム状態エンドポイント
+router.use('/health', healthRouter);
 
 // API情報エンドポイント
 router.get('/', (_req, res) => {
@@ -36,14 +48,18 @@ router.get('/', (_req, res) => {
     description: 'API for AI-powered TRPG campaign management and game master assistance',
     endpoints: {
       health: '/health',
-      ai: '/api/ai-agent',
-      aiCharacters: '/api/ai-characters',
+      aiAgent: '/api/ai-agent',
+      aiGameMaster: '/api/ai-game-master',
+      aiCharacterGeneration: '/api/ai-character-generation',
+      aiMilestoneGeneration: '/api/ai-milestone-generation',
       campaigns: '/api/campaigns',
       characters: '/api/characters', 
       sessions: '/api/sessions',
-      events: '/api/events',
-      locations: '/api/locations',
-      conversations: '/api/conversations',
+      quests: '/api/quests',
+      milestones: '/api/milestones',
+      timeManagement: '/api/time-management',
+      approachAnalysis: '/api/approach-analysis',
+      interactiveEvents: '/api/interactive-events',
     },
     timestamp: new Date().toISOString(),
   });

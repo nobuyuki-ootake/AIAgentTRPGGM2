@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { APIResponse } from '@ai-agent-trpg/types';
-import { aiService } from '../services/aiService';
+import { getAIService } from '../services/aiService';
 import { asyncHandler, ValidationError, AIServiceError } from '../middleware/errorHandler';
 
 export const aiAgentRouter = Router();
@@ -14,7 +14,7 @@ aiAgentRouter.post('/test-key', asyncHandler(async (req, res) => {
   }
 
   try {
-    const isValid = await aiService.testProviderConnection(provider, apiKey, model);
+    const isValid = await getAIService().testProviderConnection(provider, apiKey, model);
     
     const response: APIResponse<{ valid: boolean; provider: string }> = {
       success: true,
@@ -51,7 +51,7 @@ aiAgentRouter.post('/campaign/create-assistance', asyncHandler(async (req, res) 
   }
 
   try {
-    const assistance = await aiService.getCampaignCreationAssistance({
+    const assistance = await getAIService().getCampaignCreationAssistance({
       provider,
       apiKey,
       model,
@@ -92,7 +92,7 @@ aiAgentRouter.post('/character/generate', asyncHandler(async (req, res) => {
   }
 
   try {
-    const character = await aiService.generateCharacter({
+    const character = await getAIService().generateCharacter({
       provider,
       apiKey,
       model,
@@ -134,7 +134,7 @@ aiAgentRouter.post('/event/generate', asyncHandler(async (req, res) => {
   }
 
   try {
-    const event = await aiService.generateEvent({
+    const event = await getAIService().generateEvent({
       provider,
       apiKey,
       model,
@@ -177,7 +177,7 @@ aiAgentRouter.post('/session/gm-assistance', asyncHandler(async (req, res) => {
   }
 
   try {
-    const assistance = await aiService.getGMAssistance({
+    const assistance = await getAIService().getGMAssistance({
       provider,
       apiKey,
       model,
@@ -221,7 +221,7 @@ aiAgentRouter.post('/npc/behavior', asyncHandler(async (req, res) => {
   }
 
   try {
-    const behavior = await aiService.generateNPCBehavior({
+    const behavior = await getAIService().generateNPCBehavior({
       provider,
       apiKey,
       model,
@@ -265,7 +265,7 @@ aiAgentRouter.post('/rules/assistance', asyncHandler(async (req, res) => {
   }
 
   try {
-    const assistance = await aiService.getRulesAssistance({
+    const assistance = await getAIService().getRulesAssistance({
       provider,
       apiKey,
       model,
@@ -308,7 +308,7 @@ aiAgentRouter.post('/chat', asyncHandler(async (req, res) => {
   }
 
   try {
-    const chatResponse = await aiService.chat({
+    const chatResponse = await getAIService().chat({
       provider,
       apiKey,
       model,
@@ -336,7 +336,7 @@ aiAgentRouter.post('/chat', asyncHandler(async (req, res) => {
 
 // 利用可能なAIプロバイダー一覧
 aiAgentRouter.get('/providers', (_req, res) => {
-  const providers = aiService.getAvailableProviders();
+  const providers = getAIService().getAvailableProviders();
   
   const response: APIResponse<typeof providers> = {
     success: true,
@@ -353,7 +353,7 @@ aiAgentRouter.get('/stats', asyncHandler(async (_req, res) => {
     throw new ValidationError('Stats endpoint not available in production');
   }
 
-  const stats = await aiService.getUsageStats();
+  const stats = await getAIService().getUsageStats();
   
   const response: APIResponse<typeof stats> = {
     success: true,

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { Character, APIResponse } from '@ai-agent-trpg/types';
-import { characterService } from '../services/characterService';
+import { getCharacterService } from '../services/characterService';
 import { asyncHandler, ValidationError, NotFoundError } from '../middleware/errorHandler';
 
 export const characterRouter = Router();
@@ -14,7 +14,7 @@ characterRouter.get('/', asyncHandler(async (req, res) => {
     throw new ValidationError('Campaign ID is required');
   }
 
-  const characters = await characterService.getCharactersByCampaign(campaignId, characterType);
+  const characters = await getCharacterService().getCharactersByCampaign(campaignId, characterType);
 
   const response: APIResponse<Character[]> = {
     success: true,
@@ -29,7 +29,7 @@ characterRouter.get('/', asyncHandler(async (req, res) => {
 characterRouter.get('/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  const character = await characterService.getCharacterById(id);
+  const character = await getCharacterService().getCharacterById(id);
 
   if (!character) {
     throw new NotFoundError('Character', id);
@@ -46,13 +46,19 @@ characterRouter.get('/:id', asyncHandler(async (req, res) => {
 
 // キャラクター作成
 characterRouter.post('/', asyncHandler(async (req, res) => {
+  console.log('=== Creating character ===');
+  console.log('Request body:', JSON.stringify(req.body, null, 2));
+  
   const characterData = req.body;
 
   if (!characterData.name || !characterData.campaignId || !characterData.characterType) {
+    console.log('Validation failed - missing required fields');
     throw new ValidationError('Character name, campaign ID, and character type are required');
   }
 
-  const character = await characterService.createCharacter(characterData);
+  console.log('Calling characterService.createCharacter...');
+  const character = await getCharacterService().createCharacter(characterData);
+  console.log('Character service returned:', character ? `${character.name} (${character.id})` : 'null');
 
   const response: APIResponse<Character> = {
     success: true,
@@ -68,7 +74,7 @@ characterRouter.put('/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
   const updateData = req.body;
 
-  const character = await characterService.updateCharacter(id, updateData);
+  const character = await getCharacterService().updateCharacter(id, updateData);
 
   if (!character) {
     throw new NotFoundError('Character', id);
@@ -87,7 +93,7 @@ characterRouter.put('/:id', asyncHandler(async (req, res) => {
 characterRouter.delete('/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  const deleted = await characterService.deleteCharacter(id);
+  const deleted = await getCharacterService().deleteCharacter(id);
 
   if (!deleted) {
     throw new NotFoundError('Character', id);

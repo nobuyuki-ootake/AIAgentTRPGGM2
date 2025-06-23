@@ -27,7 +27,8 @@
     "openai": "^4.0.0",
     "socket.io": "^4.8.1",
     "sqlite3": "^5.1.6",
-    "uuid": "^9.0.0"
+    "uuid": "^9.0.0",
+    "zod": "^3.25.67"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
