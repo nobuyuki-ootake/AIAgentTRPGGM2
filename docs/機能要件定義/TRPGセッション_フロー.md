@@ -72,14 +72,33 @@ flowchart TD
 
 ### 1. セッション開始フェーズ
 1. **キャラクター選択**: プレイヤーが操作するキャラクターを選択
-2. **AIセッション開始**: 「AIセッションを開始します」ボタンをクリック
-3. **ゲーム概要アナウンス**: AIゲームマスターが世界観とシナリオを説明
+2. **セッション時間設定**: プレイ時間を選択
+   - **短時間プレイ**: 3日間、1日3アクション、マイルストーン1個、約30分
+     - 日単位分割: 朝・昼・夜（3つの時間帯）
+   - **中時間プレイ**: 7日間、1日4アクション、マイルストーン3個、約70分
+     - 日単位分割: 朝・昼・夕方・夜（4つの時間帯）
+   - **長時間プレイ**: 11日間、1日4アクション、マイルストーン5個、約2時間
+     - 日単位分割: 朝・昼・夕方・夜（4つの時間帯）
+   - **カスタム**: 自由設定（1日3～4アクション選択可能、日単位分割数も選択可能）
+3. **AIセッション開始**: 設定を確認して「セッション開始」ボタンをクリック
+4. **プール・マイルストーン生成**: AIが以下をバッチ処理で生成
+   - **エンティティプール生成**: テーマに適応したエネミー、イベント、NPC、アイテム、クエストプールを生成
+   - **マイルストーン自動生成**: 基本3個程度のマイルストーンを以下のタイプから選択して生成
+     - 特定のエネミーを倒す（テーマにより無効化：ほのぼの日常など）
+     - 特定のイベントをクリア
+     - 特定のNPCとの特定のコミュニケーションの実施
+     - キーアイテムの取得
+     - クエストクリア
+   - **場所連携設定**: イベント・エネミーを適切な場所に配置
+5. **ゲーム概要アナウンス**: AIゲームマスターが世界観とシナリオを説明
 
 ### 2. 行動選択フェーズ
 プレイヤーは以下の行動から選択：
 
 #### a. 探索行動
-- マイルストーンに設定されたイベントから選択
+- **マイルストーン関連**: マイルストーンに設定されたイベント・エネミー・NPCとの遭遇
+- **プール内探索**: プール内のエネミー討伐・イベント体験・NPCとの自由対話
+- **場所別コンテンツ**: 現在地に配置されたイベント・エネミーの発見
 - 調査、追跡、偵察などの行動
 
 #### b. 拠点行動
@@ -103,6 +122,22 @@ flowchart TD
 - 詳細は戦闘フロー参照
 
 ### 3. タスク実行フェーズ
+
+#### 3.1 インタラクティブイベント実行フロー
+1. **イベント選択肢表示**: AIが複数の行動選択肢を提示（何択か）
+2. **選択肢選択**: プレイヤーが希望する行動を選択
+3. **GMクリア方針問いかけ**: AIゲームマスターが「どのようにタスクをクリアしますか？」と質問
+4. **クリア方針説明**: プレイヤーがチャットで具体的な実行方針を説明
+5. **AI難易度判定**: プレイヤーの方針に基づきAIが難易度を算出
+6. **ダイスチェック実行**: 既存のダイスチェックUIとの連携
+7. **結果判定・GM解説**: 成功・失敗に応じたGMの詳細な結果説明
+
+#### 3.2 リトライシステム
+- **リトライ可能**: 失敗時は何度でもリトライ可能
+- **段階的難易度低下**: リトライごとに難易度が下がる
+- **フィードバック変化**: リトライ回数に応じたGMのアドバイス内容変化
+
+#### 3.3 従来のタスク実行（非イベント）
 1. **タスク内容説明**: AIがタスクの詳細を説明
 2. **アプローチ決定**: プレイヤーがチャットでアプローチ方法を入力
 3. **難易度判定**: AIがアプローチの論理性を評価し、難易度を調整
@@ -115,19 +150,31 @@ flowchart TD
 - **スキルチェック**: 特定技能を使用した判定
 
 ### 5. 結果処理フェーズ
-- **成功時**: 
-  - アイテム獲得
-  - マイルストーン達成
-  - クリアフラグ設定
-  - 経験値獲得
-  
-- **失敗時**:
-  - 難易度が低下してリトライ可能
-  - 状況に応じたペナルティ
+
+#### 5.1 マイルストーン関連活動の成功時
+- **マイルストーン達成**: 対象マイルストーンの進捗更新・完了
+- **キーアイテム獲得**: マイルストーン必須アイテムの入手
+- **クリアフラグ設定**: 重要イベント・NPCコミュニケーション完了
+- **経験値・報酬獲得**: マイルストーン価値に応じた大きな報酬
+
+#### 5.2 プール内活動の成功時（マイルストーン外）
+- **良いフィードバック提供**: マイルストーン進展はないが、プレイヤー体験を向上
+- **サブ報酬獲得**: 小さなアイテム・経験値・情報の入手
+- **NPCとの関係性向上**: 自由対話による好感度上昇
+- **世界観の深掘り**: 追加の背景情報・ストーリー要素の発見
+
+#### 5.3 失敗時の処理
+- **難易度が低下してリトライ可能**: すべての活動でリトライ機能提供
+- **建設的フィードバック**: 失敗理由の説明と改善提案
+- **状況に応じたペナルティ**: 軽微なペナルティ（時間消費のみなど）
 
 ### 6. ターン管理・仲間自律行動
 - 各行動で1ターン消費
-- 1日あたりの行動回数制限あり（通常3回）
+- 1日あたりの行動回数制限あり（日単位分割システム）：
+  - **短時間プレイ**: 1日3アクション（朝・昼・夜の3つの時間帯）
+  - **中時間プレイ**: 1日4アクション（朝・昼・夕方・夜の4つの時間帯）
+  - **長時間プレイ**: 1日4アクション（朝・昼・夕方・夜の4つの時間帯）
+  - **カスタム**: 3～4アクション選択可能（日単位分割数も選択可能）
 - **WebSocket仲間自律システム**の実行：
 
 #### 6.1 サーバー側状況分析フェーズ
@@ -274,3 +321,146 @@ flowchart TD
 - **サーバー管理**: グローバルsocketService経由での統一的な仲間メッセージ管理
 - **拡張性**: 新キャラクター・新反応パターンの追加が容易な設計
 - **フォールト耐性**: WebSocket接続失敗時の適切なフォールバック機能
+
+## マイルストーン・プールシステム詳細フロー
+
+### マイルストーン生成システムフロー
+
+```mermaid
+flowchart TD
+    SessionStart([セッション開始]) --> ThemeAnalysis[テーマ分析<br/>・キャンペーンテーマ確認<br/>・許可エンティティタイプ決定]
+    
+    ThemeAnalysis --> PoolGeneration[エンティティプール生成<br/>・AIがテーマ適応コンテンツ生成<br/>・場所別配置決定]
+    
+    PoolGeneration --> EnemyPool{エネミープール<br/>生成}
+    PoolGeneration --> EventPool{イベントプール<br/>生成}
+    PoolGeneration --> NPCPool{NPCプール<br/>生成}
+    PoolGeneration --> ItemPool{アイテムプール<br/>生成}
+    PoolGeneration --> QuestPool{クエストプール<br/>生成}
+    
+    EnemyPool --> MilestoneGeneration[マイルストーン生成<br/>・基本3個程度<br/>・プールから適切な要素選択<br/>・達成条件設定]
+    EventPool --> MilestoneGeneration
+    NPCPool --> MilestoneGeneration
+    ItemPool --> MilestoneGeneration
+    QuestPool --> MilestoneGeneration
+    
+    MilestoneGeneration --> MilestoneTypes[マイルストーンタイプ決定]
+    MilestoneTypes --> EnemyDefeat[特定エネミー討伐<br/>※テーマにより無効化]
+    MilestoneTypes --> EventClear[特定イベントクリア]
+    MilestoneTypes --> NPCComm[特定NPC<br/>コミュニケーション]
+    MilestoneTypes --> KeyItem[キーアイテム取得]
+    MilestoneTypes --> QuestComplete[クエストクリア]
+    
+    EnemyDefeat --> LocationBinding[場所連携設定<br/>・エネミー・イベント配置<br/>・NPCアクセス設定]
+    EventClear --> LocationBinding
+    NPCComm --> LocationBinding
+    KeyItem --> LocationBinding
+    QuestComplete --> LocationBinding
+    
+    LocationBinding --> GameStart[ゲーム開始<br/>プール・マイルストーン準備完了]
+```
+
+### インタラクティブイベントシステムフロー
+
+```mermaid
+flowchart TD
+    EventEncounter([イベント遭遇]) --> EventType{イベントタイプ<br/>判定}
+    
+    EventType -->|マイルストーン| MilestoneEvent[マイルストーン<br/>関連イベント]
+    EventType -->|プール内| PoolEvent[プール内<br/>自由イベント]
+    
+    MilestoneEvent --> ChoicePresentation[選択肢表示<br/>・AIが複数選択肢生成<br/>・プレイヤーの行動方針選択]
+    PoolEvent --> ChoicePresentation
+    
+    ChoicePresentation --> PlayerChoice[プレイヤー選択<br/>・希望する行動選択]
+    
+    PlayerChoice --> GMQuestion[GM問いかけ<br/>「どのようにタスクを<br/>クリアしますか？」]
+    
+    GMQuestion --> PlayerExplanation[プレイヤー方針説明<br/>・チャットで具体的実行方法入力<br/>・創造性・論理性を含む説明]
+    
+    PlayerExplanation --> AIDifficulty[AI難易度判定<br/>・方針の論理性評価<br/>・実現可能性分析<br/>・ダイス目標値算出]
+    
+    AIDifficulty --> DiceCheck[ダイスチェック実行<br/>・既存UIとの統合<br/>・適切なチェック種別選択]
+    
+    DiceCheck --> ResultJudge{結果判定}
+    
+    ResultJudge -->|成功| SuccessResult[成功処理<br/>・GM詳細解説<br/>・報酬獲得<br/>・マイルストーン進捗]
+    ResultJudge -->|失敗| FailureResult[失敗処理<br/>・GM建設的フィードバック<br/>・リトライ提案]
+    
+    FailureResult --> RetryOption{リトライ？}
+    RetryOption -->|Yes| DifficultyReduce[難易度低下<br/>・目標値を下げる<br/>・GMアドバイス更新]
+    RetryOption -->|No| TurnEnd[ターン終了]
+    
+    DifficultyReduce --> PlayerExplanation
+    SuccessResult --> TurnEnd
+```
+
+### プール内活動フィードバックシステム
+
+```mermaid
+flowchart TD
+    PoolActivity([プール内活動実行]) --> ActivityType{活動タイプ}
+    
+    ActivityType --> PoolEnemy[プール内エネミー討伐]
+    ActivityType --> PoolEvent[プール内イベント体験]
+    ActivityType --> PoolNPC[プール内NPC対話]
+    ActivityType --> PoolItem[プール内アイテム探索]
+    
+    PoolEnemy --> EnemyReward[エネミー討伐報酬<br/>・戦闘経験値<br/>・小アイテム獲得<br/>・戦術スキル向上]
+    PoolEvent --> EventExperience[イベント体験価値<br/>・世界観理解深化<br/>・追加情報獲得<br/>・キャラクター成長]
+    PoolNPC --> NPCRelation[NPC関係性向上<br/>・好感度上昇<br/>・特別情報入手<br/>・将来的協力関係]
+    PoolItem --> ItemDiscovery[アイテム発見<br/>・便利道具獲得<br/>・希少素材収集<br/>・クラフト材料確保]
+    
+    EnemyReward --> FeedbackGeneration[良いフィードバック生成<br/>・プレイヤー満足度向上<br/>・継続プレイ動機維持]
+    EventExperience --> FeedbackGeneration
+    NPCRelation --> FeedbackGeneration
+    ItemDiscovery --> FeedbackGeneration
+    
+    FeedbackGeneration --> ExperienceBoost[体験価値向上<br/>・マイルストーン外でも<br/>充実したゲーム体験<br/>・自由度の高い探索奨励]
+```
+
+### 開発者モード管理フロー
+
+```mermaid
+flowchart TD
+    DevMode([開発者モード]) --> EntitySelect[エンティティ選択<br/>・エネミー<br/>・イベント<br/>・NPC<br/>・アイテム<br/>・マイルストーン]
+    
+    EntitySelect --> EnemyMgmt[エネミー管理画面]
+    EntitySelect --> EventMgmt[イベント管理画面]
+    EntitySelect --> NPCMgmt[NPC管理画面]
+    EntitySelect --> ItemMgmt[アイテム管理画面]
+    EntitySelect --> MilestoneMgmt[マイルストーン管理画面]
+    
+    EnemyMgmt --> EnemyEdit[エネミー編集<br/>・能力値調整<br/>・場所配置設定<br/>・報酬設定<br/>・AI行動パターン]
+    EventMgmt --> EventEdit[イベント編集<br/>・内容詳細編集<br/>・選択肢設定<br/>・結果分岐編集<br/>・場所紐付け]
+    NPCMgmt --> NPCEdit[NPC編集<br/>・個性・性格設定<br/>・対話パターン編集<br/>・コミュニケーション条件<br/>・提供情報設定]
+    ItemMgmt --> ItemEdit[アイテム編集<br/>・効果・説明編集<br/>・入手方法設定<br/>・希少度調整<br/>・価値設定]
+    MilestoneMgmt --> MilestoneEdit[マイルストーン編集<br/>・達成条件詳細<br/>・進捗監視<br/>・報酬設定<br/>・優先度調整]
+    
+    EnemyEdit --> SaveChanges[変更保存<br/>・リアルタイム反映<br/>・セッション継続中更新<br/>・整合性チェック]
+    EventEdit --> SaveChanges
+    NPCEdit --> SaveChanges
+    ItemEdit --> SaveChanges
+    MilestoneEdit --> SaveChanges
+```
+
+### テーマ適応システム
+
+#### テーマ別制約・特徴
+
+**ほのぼの日常テーマ**
+- ✅ **有効**: イベント、NPC対話、アイテム獲得、クエスト
+- ❌ **無効**: エネミー討伐マイルストーン
+- 🎯 **特化**: 料理、手芸、農業、友情、地域貢献系イベント
+
+**ホラーミステリーテーマ**
+- ✅ **有効**: 全マイルストーンタイプ対応
+- 🎯 **特化**: 謎解き、証拠収集、真犯人発見、呪い解除
+
+**クラシックファンタジーテーマ**
+- ✅ **有効**: 全マイルストーンタイプ対応
+- 🎯 **特化**: 魔王討伐、伝説武器獲得、古代遺跡探索
+
+**SF宇宙冒険テーマ**
+- ✅ **有効**: 全マイルストーンタイプ対応（エネミー=エイリアン等）
+- 🎯 **特化**: 未知技術獲得、惑星探索、宇宙戦争

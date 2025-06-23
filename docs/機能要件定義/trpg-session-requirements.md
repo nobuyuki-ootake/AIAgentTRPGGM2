@@ -68,6 +68,18 @@
 - **興味分析**: プレイヤーの興味に基づくコンテンツ調整
 - **緊張管理**: セッションの緊張感を適切に保つ調整
 
+### 4. マイルストーン・プール生成システム
+- **AIマイルストーン生成**: セッション開始時に基本3個程度の自動生成
+- **エンティティプール生成**: テーマ適応したエネミー・イベント・NPC・アイテム・クエストの自動生成
+- **テーマ適応機能**: キャンペーンテーマに応じた要素無効化（ほのぼの日常でエネミー無し等）
+- **場所連携機能**: エネミー・イベントの適切な場所配置
+
+### 5. インタラクティブイベントシステム
+- **選択肢自動生成**: AI による複数行動選択肢の動的生成
+- **GM問いかけ機能**: 「どのようにタスクをクリアしますか？」の自動質問
+- **方針理解システム**: プレイヤーの自然言語説明の理解・分析
+- **段階的難易度調整**: リトライ時の自動難易度低下機能
+
 ## セッションモード
 
 ### 1. 探索モード
@@ -147,6 +159,189 @@ interface SessionEvent {
   action: ActionInfo;
   result: EventResult;
   diceRolls?: DiceRollResult[];
+}
+```
+
+### マイルストーンシステム
+
+#### マイルストーン
+```typescript
+interface Milestone {
+  id: string;
+  campaignId: string;
+  sessionId: string;
+  title: string;
+  description: string;
+  type: MilestoneType; // 'enemy_defeat' | 'event_clear' | 'npc_communication' | 'item_acquisition' | 'quest_completion'
+  targetId: string; // 対象エンティティのID
+  targetDetails: MilestoneTargetDetails;
+  status: MilestoneStatus; // 'pending' | 'in_progress' | 'completed'
+  progress: number; // 0-100
+  requiredConditions: MilestoneCondition[];
+  reward: MilestoneReward;
+  createdAt: Date;
+  completedAt?: Date;
+}
+
+interface MilestoneTargetDetails {
+  entityType: 'enemy' | 'event' | 'npc' | 'item' | 'quest';
+  entityId: string;
+  specificConditions: Record<string, any>; // 特定の条件（NPCとの特定会話内容等）
+}
+
+interface MilestoneCondition {
+  type: string;
+  description: string;
+  required: boolean;
+  completed: boolean;
+}
+
+interface MilestoneReward {
+  experiencePoints: number;
+  items: string[]; // アイテムID配列
+  characterBenefits: Record<string, any>;
+  storyProgression: string;
+}
+```
+
+#### エンティティプール
+```typescript
+interface EntityPool {
+  id: string;
+  campaignId: string;
+  sessionId: string;
+  themeId: string;
+  entities: EntityPoolCollection;
+  generatedAt: Date;
+  lastUpdated: Date;
+}
+
+interface EntityPoolCollection {
+  enemies: Enemy[];
+  events: InteractiveEvent[];
+  npcs: NPC[];
+  items: Item[];
+  quests: Quest[];
+}
+
+interface Enemy {
+  id: string;
+  name: string;
+  description: string;
+  level: number;
+  abilities: EnemyAbilities;
+  locationIds: string[]; // 配置場所
+  isMilestoneTarget: boolean;
+  rewards: EnemyReward[];
+  behavior: EnemyBehavior;
+}
+
+interface InteractiveEvent {
+  id: string;
+  name: string;
+  description: string;
+  locationIds: string[]; // 発生場所
+  choices: EventChoice[];
+  isMilestoneTarget: boolean;
+  requiredConditions: EventCondition[];
+  outcomes: EventOutcome[];
+}
+
+interface EventChoice {
+  id: string;
+  text: string;
+  description: string;
+  requirements: ChoiceRequirement[];
+  consequences: ChoiceConsequence[];
+}
+
+interface NPC {
+  id: string;
+  name: string;
+  description: string;
+  personality: NPCPersonality;
+  locationIds: string[]; // 存在場所
+  dialoguePatterns: DialoguePattern[];
+  communicationConditions: CommunicationCondition[];
+  isMilestoneTarget: boolean;
+  relationshipLevel: number; // プレイヤーとの関係性
+}
+
+interface Item {
+  id: string;
+  name: string;
+  description: string;
+  type: ItemType;
+  rarity: ItemRarity;
+  effects: ItemEffect[];
+  acquisitionMethods: AcquisitionMethod[]; // 入手方法
+  isMilestoneTarget: boolean;
+  value: number;
+}
+```
+
+### インタラクティブイベント実行状態
+```typescript
+interface EventExecutionState {
+  eventId: string;
+  sessionId: string;
+  currentChoiceId?: string;
+  playerApproach?: string;
+  retryCount: number;
+  difficulty: DifficultyLevel;
+  baseDifficulty: DifficultyLevel;
+  status: EventExecutionStatus; // 'choice_selection' | 'approach_input' | 'dice_check' | 'result_processing' | 'completed'
+  executionHistory: EventExecution[];
+}
+
+interface EventExecution {
+  attempt: number;
+  choiceId: string;
+  playerApproach: string;
+  difficulty: DifficultyLevel;
+  diceResult: DiceRollResult;
+  outcome: EventExecutionOutcome;
+  timestamp: Date;
+}
+
+interface DiceRollResult {
+  diceType: string; // 'D20', 'D10', etc.
+  rawRoll: number;
+  modifiers: number;
+  totalResult: number;
+  targetNumber: number;
+  success: boolean;
+  criticalSuccess?: boolean;
+  criticalFailure?: boolean;
+}
+```
+
+### プール活動フィードバック
+```typescript
+interface PoolActivityFeedback {
+  id: string;
+  sessionId: string;
+  activityType: PoolActivityType; // 'enemy_defeat' | 'event_participation' | 'npc_interaction' | 'item_discovery'
+  entityId: string;
+  playerId: string;
+  isMilestoneRelated: boolean;
+  feedback: ActivityFeedback;
+  rewards: ActivityReward[];
+  timestamp: Date;
+}
+
+interface ActivityFeedback {
+  message: string;
+  tone: FeedbackTone; // 'encouraging' | 'informative' | 'rewarding' | 'story_advancing'
+  experienceValue: ExperienceValue; // 体験価値の評価
+  relationshipImpact: RelationshipImpact[];
+}
+
+interface ActivityReward {
+  type: RewardType; // 'experience' | 'item' | 'information' | 'relationship' | 'story_element'
+  value: number;
+  description: string;
+  permanent: boolean; // 永続的な効果か
 }
 ```
 

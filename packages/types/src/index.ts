@@ -99,7 +99,7 @@ export interface BaseCharacter {
   description: string;
   age: number;
   race: string;
-  class: string;
+  characterClass: string;
   level: number;
   experience: number;
   
@@ -159,6 +159,17 @@ export interface BaseCharacter {
 
 export interface TRPGCharacter extends BaseCharacter {
   characterType: 'PC';
+  characterClass: string; // 職業・クラス名
+  characterStats?: {
+    hitPoints: number;
+    maxHitPoints: number;
+    magicPoints: number;
+    maxMagicPoints: number;
+    armorClass: number;
+    initiative: number;
+    speed: number;
+  };
+  alignment?: string; // 属性
   playerId?: ID; // プレイヤーID（セッション時）
   
   // PC固有の情報
@@ -348,6 +359,9 @@ export interface EnemyCharacter extends BaseCharacter {
   };
 }
 
+// キャラクタータイプ
+export type CharacterType = 'PC' | 'NPC' | 'Enemy';
+
 // 統合キャラクター型
 export type Character = TRPGCharacter | NPCCharacter | EnemyCharacter;
 
@@ -366,6 +380,7 @@ export interface QuestObjective {
 
 export interface Quest {
   id: ID;
+  campaignId?: ID; // キャンペーンID（追加）
   title: string;
   description: string;
   type: 'main' | 'side' | 'personal' | 'faction';
@@ -452,6 +467,26 @@ export interface TRPGEvent {
 // セッション管理
 // ==========================================
 
+export interface GameTheme {
+  id: ID;
+  name: string;
+  description: string;
+  genre: 'fantasy' | 'sci_fi' | 'modern' | 'historical' | 'horror' | 'mystery' | 'superhero' | 'western' | 'cyberpunk' | 'steampunk' | 'custom';
+  setting: string; // "中世ファンタジー", "宇宙船内", "現代都市" など
+  mood: 'heroic' | 'dark' | 'comedic' | 'dramatic' | 'mysterious' | 'action' | 'romantic' | 'survival';
+  difficulty: 'casual' | 'normal' | 'challenging' | 'hardcore';
+  style: 'combat_heavy' | 'roleplay_focused' | 'exploration' | 'puzzle_solving' | 'social_intrigue' | 'balanced';
+  
+  // 特別な設定やルール
+  specialRules?: string[];
+  keyElements?: string[]; // "魔法", "ロボット", "古代遺跡" など
+  restrictions?: string[]; // "魔法禁止", "現代兵器なし" など
+  
+  // AI生成用の追加コンテキスト
+  playerPrompt?: string; // プレイヤーが入力した自由テキスト
+  aiInstructions?: string; // AI生成用の詳細指示
+}
+
 export interface SessionParticipant {
   characterId: ID;
   playerId?: string; // プレイヤー識別子
@@ -467,6 +502,9 @@ export interface SessionState {
   // セッション状態
   status: 'preparing' | 'active' | 'paused' | 'completed' | 'cancelled';
   mode: 'exploration' | 'combat' | 'social' | 'planning';
+  
+  // ゲームテーマ設定
+  gameTheme?: GameTheme;
   
   // 参加者管理
   participants: SessionParticipant[];
@@ -523,6 +561,17 @@ export interface SessionState {
     target?: number;
     success?: boolean;
   }>;
+  
+  // 時間管理システム
+  timeManagement?: {
+    durationType: SessionDurationType;
+    currentDay: number;
+    totalDays: number;
+    actionsPerDay: number;
+    remainingActions: number;
+    milestoneSchedule: MilestoneSchedule[];
+    estimatedPlayTime: number; // 分
+  };
   
   // セッションノート
   notes: {
@@ -1315,4 +1364,1017 @@ export interface AIConversationResponse {
   emotion?: 'happy' | 'sad' | 'angry' | 'surprised' | 'neutral' | 'confused';
   relationshipChanges?: Record<ID, number>; // 他キャラクターとの関係値変化
   nextAction?: 'continue' | 'change_topic' | 'end_conversation' | 'invite_others';
+}
+
+// ==========================================
+// マイルストーン・進捗管理システム
+// ==========================================
+
+export interface Milestone {
+  id: ID;
+  campaignId: ID;
+  title: string;
+  description: string;
+  category: 'story' | 'character' | 'exploration' | 'combat' | 'social' | 'custom';
+  
+  // 進捗管理
+  status: 'not_started' | 'in_progress' | 'completed' | 'failed' | 'skipped';
+  progress: number; // 0-100%
+  requirements: MilestoneRequirement[];
+  
+  // 報酬
+  rewards: {
+    experience: number;
+    currency: number;
+    items: ID[];
+    abilities: string[];
+    storyProgression: string[];
+    unlockedContent: string[];
+  };
+  
+  // 依存関係
+  prerequisites: ID[]; // 前提マイルストーン
+  unlocks: ID[]; // このマイルストーン完了で解放されるもの
+  dependencies: ID[]; // 依存関係（下位互換用）
+  
+  // メタデータ
+  importance: 'minor' | 'major' | 'critical';
+  estimatedTimeToComplete: number; // 分
+  estimatedTime: number; // 分（下位互換用）
+  difficulty: 'trivial' | 'easy' | 'medium' | 'hard' | 'extreme';
+  tags: string[]; // タグ
+  
+  // 時間管理
+  createdAt: DateTime;
+  updatedAt: DateTime;
+  completedAt?: DateTime;
+  deadline?: DateTime;
+  createdBy?: string; // 作成者
+}
+
+export interface MilestoneRequirement {
+  id: ID;
+  description: string;
+  type: 'quest_completion' | 'character_level' | 'location_visit' | 'item_obtain' | 
+        'npc_interaction' | 'skill_check' | 'combat_victory' | 'custom';
+  
+  // 条件詳細
+  targetValue?: number; // 必要な値（レベル、アイテム数など）
+  currentValue?: number; // 現在の値
+  targetId?: ID; // 対象のID（クエスト、場所、NPCなど）
+  
+  completed: boolean;
+  optional: boolean;
+}
+
+export interface ProgressTracker {
+  id?: ID; // オプショナルなID
+  campaignId: ID;
+  
+  // 全体進捗
+  overallProgress: {
+    completedMilestones: number;
+    totalMilestones: number;
+    experienceGained: number;
+    totalExperience: number;
+    estimatedCompletion: number; // 0-100%
+  };
+  
+  // カテゴリ別進捗
+  categoryProgress: Record<Milestone['category'], {
+    completed: number;
+    total: number;
+    progress: number; // 0-100%
+  }>;
+  
+  // 最近の達成
+  recentAchievements: Array<{
+    milestoneId: ID;
+    completedAt: DateTime;
+    experience: number;
+    rewards: string[];
+  }>;
+  
+  // 次の目標
+  upcomingMilestones: Array<{
+    milestoneId: ID;
+    title: string;
+    estimatedTimeToComplete: number;
+    progress: number;
+  }>;
+  
+  // 統計
+  statistics: {
+    averageCompletionTime: number;
+    preferredCategory: Milestone['category'];
+    completionRate: number; // 0-100%
+    totalPlayTime: number; // 分
+  };
+  
+  // メタデータ
+  createdAt?: DateTime;
+  updatedAt?: DateTime;
+}
+
+export interface LevelUpEvent {
+  id: ID;
+  characterId: ID;
+  campaignId: ID;
+  
+  // レベル情報
+  previousLevel: number;
+  newLevel: number;
+  experienceGained: number;
+  totalExperience: number;
+  
+  // 成長
+  statIncreases: Partial<BaseStats>;
+  statImprovements: Partial<BaseStats>; // 下位互換用
+  newSkills: Skill[];
+  newAbilities: string[]; // 下位互換用
+  newFeats: string[];
+  hitPointIncrease: number;
+  milestoneId?: ID; // 関連マイルストーンID
+  
+  // 選択肢（プレイヤーが選ぶ必要がある場合）
+  pendingChoices: Array<{
+    id: ID;
+    type: 'skill' | 'feat' | 'spell' | 'attribute';
+    options: string[];
+    maxSelections: number;
+  }>;
+  
+  // メタデータ
+  timestamp: DateTime;
+  source: 'milestone_completion' | 'quest_completion' | 'combat_victory' | 'manual';
+}
+
+export interface CampaignCompletion {
+  id?: ID; // オプショナルなID
+  campaignId: ID;
+  
+  // 完了状態
+  isCompleted: boolean;
+  completionPercentage: number; // 0-100%
+  completionType?: string; // 完了タイプ
+  completionDate?: DateTime; // 完了日
+  completionNotes?: string; // 完了メモ
+  
+  // クリア条件
+  winConditions: Array<{
+    id: ID;
+    description: string;
+    type: 'milestone' | 'quest' | 'character_level' | 'custom';
+    required: boolean;
+    completed: boolean;
+    targetValue?: number;
+    currentValue?: number;
+  }>;
+  
+  // 失敗条件
+  failConditions: Array<{
+    id: ID;
+    description: string;
+    triggered: boolean;
+    consequences: string[];
+  }>;
+  
+  // エンディング
+  availableEndings: Array<{
+    id: ID;
+    title: string;
+    description: string;
+    requirements: string[];
+    unlocked: boolean;
+  }>;
+  
+  // 統計
+  finalStatistics: {
+    totalPlayTime: number;
+    sessionsPlayed: number;
+    milestonesCompleted: number;
+    questsCompleted: number;
+    charactersLost: number;
+    finalCharacterLevels: Record<ID, number>;
+  };
+  
+  // 達成履歴
+  achievements?: string[];
+}
+
+// ==========================================
+// 時間管理システム
+// ==========================================
+
+// 日単位分割システム（旧: TimeSlot）
+export interface DayPeriod {
+  id: ID;
+  name: string;
+  description: string;
+  order: number;
+  actionsAllowed: number;
+  isRestPeriod: boolean;
+}
+
+// 下位互換性のための型エイリアス
+export type TimeSlot = DayPeriod;
+
+export interface GameDay {
+  id: ID;
+  campaignId: ID;
+  sessionId?: ID;
+  dayNumber: number;
+  currentDayPeriod: number; // 現在の日単位分割（旧: currentTimeSlot）
+  actionsRemaining: number;
+  isComplete: boolean;
+  events: DayEvent[];
+  createdAt: DateTime;
+  completedAt?: DateTime;
+}
+
+export interface DayEvent {
+  id: ID;
+  type: 'action' | 'rest' | 'event' | 'milestone';
+  description: string;
+  dayPeriod: number; // 日単位分割（旧: timeSlot）
+  characterId?: ID;
+  metadata: Record<string, any>;
+  timestamp: DateTime;
+}
+
+export interface TurnState {
+  id: ID;
+  sessionId: ID;
+  campaignId: ID;
+  currentDay: number;
+  maxDays: number;
+  currentPhase: 'planning' | 'action' | 'resolution' | 'rest';
+  activeCharacterId?: ID;
+  turnOrder: ID[];
+  phaseStartTime: DateTime;
+  settings: TurnSettings;
+  createdAt: DateTime;
+  updatedAt: DateTime;
+}
+
+export interface TurnSettings {
+  maxActionsPerDay: number;
+  maxDays: number;
+  dayPeriods: DayPeriod[]; // 日単位分割システム（旧: timeSlots）
+  autoProgressDay: boolean;
+  restRequired: boolean;
+  simultaneousTurns: boolean;
+}
+
+// ==========================================
+// ゲームテーマシステム
+// ==========================================
+
+export interface GameTheme {
+  id: ID;
+  name: string;
+  description: string;
+  genre: 'fantasy' | 'sci_fi' | 'modern' | 'historical' | 'horror' | 'mystery' | 'superhero' | 'western' | 'cyberpunk' | 'steampunk' | 'custom';
+  setting: string;
+  mood: 'heroic' | 'dark' | 'comedic' | 'dramatic' | 'mysterious' | 'action' | 'romantic' | 'survival';
+  difficulty: 'casual' | 'normal' | 'challenging' | 'hardcore';
+  style: 'combat_heavy' | 'roleplay_focused' | 'exploration' | 'puzzle_solving' | 'social_intrigue' | 'balanced';
+  specialRules?: string[];
+  keyElements?: string[];
+  restrictions?: string[];
+  playerPrompt?: string;
+  aiInstructions?: string;
+}
+
+// ==========================================
+// セッション時間管理システム
+// ==========================================
+
+export type SessionDurationType = 'short' | 'medium' | 'long' | 'custom';
+
+export interface SessionDurationConfig {
+  type: SessionDurationType;
+  totalDays: number;
+  actionsPerDay: number;
+  dayPeriods: DayPeriodConfig[]; // 日単位分割システム設定
+  estimatedPlayTime: number; // 分
+  milestoneCount: number;
+  description: string;
+}
+
+export interface DayPeriodConfig {
+  id: string;
+  name: string;
+  description: string;
+  order: number;
+  icon?: string; // オプション: UIアイコン用
+}
+
+export interface MilestoneSchedule {
+  id: ID;
+  day: number;
+  type: 'intermediate' | 'final' | 'branch_condition';
+  title: string;
+  description: string;
+  required: boolean;
+  conditions?: string[];
+}
+
+export interface DayAction {
+  id: ID;
+  type: 'exploration' | 'quest' | 'combat' | 'social' | 'rest' | 'custom';
+  description: string;
+  characterId?: ID;
+  duration: number; // 消費アクション数
+  dayPeriod?: number; // どの日単位分割で実行されたか
+  results?: string;
+  timestamp: DateTime;
+}
+
+export interface TimeManagementState {
+  currentDay: number;
+  totalDays: number;
+  actionsPerDay: number;
+  remainingActions: number;
+  currentDayPeriod: number; // 現在の日単位分割（0から開始）
+  dayPeriods: DayPeriodConfig[]; // 日単位分割システム
+  dailyActions: Record<number, DayAction[]>; // day -> actions
+  milestoneSchedule: MilestoneSchedule[];
+  completedMilestones: ID[];
+  durationType: SessionDurationType;
+  estimatedPlayTime: number;
+  sessionStartTime?: DateTime;
+}
+
+// 日単位分割システム定義
+export const DAY_PERIODS_3_ACTIONS: DayPeriodConfig[] = [
+  { id: 'morning', name: '朝', description: '1日の始まり。情報収集や準備に適した時間', order: 0, icon: 'morning' },
+  { id: 'day', name: '昼', description: 'メインの活動時間。探索や調査、戦闘など', order: 1, icon: 'day' },
+  { id: 'night', name: '夜', description: '1日の終わり。休息や振り返りの時間', order: 2, icon: 'night' }
+];
+
+export const DAY_PERIODS_4_ACTIONS: DayPeriodConfig[] = [
+  { id: 'morning', name: '朝', description: '1日の始まり。情報収集や準備に適した時間', order: 0, icon: 'morning' },
+  { id: 'day', name: '昼', description: 'メインの活動時間。探索や調査など', order: 1, icon: 'day' },
+  { id: 'evening', name: '夕方', description: '社交や情報交換に適した時間', order: 2, icon: 'evening' },
+  { id: 'night', name: '夜', description: '1日の終わり。休息や振り返りの時間', order: 3, icon: 'night' }
+];
+
+// セッション時間の事前定義
+export const SESSION_DURATION_PRESETS: Record<SessionDurationType, SessionDurationConfig> = {
+  short: {
+    type: 'short',
+    totalDays: 3,
+    actionsPerDay: 3,
+    dayPeriods: DAY_PERIODS_3_ACTIONS,
+    estimatedPlayTime: 30,
+    milestoneCount: 1,
+    description: '短時間プレイ: 3日間、日単位分割数3回、1つの最終マイルストーン、約30分'
+  },
+  medium: {
+    type: 'medium',
+    totalDays: 7,
+    actionsPerDay: 4,
+    dayPeriods: DAY_PERIODS_4_ACTIONS,
+    estimatedPlayTime: 70,
+    milestoneCount: 3,
+    description: '中時間プレイ: 7日間、日単位分割数4回、3つのマイルストーン（中間2つ）、約70分'
+  },
+  long: {
+    type: 'long',
+    totalDays: 11,
+    actionsPerDay: 4,
+    dayPeriods: DAY_PERIODS_4_ACTIONS,
+    estimatedPlayTime: 120,
+    milestoneCount: 5,
+    description: '長時間プレイ: 11日間、日単位分割数4回、5つのマイルストーン（中間3つ、最終条件分岐）、約2時間'
+  },
+  custom: {
+    type: 'custom',
+    totalDays: 5,
+    actionsPerDay: 3,
+    dayPeriods: DAY_PERIODS_3_ACTIONS,
+    estimatedPlayTime: 60,
+    milestoneCount: 2,
+    description: 'カスタム設定: 自由に設定可能'
+  }
+};
+
+// ==========================================
+// AIマイルストーン・エンティティプールシステム
+// ==========================================
+
+export type MilestoneType = 'enemy_defeat' | 'event_clear' | 'npc_communication' | 'item_acquisition' | 'quest_completion';
+export type MilestoneStatus = 'pending' | 'in_progress' | 'completed';
+
+export interface MilestoneTargetDetails {
+  entityType: 'enemy' | 'event' | 'npc' | 'item' | 'quest';
+  entityId: ID;
+  specificConditions: Record<string, any>; // 特定の条件（NPCとの特定会話内容等）
+}
+
+export interface MilestoneCondition {
+  type: string;
+  description: string;
+  required: boolean;
+  completed: boolean;
+}
+
+export interface MilestoneReward {
+  experiencePoints: number;
+  items: ID[]; // アイテムID配列
+  characterBenefits: Record<string, any>;
+  storyProgression: string;
+}
+
+// 新しいマイルストーン型（既存のMilestone型と区別するため）
+export interface AIMilestone {
+  id: ID;
+  campaignId: ID;
+  sessionId: ID;
+  title: string;
+  description: string;
+  type: MilestoneType;
+  targetId: ID; // 対象エンティティのID
+  targetDetails: MilestoneTargetDetails;
+  status: MilestoneStatus;
+  progress: number; // 0-100
+  requiredConditions: MilestoneCondition[];
+  reward: MilestoneReward;
+  createdAt: DateTime;
+  completedAt?: DateTime;
+}
+
+// ==========================================
+// エンティティプールシステム
+// ==========================================
+
+export interface EntityPool {
+  id: ID;
+  campaignId: ID;
+  sessionId: ID;
+  themeId: ID;
+  entities: EntityPoolCollection;
+  generatedAt: DateTime;
+  lastUpdated: DateTime;
+}
+
+export interface EntityPoolCollection {
+  enemies: PoolEnemy[];
+  events: InteractiveEvent[];
+  npcs: PoolNPC[];
+  items: PoolItem[];
+  quests: PoolQuest[];
+}
+
+// プール用エネミー（既存のEnemyCharacterと区別）
+export interface PoolEnemy {
+  id: ID;
+  name: string;
+  description: string;
+  level: number;
+  abilities: EnemyAbilities;
+  locationIds: ID[]; // 配置場所
+  isMilestoneTarget: boolean;
+  rewards: EnemyReward[];
+  behavior: EnemyBehavior;
+}
+
+export interface EnemyAbilities {
+  hitPoints: number;
+  attackPower: number;
+  defense: number;
+  specialAbilities: string[];
+  weaknesses: string[];
+  resistances: string[];
+}
+
+export interface EnemyReward {
+  type: 'experience' | 'currency' | 'item';
+  value: number;
+  description: string;
+}
+
+export interface EnemyBehavior {
+  aggression: number; // 0-10
+  intelligence: number; // 0-10
+  preferredTactics: string[];
+  combatDialogue: string[];
+}
+
+// ==========================================
+// インタラクティブイベントシステム
+// ==========================================
+
+export interface InteractiveEvent {
+  id: ID;
+  name: string;
+  description: string;
+  locationIds: ID[]; // 発生場所
+  choices: EventChoice[];
+  isMilestoneTarget: boolean;
+  requiredConditions: EventCondition[];
+  outcomes: EventOutcome[];
+}
+
+export interface EventChoice {
+  id: ID;
+  text: string;
+  description: string;
+  requirements: ChoiceRequirement[];
+  consequences: ChoiceConsequence[];
+}
+
+export interface ChoiceRequirement {
+  type: 'character_level' | 'skill_check' | 'item_possession' | 'story_flag';
+  value: number;
+  description: string;
+}
+
+export interface ChoiceConsequence {
+  type: 'reward' | 'penalty' | 'story_progression' | 'relationship_change';
+  description: string;
+  effects: Record<string, any>;
+}
+
+export interface EventCondition {
+  type: string;
+  description: string;
+  required: boolean;
+}
+
+export interface EventOutcome {
+  choiceId: ID;
+  successResult: string;
+  failureResult: string;
+  rewards: Record<string, any>;
+  consequences: string[];
+}
+
+// ==========================================
+// イベント実行状態管理
+// ==========================================
+
+export type DifficultyLevel = 'trivial' | 'easy' | 'medium' | 'hard' | 'extreme';
+
+// ==========================================
+// インタラクティブイベントシステム（拡張）
+// ==========================================
+
+export type InteractiveEventState = 
+  | 'waiting_for_choice'
+  | 'processing_choice'
+  | 'waiting_for_solution'
+  | 'calculating_difficulty'
+  | 'dice_rolling'
+  | 'processing_result'
+  | 'waiting_for_retry'
+  | 'completed'
+  | 'failed';
+
+export type EventStep = 
+  | 'choice_selection'
+  | 'ai_interpretation'
+  | 'task_presentation'
+  | 'solution_input'
+  | 'difficulty_calculation'
+  | 'dice_roll'
+  | 'result_processing'
+  | 'penalty_application'
+  | 'retry_selection';
+
+export interface InteractiveEventSession {
+  id: ID;
+  sessionId: ID;
+  eventId: ID;
+  playerId: ID;
+  characterId: ID;
+  state: InteractiveEventState;
+  currentStep: EventStep;
+  timeline: EventStepHistory[];
+  metadata: EventMetadata;
+  createdAt: DateTime;
+  updatedAt: DateTime;
+}
+
+export interface EventStepHistory {
+  step: EventStep;
+  timestamp: DateTime;
+  data: any;
+  aiResponse?: string;
+  playerInput?: string;
+  diceResult?: DiceRollResult;
+  penalties?: PenaltyEffect[];
+  duration: number; // ステップ実行時間（ミリ秒）
+}
+
+export interface EventMetadata {
+  startTime: DateTime;
+  totalAttempts: number;
+  currentAttempt: number;
+  maxAttempts: number;
+  accumulatedPenalties: PenaltyEffect[];
+  experienceEarned: number;
+  storyProgression: string[];
+  difficultyAdjustments: DifficultyAdjustment[];
+}
+
+// AI生成タスク定義
+export interface AITaskDefinition {
+  id: ID;
+  choiceId: ID;
+  interpretation: string;
+  objective: string;
+  approach: string[];
+  constraints: string[];
+  successCriteria: string[];
+  estimatedDifficulty: DifficultyLevel;
+  playerSolution?: string;
+  aiEvaluation?: TaskEvaluation;
+}
+
+export interface TaskEvaluation {
+  feasibility: number; // 0-100
+  creativity: number; // 0-100
+  riskLevel: number; // 0-100
+  approachQuality: number; // 0-100
+  finalDifficulty: DifficultyLevel;
+  modifiers: DifficultyModifier[];
+  reasoning: string;
+}
+
+// 動的難易度システム
+export interface DynamicDifficultySettings {
+  baseTargetNumber: number;
+  modifiers: DifficultyModifier[];
+  rollType: 'd20' | '2d10' | '3d6' | 'custom';
+  criticalSuccess: number;
+  criticalFailure: number;
+  retryPenalty: number;
+  maxRetries: number;
+}
+
+export interface DifficultyModifier {
+  id: ID;
+  type: 'player_creativity' | 'character_skill' | 'environmental' | 'story_relevance' | 'retry_penalty';
+  value: number; // 正の値は難易度を下げ、負の値は上げる
+  description: string;
+  temporary: boolean;
+}
+
+export interface DifficultyAdjustment {
+  timestamp: DateTime;
+  fromDifficulty: DifficultyLevel;
+  toDifficulty: DifficultyLevel;
+  reason: string;
+  aiReasoning: string;
+  modifiers: DifficultyModifier[];
+}
+
+// ペナルティシステム
+export interface PenaltyEffect {
+  id: ID;
+  type: 'hp_loss' | 'mp_loss' | 'status_effect' | 'item_loss' | 'time_loss' | 'reputation_loss' | 'skill_penalty';
+  amount: number;
+  description: string;
+  duration?: number; // ターン数、永続の場合は undefined
+  reversible: boolean;
+  severity: 'minor' | 'moderate' | 'major';
+  appliedAt: DateTime;
+  source: 'dice_failure' | 'retry_penalty' | 'time_penalty';
+}
+
+export interface StatusEffect {
+  id: ID;
+  name: string;
+  description: string;
+  type: 'buff' | 'debuff' | 'neutral';
+  stats: Partial<DerivedStats>;
+  duration: number; // ターン数
+  stackable: boolean;
+  source: string;
+}
+
+// リトライシステム
+export interface RetryOption {
+  id: ID;
+  description: string;
+  penaltyReduction: number; // 0-100%
+  costModifier: number; // コスト倍率
+  availableAttempts: number;
+  requirements?: string[];
+  unlockConditions?: RetryUnlockCondition[];
+}
+
+export interface RetryUnlockCondition {
+  type: 'character_level' | 'skill_value' | 'item_possession' | 'reputation' | 'previous_success';
+  threshold: number;
+  description: string;
+}
+
+// 結果処理
+export interface EventResult {
+  success: boolean;
+  finalScore: number;
+  targetNumber: number;
+  diceResult: DiceRollResult;
+  criticalType?: 'success' | 'failure';
+  narrative: string;
+  rewards?: EventReward[];
+  penalties?: PenaltyEffect[];
+  storyConsequences: string[];
+  relationshipChanges: Record<ID, number>; // NPC ID -> 関係値変化
+  experienceGained: number;
+}
+
+export interface EventReward {
+  type: 'experience' | 'currency' | 'item' | 'skill_point' | 'reputation' | 'story_element';
+  amount: number;
+  itemId?: ID;
+  description: string;
+  rarity?: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+}
+
+// AI統合用インターフェース
+export interface EventAIRequest {
+  type: 'choice_interpretation' | 'task_generation' | 'difficulty_calculation' | 'result_narration';
+  eventSession: InteractiveEventSession;
+  playerInput?: string;
+  choice?: EventChoice;
+  character: Character;
+  sessionContext: SessionContext;
+}
+
+export interface EventAIResponse {
+  success: boolean;
+  response: AITaskDefinition | TaskEvaluation | DynamicDifficultySettings | string;
+  processingTime: number;
+  tokensUsed: number;
+  error?: string;
+}
+
+export interface SessionContext {
+  campaignId: ID;
+  sessionId: ID;
+  currentLocation?: Location;
+  activeCharacters: Character[];
+  recentEvents: string[];
+  storyFlags: Record<string, any>;
+  timeOfDay: 'morning' | 'afternoon' | 'evening' | 'night';
+  weatherCondition?: string;
+}
+export type EventExecutionStatus = 'choice_selection' | 'approach_input' | 'dice_check' | 'result_processing' | 'completed';
+
+export interface EventExecutionState {
+  eventId: ID;
+  sessionId: ID;
+  currentChoiceId?: ID;
+  playerApproach?: string;
+  retryCount: number;
+  difficulty: DifficultyLevel;
+  baseDifficulty: DifficultyLevel;
+  status: EventExecutionStatus;
+  executionHistory: EventExecution[];
+}
+
+export interface EventExecution {
+  attempt: number;
+  choiceId: ID;
+  playerApproach: string;
+  difficulty: DifficultyLevel;
+  diceResult: DiceRollResult;
+  outcome: EventExecutionOutcome;
+  timestamp: DateTime;
+}
+
+export interface DiceRollResult {
+  diceType: string; // 'D20', 'D10', etc.
+  rawRoll: number;
+  modifiers: number;
+  totalResult: number;
+  targetNumber: number;
+  success: boolean;
+  criticalSuccess?: boolean;
+  criticalFailure?: boolean;
+}
+
+export interface EventExecutionOutcome {
+  success: boolean;
+  description: string;
+  rewards: string[];
+  penalties: string[];
+  storyProgression: string[];
+}
+
+// ==========================================
+// プール用NPC（既存のNPCCharacterと区別）
+// ==========================================
+
+export interface PoolNPC {
+  id: ID;
+  name: string;
+  description: string;
+  personality: NPCPersonality;
+  locationIds: ID[]; // 存在場所
+  dialoguePatterns: DialoguePattern[];
+  communicationConditions: CommunicationCondition[];
+  isMilestoneTarget: boolean;
+  relationshipLevel: number; // プレイヤーとの関係性
+}
+
+export interface NPCPersonality {
+  traits: string[];
+  goals: string[];
+  fears: string[];
+  motivations: string[];
+}
+
+export interface DialoguePattern {
+  trigger: string;
+  responses: string[];
+  mood: 'friendly' | 'neutral' | 'hostile' | 'curious';
+}
+
+export interface CommunicationCondition {
+  type: 'greeting' | 'information_request' | 'quest_related' | 'personal';
+  requiredRelationship: number; // 最低関係値
+  availableResponses: string[];
+}
+
+// ==========================================
+// プール用アイテム（既存のItemと区別）
+// ==========================================
+
+export type ItemType = 'weapon' | 'armor' | 'accessory' | 'consumable' | 'tool' | 'key_item' | 'misc';
+export type ItemRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+
+export interface PoolItem {
+  id: ID;
+  name: string;
+  description: string;
+  type: ItemType;
+  rarity: ItemRarity;
+  effects: ItemEffect[];
+  acquisitionMethods: AcquisitionMethod[]; // 入手方法
+  isMilestoneTarget: boolean;
+  value: number;
+}
+
+export interface ItemEffect {
+  type: 'stat_boost' | 'heal' | 'damage' | 'utility' | 'special';
+  magnitude: number;
+  description: string;
+  duration?: number; // ターン数、永続の場合は undefined
+}
+
+export interface AcquisitionMethod {
+  type: 'enemy_defeat' | 'event_completion' | 'npc_trade' | 'quest_reward' | 'exploration';
+  sourceId: ID; // 入手元のID
+  probability: number; // 0-1の確率
+  conditions?: string[];
+}
+
+// ==========================================
+// プール用クエスト（既存のQuestと区別）
+// ==========================================
+
+export interface PoolQuest {
+  id: ID;
+  title: string;
+  description: string;
+  type: 'main' | 'side' | 'personal' | 'discovery';
+  objectives: QuestObjective[];
+  rewards: QuestReward;
+  difficulty: DifficultyLevel;
+  estimatedTime: number; // 分
+  prerequisites: ID[];
+  isMilestoneTarget: boolean;
+}
+
+export interface QuestReward {
+  experience: number;
+  currency: number;
+  items: ID[];
+  storyProgression: string[];
+  relationshipChanges: Record<ID, number>; // NPC ID -> 関係値変化
+}
+
+// ==========================================
+// プール活動フィードバックシステム
+// ==========================================
+
+export type PoolActivityType = 'enemy_defeat' | 'event_participation' | 'npc_interaction' | 'item_discovery';
+export type FeedbackTone = 'encouraging' | 'informative' | 'rewarding' | 'story_advancing';
+export type ExperienceValue = 'high' | 'medium' | 'low';
+export type RewardType = 'experience' | 'item' | 'information' | 'relationship' | 'story_element';
+
+export interface PoolActivityFeedback {
+  id: ID;
+  sessionId: ID;
+  activityType: PoolActivityType;
+  entityId: ID;
+  playerId: ID;
+  isMilestoneRelated: boolean;
+  feedback: ActivityFeedback;
+  rewards: ActivityReward[];
+  timestamp: DateTime;
+}
+
+export interface ActivityFeedback {
+  message: string;
+  tone: FeedbackTone;
+  experienceValue: ExperienceValue; // 体験価値の評価
+  relationshipImpact: RelationshipImpact[];
+}
+
+export interface RelationshipImpact {
+  characterId: ID;
+  change: number; // -10 to 10
+  reason: string;
+}
+
+export interface ActivityReward {
+  type: RewardType;
+  value: number;
+  description: string;
+  permanent: boolean; // 永続的な効果か
+}
+
+// ==========================================
+// テーマ適応システム
+// ==========================================
+
+export interface ThemeAdaptation {
+  themeId: ID;
+  allowedEntityTypes: ('enemy' | 'event' | 'npc' | 'item' | 'quest')[];
+  restrictedEntityTypes: ('enemy' | 'event' | 'npc' | 'item' | 'quest')[];
+  specializations: ThemeSpecialization[];
+  contentModifiers: ContentModifier[];
+}
+
+export interface ThemeSpecialization {
+  entityType: 'enemy' | 'event' | 'npc' | 'item' | 'quest';
+  categories: string[]; // テーマ特化カテゴリ
+  examples: string[];
+  generationHints: string[];
+}
+
+export interface ContentModifier {
+  type: 'tone' | 'difficulty' | 'complexity' | 'focus';
+  value: string;
+  description: string;
+}
+
+// ==========================================
+// AIマイルストーン生成サービス型
+// ==========================================
+
+export interface MilestoneGenerationRequest {
+  campaignId: ID;
+  sessionId: ID;
+  themeId: ID;
+  sessionDuration: SessionDurationConfig;
+  milestoneCount: number; // 基本3個程度
+  existingContent?: {
+    characters: Character[];
+    locations: Location[];
+    quests: Quest[];
+  };
+}
+
+export interface MilestoneGenerationResponse {
+  milestones: AIMilestone[];
+  entityPool: EntityPool;
+  themeAdaptation: ThemeAdaptation;
+  generationMetadata: {
+    model: string;
+    prompt: string;
+    tokensUsed: number;
+    processingTime: number;
+    generatedAt: DateTime;
+  };
+}
+
+// ==========================================
+// 型ガード関数（追加）
+// ==========================================
+
+export function isPoolEnemy(entity: any): entity is PoolEnemy {
+  return entity && typeof entity.isMilestoneTarget === 'boolean' && entity.abilities;
+}
+
+export function isInteractiveEvent(entity: any): entity is InteractiveEvent {
+  return entity && Array.isArray(entity.choices) && Array.isArray(entity.locationIds);
+}
+
+export function isPoolNPC(entity: any): entity is PoolNPC {
+  return entity && entity.personality && Array.isArray(entity.dialoguePatterns);
+}
+
+export function isPoolItem(entity: any): entity is PoolItem {
+  return entity && Array.isArray(entity.acquisitionMethods) && typeof entity.isMilestoneTarget === 'boolean';
+}
+
+export function isPoolQuest(entity: any): entity is PoolQuest {
+  return entity && Array.isArray(entity.objectives) && typeof entity.isMilestoneTarget === 'boolean';
 }
