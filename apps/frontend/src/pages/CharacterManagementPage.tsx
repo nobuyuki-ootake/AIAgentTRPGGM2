@@ -30,20 +30,6 @@ const CharacterManagementPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState(0);
 
-  // キャンペーンIDがない場合はホームにリダイレクト
-  if (!id) {
-    return <Navigate to="/" replace />;
-  }
-
-  // キャンペーンが読み込まれていない場合はキャンペーンページにリダイレクト
-  if (!currentCampaign || currentCampaign.id !== id) {
-    return <Navigate to={`/campaign/${id}/setup`} replace />;
-  }
-
-  useEffect(() => {
-    loadCharacters();
-  }, [id]);
-
   const loadCharacters = async () => {
     setLoading(true);
     setError(null);
@@ -58,6 +44,22 @@ const CharacterManagementPage: React.FC = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (id) {
+      loadCharacters();
+    }
+  }, [id]);
+
+  // キャンペーンIDがない場合はホームにリダイレクト
+  if (!id) {
+    return <Navigate to="/" replace />;
+  }
+
+  // キャンペーンが読み込まれていない場合はキャンペーンページにリダイレクト
+  if (!currentCampaign || currentCampaign.id !== id) {
+    return <Navigate to={`/campaign/${id}/setup`} replace />;
+  }
 
   const pcCharacters = characters.filter(isTRPGCharacter);
   const npcCharacters = characters.filter(isNPCCharacter);

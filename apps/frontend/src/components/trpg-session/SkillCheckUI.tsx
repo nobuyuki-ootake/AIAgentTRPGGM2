@@ -14,20 +14,17 @@ import {
   Tooltip,
   Card,
   CardContent,
-  CardActions,
   Grid,
   CircularProgress,
   LinearProgress,
 } from '@mui/material';
 import {
   PlayArrow as PlayIcon,
-  Stop as StopIcon,
   RestartAlt as RestartIcon,
   Help as HelpIcon,
   Speed as SpeedIcon,
   Visibility as PerceptionIcon,
   Psychology as IntelligenceIcon,
-  Favorite as WisdomIcon,
   Group as CharismaIcon,
   Security as ConstitutionIcon,
 } from '@mui/icons-material';
@@ -124,11 +121,9 @@ export const SkillCheckUI: React.FC<SkillCheckUIProps> = ({
   title,
   description,
   characterStats,
-  derivedStats,
   availableSkills,
   suggestedSkills,
   difficulty,
-  checkType,
   onResult,
   onCancel,
   open,
@@ -146,7 +141,7 @@ export const SkillCheckUI: React.FC<SkillCheckUIProps> = ({
   });
 
   const [showHelp, setShowHelp] = useState(false);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
 
   // スキルアイコンマッピング
@@ -163,13 +158,13 @@ export const SkillCheckUI: React.FC<SkillCheckUIProps> = ({
   // 能力値ボーナス計算
   const getAbilityBonus = (skill: Skill): number => {
     switch (skill.attribute) {
-      case 'strength': return Math.floor((characterStats.strength - 10) / 2);
-      case 'dexterity': return Math.floor((characterStats.dexterity - 10) / 2);
-      case 'constitution': return Math.floor((characterStats.constitution - 10) / 2);
-      case 'intelligence': return Math.floor((characterStats.intelligence - 10) / 2);
-      case 'wisdom': return Math.floor((characterStats.wisdom - 10) / 2);
-      case 'charisma': return Math.floor((characterStats.charisma - 10) / 2);
-      default: return 0;
+    case 'strength': return Math.floor((characterStats.strength - 10) / 2);
+    case 'dexterity': return Math.floor((characterStats.dexterity - 10) / 2);
+    case 'constitution': return Math.floor((characterStats.constitution - 10) / 2);
+    case 'intelligence': return Math.floor((characterStats.intelligence - 10) / 2);
+    case 'wisdom': return Math.floor((characterStats.wisdom - 10) / 2);
+    case 'charisma': return Math.floor((characterStats.charisma - 10) / 2);
+    default: return 0;
     }
   };
 
@@ -211,7 +206,7 @@ export const SkillCheckUI: React.FC<SkillCheckUIProps> = ({
         if (timeLeft <= 0) {
           clearInterval(timer);
           // 時間切れ - 現在の結果で終了
-          finishChallenge(prev.hits, prev.misses, prev.challengeTargets.length);
+          finishChallenge(prev.hits, prev.challengeTargets.length);
           return prev;
         }
         
@@ -237,7 +232,7 @@ export const SkillCheckUI: React.FC<SkillCheckUIProps> = ({
           clearInterval(intervalRef.current);
           intervalRef.current = null;
         }
-        finishChallenge(newHits, prev.misses, prev.challengeTargets.length);
+        finishChallenge(newHits, prev.challengeTargets.length);
         return prev;
       }
       
@@ -261,7 +256,7 @@ export const SkillCheckUI: React.FC<SkillCheckUIProps> = ({
           clearInterval(intervalRef.current);
           intervalRef.current = null;
         }
-        finishChallenge(prev.hits, newMisses, prev.challengeTargets.length);
+        finishChallenge(prev.hits, prev.challengeTargets.length);
         return prev;
       }
       
@@ -274,7 +269,7 @@ export const SkillCheckUI: React.FC<SkillCheckUIProps> = ({
   }, []);
 
   // チャレンジ終了
-  const finishChallenge = useCallback((hits: number, misses: number, totalTargets: number) => {
+  const finishChallenge = useCallback((hits: number, totalTargets: number) => {
     if (!state.selectedSkill) return;
 
     const skill = state.selectedSkill;
@@ -406,7 +401,7 @@ export const SkillCheckUI: React.FC<SkillCheckUIProps> = ({
         maxWidth="md"
         fullWidth
         PaperProps={{
-          sx: { minHeight: '600px' }
+          sx: { minHeight: '600px' },
         }}
       >
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -554,16 +549,16 @@ export const SkillCheckUI: React.FC<SkillCheckUIProps> = ({
               <Alert 
                 severity={
                   state.result.criticalSuccess ? 'success' : 
-                  state.result.criticalFailure ? 'error' :
-                  state.result.success ? 'success' : 'warning'
+                    state.result.criticalFailure ? 'error' :
+                      state.result.success ? 'success' : 'warning'
                 }
                 sx={{ mb: 2 }}
               >
                 <Typography variant="body1">
                   <strong>
                     {state.result.criticalSuccess ? 'クリティカル成功！' :
-                     state.result.criticalFailure ? 'クリティカル失敗...' :
-                     state.result.success ? '成功！' : '失敗...'}
+                      state.result.criticalFailure ? 'クリティカル失敗...' :
+                        state.result.success ? '成功！' : '失敗...'}
                   </strong>
                 </Typography>
                 <Typography variant="body2">

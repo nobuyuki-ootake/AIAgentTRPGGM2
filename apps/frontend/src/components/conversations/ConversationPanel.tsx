@@ -7,8 +7,6 @@ import {
   List,
   ListItem,
   ListItemText,
-  ListItemAvatar,
-  Avatar,
   Button,
   TextField,
   Chip,
@@ -20,26 +18,20 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  IconButton,
-  Divider,
   Stack,
   Paper,
-  Tooltip,
 } from '@mui/material';
 import {
   Chat as ChatIcon,
   Send as SendIcon,
   SmartToy as AIIcon,
-  PersonAdd as InviteIcon,
-  Close as CloseIcon,
-  MoreVert as MoreIcon,
 } from '@mui/icons-material';
 import { 
-  CharacterConversation, 
+ 
   ConversationMessage, 
   Character,
   ConversationStartRequest,
-  ID 
+  ID, 
 } from '@ai-agent-trpg/types';
 import { useConversations } from '@/hooks/useConversations';
 
@@ -127,7 +119,7 @@ const ConversationPanel: React.FC<ConversationPanelProps> = ({
 
   const availableTargets = characters.filter(c => 
     c.id !== currentUserId && 
-    (!activeConversation || !activeConversation.participants.includes(c.id))
+    (!activeConversation || !activeConversation.participants.includes(c.id)),
   );
 
   const nonUserParticipants = activeConversation?.participants.filter(id => id !== currentUserId) || [];

@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useRecoilState, useSetRecoilState } from 'recoil';
-import { SessionState, Character } from '@ai-agent-trpg/types';
+import { useRecoilState } from 'recoil';
+import { SessionState, Character, SessionDurationConfig } from '@ai-agent-trpg/types';
 import { sessionAPI, characterAPI } from '@/api';
+import { aiGameMasterAPI, SessionContext } from '@/api/aiGameMaster';
 import { 
   currentSessionAtom, 
   charactersAtom, 
   sessionLoadingAtom,
-  notificationsAtom 
 } from '@/store/atoms';
 import { useNotification } from '@/components/common/NotificationProvider';
 import { useWebSocket } from './useWebSocket';
@@ -15,9 +15,17 @@ export interface UseSessionOptions {
   sessionId?: string;
   campaignId: string;
   pollingInterval?: number;
+  isPlayerMode?: boolean;
+  playerCharacter?: Character | null;
 }
 
-export const useSession = ({ sessionId, campaignId, pollingInterval = 3000 }: UseSessionOptions) => {
+export const useSession = ({ 
+  sessionId, 
+  campaignId, 
+  pollingInterval = 3000, 
+  isPlayerMode = false, 
+  playerCharacter, 
+}: UseSessionOptions) => {
   const [currentSession, setCurrentSession] = useRecoilState(currentSessionAtom);
   const [characters, setCharacters] = useRecoilState(charactersAtom);
   const [loading, setLoading] = useRecoilState(sessionLoadingAtom);
@@ -32,7 +40,7 @@ export const useSession = ({ sessionId, campaignId, pollingInterval = 3000 }: Us
     joinSession: wsJoinSession, 
     leaveSession: wsLeaveSession,
     onCompanionMessage,
-    onPlayerAction
+    onPlayerAction,
   } = useWebSocket();
 
   // 初期化フラグ（重複実行防止）
@@ -99,25 +107,64 @@ export const useSession = ({ sessionId, campaignId, pollingInterval = 3000 }: Us
       (updatedSession) => {
         setCurrentSession(updatedSession);
       },
-      pollingInterval
+      pollingInterval,
     ).then(stopFunction => {
       stopPollingRef.current = stopFunction;
     });
   }, [pollingInterval, setCurrentSession]);
 
   // セッション開始
-  const startSession = useCallback(async () => {
+  const startSession = useCallback(async (config?: SessionDurationConfig) => {
     if (!currentSession) return;
 
     try {
-      const updatedSession = await sessionAPI.updateSessionStatus(currentSession.id, 'active');
+      const updatedSession = await sessionAPI.updateSessionStatus(currentSession.id, 'active', config);
       setCurrentSession(updatedSession);
       showSuccess('セッションを開始しました');
       startPolling(updatedSession.id);
+      
+      // プレイヤーモードの場合、自動的にAIゲーム概要を生成
+      if (isPlayerMode) {
+        try {
+          // セッションコンテキストを構築
+          const sessionContext: SessionContext = {
+            currentSession: updatedSession,
+            characters,
+            activeQuests: [], // TODO: 実際のクエストデータを渡す
+            completedMilestones: [], // TODO: 実際のマイルストーンデータを渡す
+            recentEvents: [],
+            campaignTension: 50,
+            playerEngagement: 80,
+            storyProgression: 0,
+            difficulty: updatedSession.gameTheme?.difficulty || 'normal',
+            mood: updatedSession.gameTheme?.mood || 'adventurous',
+          };
+
+          // AI概要生成をリクエスト（非同期で実行）
+          aiGameMasterAPI.generateGameOverview({
+            sessionId: updatedSession.id,
+            campaignId: updatedSession.campaignId,
+            context: sessionContext,
+            provider: 'google', // TODO: ユーザー設定から取得
+          }).catch(error => {
+            console.warn('AI game overview generation failed:', error);
+            // エラーは表示しない（プレイヤー体験を阻害しないため）
+          });
+        } catch (error) {
+          console.warn('Failed to trigger AI game overview:', error);
+        }
+      }
     } catch (err) {
+      console.error('セッション開始エラー:', err);
+      console.error('エラー詳細:', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+        response: (err as any)?.response,
+        config: config
+      });
       showError('セッションの開始に失敗しました');
     }
-  }, [currentSession, setCurrentSession, showSuccess, showError, startPolling]);
+  }, [currentSession, setCurrentSession, showSuccess, showError, startPolling, isPlayerMode, characters]);
 
   // セッション終了
   const endSession = useCallback(async () => {
@@ -140,7 +187,7 @@ export const useSession = ({ sessionId, campaignId, pollingInterval = 3000 }: Us
   const sendMessage = useCallback(async (
     message: string,
     type: 'ic' | 'ooc' = 'ic',
-    characterId?: string
+    characterId?: string,
   ) => {
     if (!currentSession) return;
 
@@ -156,16 +203,50 @@ export const useSession = ({ sessionId, campaignId, pollingInterval = 3000 }: Us
 
       const updatedSession = await sessionAPI.sendChatMessage(currentSession.id, chatMessage);
       setCurrentSession(updatedSession);
+
+      // プレイヤーモードでIC（キャラクター発言）の場合、AI応答を自動生成
+      if (isPlayerMode && type === 'ic' && playerCharacter && characterId === playerCharacter.id) {
+        try {
+          // セッションコンテキストを構築
+          const sessionContext: SessionContext = {
+            currentSession: updatedSession,
+            characters,
+            activeQuests: [], // TODO: 実際のクエストデータを渡す
+            completedMilestones: [], // TODO: 実際のマイルストーンデータを渡す
+            recentEvents: [], // TODO: チャットメッセージから取得
+            campaignTension: 60, // TODO: 実際の値を計算
+            playerEngagement: 75, // TODO: 実際の値を計算
+            storyProgression: 40, // TODO: 実際の値を計算
+            difficulty: 'medium',
+            mood: 'adventurous',
+          };
+
+          // AI応答を生成（非同期で実行、エラーは無視）
+          aiGameMasterAPI.generatePlayerActionResponse({
+            sessionId: updatedSession.id,
+            playerCharacterId: playerCharacter.id,
+            playerAction: message,
+            sessionContext,
+            provider: 'google', // TODO: ユーザー設定から取得
+          }).catch(error => {
+            console.warn('AI response generation failed:', error);
+            // エラーは表示しない（プレイヤー体験を阻害しないため）
+          });
+        } catch (error) {
+          console.warn('Failed to trigger AI response:', error);
+          // エラーは表示しない
+        }
+      }
     } catch (err) {
       showError('メッセージの送信に失敗しました');
     }
-  }, [currentSession, characters, setCurrentSession, showError]);
+  }, [currentSession, characters, setCurrentSession, showError, isPlayerMode, playerCharacter]);
 
   // ダイスロール
   const rollDice = useCallback(async (
     dice: string,
     purpose: string = 'General roll',
-    characterId?: string
+    characterId?: string,
   ) => {
     if (!currentSession) return;
 
@@ -233,13 +314,11 @@ export const useSession = ({ sessionId, campaignId, pollingInterval = 3000 }: Us
       setCurrentSession(prevSession => {
         if (!prevSession) return prevSession;
         
-        return {
-          ...prevSession,
-          chatMessages: [...prevSession.chatMessages, data.message]
-        };
+        // TODO: チャットメッセージ管理を実装
+        return prevSession;
       });
       
-      showInfo(`${data.message.speaker}が反応しました`);
+      showInfo(`${data.message.sender}が反応しました`);
     });
 
     onPlayerAction((data) => {

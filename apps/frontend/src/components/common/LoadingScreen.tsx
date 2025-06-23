@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, CircularProgress, Typography, useTheme } from '@mui/material';
+import { Box, CircularProgress, Typography, useTheme, type SxProps, type Theme } from '@mui/material';
 
 interface LoadingScreenProps {
   message?: string;
@@ -16,39 +16,39 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
   
   const getSizeValue = () => {
     switch (size) {
-      case 'small':
-        return 32;
-      case 'medium':
-        return 48;
-      case 'large':
-        return 64;
-      default:
-        return 48;
+    case 'small':
+      return 32;
+    case 'medium':
+      return 48;
+    case 'large':
+      return 64;
+    default:
+      return 48;
     }
   };
 
-  const containerSx = fullScreen
+  const containerSx: SxProps<Theme> = fullScreen
     ? {
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: theme.palette.background.default,
-        zIndex: theme.zIndex.modal,
-      }
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.palette.background.default,
+      zIndex: theme.zIndex.modal,
+    }
     : {
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '200px',
-        width: '100%',
-      };
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: '200px',
+      width: '100%',
+    };
 
   return (
     <Box sx={containerSx}>

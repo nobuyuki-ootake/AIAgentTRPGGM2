@@ -47,16 +47,16 @@ const LocationDisplay: React.FC<LocationDisplayProps> = ({
 }) => {
   const getEnvironmentIcon = (type: string) => {
     switch (type) {
-      case 'lighting':
-        return <LightIcon />;
-      case 'temperature':
-        return <TempIcon />;
-      case 'weather':
-        return <WeatherIcon />;
-      case 'terrain':
-        return <TerrainIcon />;
-      default:
-        return null;
+    case 'lighting':
+      return <LightIcon />;
+    case 'temperature':
+      return <TempIcon />;
+    case 'weather':
+      return <WeatherIcon />;
+    case 'terrain':
+      return <TerrainIcon />;
+    default:
+      return null;
     }
   };
 
@@ -251,7 +251,7 @@ const LocationDisplay: React.FC<LocationDisplayProps> = ({
             {characters.map((character) => (
               <ListItem
                 key={character.id}
-                button={!!onCharacterClick}
+                {...(onCharacterClick && { component: 'button' })}
                 onClick={() => onCharacterClick?.(character)}
                 data-testid={`character-in-location-${character.id}`}
               >

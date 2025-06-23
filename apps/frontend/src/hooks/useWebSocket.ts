@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { ChatMessage, ID } from '@ai-agent-trpg/types';
+import { ID } from '@ai-agent-trpg/types';
+
+interface ChatMessage {
+  id: ID;
+  content: string;
+  timestamp: string;
+  sender: string;
+  type?: string;
+}
 import { logger } from '../utils/logger';
 
 interface WebSocketEvents {
@@ -12,7 +20,7 @@ interface WebSocketEvents {
   'player-action': {
     type: 'action_performed';
     sessionId: ID;
-    actionData: any;
+    actionData: unknown;
     timestamp: string;
   };
 }
@@ -38,7 +46,7 @@ export function useWebSocket(): UseWebSocketReturn {
   useEffect(() => {
     // WebSocket接続の初期化
     const initializeSocket = () => {
-      const serverUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+      const serverUrl = import.meta.env.VITE_WS_BASE_URL || 'http://localhost:4001';
       
       logger.info('Initializing WebSocket connection to:', serverUrl);
       

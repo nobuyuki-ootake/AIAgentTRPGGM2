@@ -27,7 +27,7 @@ export interface EventQueryParams {
 export const eventAPI = {
   async getEvents(params?: EventQueryParams): Promise<PaginatedResponse<TRPGEvent>> {
     return await apiClient.get<PaginatedResponse<TRPGEvent>>('/events', {
-      params
+      params,
     });
   },
 
@@ -137,5 +137,5 @@ export const eventAPI = {
     };
     
     return ratings[difficulty] || 1;
-  }
+  },
 };

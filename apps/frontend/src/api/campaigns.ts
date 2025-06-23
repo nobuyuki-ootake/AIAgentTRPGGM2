@@ -19,7 +19,7 @@ class CampaignAPI {
     if (filters?.search) params.append('search', filters.search);
     
     return apiClient.get<PaginatedResponse<TRPGCampaign>>(
-      `/campaigns${params.toString() ? `?${params.toString()}` : ''}`
+      `/campaigns${params.toString() ? `?${params.toString()}` : ''}`,
     );
   }
 

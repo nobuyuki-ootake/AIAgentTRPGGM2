@@ -8,7 +8,8 @@ export interface UseSessionEventsOptions {
   campaignId: string;
 }
 
-export const useSessionEvents = ({ sessionId, campaignId }: UseSessionEventsOptions) => {
+export const useSessionEvents = ({ campaignId }: UseSessionEventsOptions) => {
+  // sessionIdは今のところ使用していない
   const [events, setEvents] = useState<TRPGEvent[]>([]);
   const [currentEvent, setCurrentEvent] = useState<TRPGEvent | null>(null);
   const [eventQueue, setEventQueue] = useState<TRPGEvent[]>([]);
@@ -81,7 +82,7 @@ export const useSessionEvents = ({ sessionId, campaignId }: UseSessionEventsOpti
 
       const completedEvent = await eventAPI.completeEvent(
         currentEvent.id, 
-        outcomes || defaultOutcomes
+        outcomes || defaultOutcomes,
       );
       
       // Update local state
@@ -103,7 +104,7 @@ export const useSessionEvents = ({ sessionId, campaignId }: UseSessionEventsOpti
       exploration: ['exploration', 'story', 'puzzle'],
       combat: ['combat', 'story'],
       social: ['social', 'story'],
-      planning: ['rest', 'story']
+      planning: ['rest', 'story'],
     };
 
     const relevantTypes = modeToEventType[sessionMode] || ['story'];
@@ -124,7 +125,7 @@ export const useSessionEvents = ({ sessionId, campaignId }: UseSessionEventsOpti
   const createQuickEvent = useCallback(async (
     title: string, 
     description: string, 
-    type: TRPGEvent['type'] = 'story'
+    type: TRPGEvent['type'] = 'story',
   ) => {
     try {
       const quickEventData = {

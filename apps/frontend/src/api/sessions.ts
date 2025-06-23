@@ -1,4 +1,4 @@
-import { SessionState } from '@ai-agent-trpg/types';
+import { SessionState, SessionDurationConfig } from '@ai-agent-trpg/types';
 import { apiClient } from './client';
 
 interface ChatMessage {
@@ -39,8 +39,8 @@ class SessionAPI {
   }
 
   // セッション状態更新
-  async updateSessionStatus(id: string, status: string): Promise<SessionState> {
-    return apiClient.patch<SessionState>(`/sessions/${id}/status`, { status });
+  async updateSessionStatus(id: string, status: string, timeConfig?: SessionDurationConfig): Promise<SessionState> {
+    return apiClient.patch<SessionState>(`/sessions/${id}/status`, { status, timeConfig });
   }
 
   // チャットメッセージ送信
@@ -66,7 +66,7 @@ class SessionAPI {
   // セッション更新のポーリング（リアルタイム更新の簡易実装）
   async pollSession(sessionId: string, callback: (session: SessionState) => void, interval: number = 2000): Promise<() => void> {
     let isPolling = true;
-    let timeoutId: NodeJS.Timeout | null = null;
+    let timeoutId: number | null = null;
     
     const poll = async () => {
       if (!isPolling) return;

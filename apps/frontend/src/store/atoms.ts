@@ -145,6 +145,40 @@ export const developerModeAtom = atom<boolean>({
   ],
 });
 
+// ユーザーモード（プレイヤー体験モード）
+export const userModeAtom = atom<boolean>({
+  key: 'userMode',
+  default: localStorage.getItem('userMode') === 'true',
+  effects: [
+    ({ onSet }) => {
+      onSet((newValue) => {
+        localStorage.setItem('userMode', newValue.toString());
+      });
+    },
+  ],
+});
+
+// アプリケーションモード（開発者、ユーザー、標準）
+export type AppMode = 'standard' | 'developer' | 'user';
+
+export const appModeAtom = atom<AppMode>({
+  key: 'appMode',
+  default: (localStorage.getItem('appMode') as AppMode) || 'standard',
+  effects: [
+    ({ onSet }) => {
+      onSet((newValue) => {
+        localStorage.setItem('appMode', newValue);
+      });
+    },
+  ],
+});
+
+// プレイヤーキャラクター（ユーザーモード時に操作するキャラクター）
+export const playerCharacterAtom = atom<Character | null>({
+  key: 'playerCharacter',
+  default: null,
+});
+
 // ==========================================
 // 通知・エラー管理
 // ==========================================
@@ -192,8 +226,8 @@ export interface SelectedElements {
   campaign?: TRPGCampaign;
   characters?: Character[];
   session?: SessionState;
-  events?: any[];
-  quests?: any[];
+  events?: unknown[];
+  quests?: unknown[];
   notes?: string;
 }
 

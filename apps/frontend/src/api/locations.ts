@@ -52,6 +52,9 @@ export async function getLocations(query?: LocationQuery): Promise<PaginatedResp
     throw new Error('Failed to fetch locations');
   }
   
+  if (!result.data) {
+    throw new Error('No data received from API');
+  }
   return result.data;
 }
 
@@ -66,6 +69,9 @@ export async function getLocationById(id: ID): Promise<Location> {
     throw new Error('Failed to fetch location');
   }
   
+  if (!result.data) {
+    throw new Error('No data received from API');
+  }
   return result.data;
 }
 
@@ -87,6 +93,9 @@ export async function createLocation(data: CreateLocationData): Promise<Location
     throw new Error('Failed to create location');
   }
   
+  if (!result.data) {
+    throw new Error('No data received from API');
+  }
   return result.data;
 }
 
@@ -108,6 +117,9 @@ export async function updateLocation(id: ID, updates: Partial<Location>): Promis
     throw new Error('Failed to update location');
   }
   
+  if (!result.data) {
+    throw new Error('No data received from API');
+  }
   return result.data;
 }
 
@@ -141,6 +153,9 @@ export async function getCharactersInLocation(locationId: ID) {
     throw new Error('Failed to fetch characters in location');
   }
   
+  if (!result.data) {
+    throw new Error('No data received from API');
+  }
   return result.data;
 }
 
@@ -155,6 +170,9 @@ export async function getEventsInLocation(locationId: ID) {
     throw new Error('Failed to fetch events in location');
   }
   
+  if (!result.data) {
+    throw new Error('No data received from API');
+  }
   return result.data;
 }
 
@@ -169,6 +187,9 @@ export async function getConnectedLocations(locationId: ID): Promise<Location[]>
     throw new Error('Failed to fetch connected locations');
   }
   
+  if (!result.data) {
+    throw new Error('No data received from API');
+  }
   return result.data;
 }
 
@@ -188,6 +209,9 @@ export async function getNearbyLocations(locationId: ID, maxDistance?: number): 
     throw new Error('Failed to fetch nearby locations');
   }
   
+  if (!result.data) {
+    throw new Error('No data received from API');
+  }
   return result.data;
 }
 
@@ -213,6 +237,9 @@ export async function moveCharacter(data: MoveCharacterData): Promise<LocationMo
     throw new Error('Failed to move character');
   }
   
+  if (!result.data) {
+    throw new Error('No data received from API');
+  }
   return result.data;
 }
 
@@ -225,7 +252,7 @@ export async function createLocationInteraction(
   characterId: ID,
   interactionType: LocationInteraction['interactionType'],
   details: LocationInteraction['details'],
-  context?: LocationInteraction['context']
+  context?: LocationInteraction['context'],
 ): Promise<LocationInteraction> {
   const response = await fetch(`${API_BASE}/${locationId}/interactions`, {
     method: 'POST',
@@ -249,13 +276,16 @@ export async function createLocationInteraction(
     throw new Error('Failed to create location interaction');
   }
   
+  if (!result.data) {
+    throw new Error('No data received from API');
+  }
   return result.data;
 }
 
 export async function getLocationInteractions(
   locationId: ID,
   characterId?: ID,
-  interactionType?: LocationInteraction['interactionType']
+  interactionType?: LocationInteraction['interactionType'],
 ): Promise<LocationInteraction[]> {
   const searchParams = new URLSearchParams();
   if (characterId) {
@@ -275,6 +305,9 @@ export async function getLocationInteractions(
     throw new Error('Failed to fetch location interactions');
   }
   
+  if (!result.data) {
+    throw new Error('No data received from API');
+  }
   return result.data;
 }
 
@@ -296,5 +329,8 @@ export async function seedDefaultLocations(): Promise<Location[]> {
     throw new Error('Failed to seed default locations');
   }
   
+  if (!result.data) {
+    throw new Error('No data received from API');
+  }
   return result.data;
 }

@@ -4,7 +4,6 @@ import {
   Typography,
   Card,
   CardContent,
-  Box,
 } from '@mui/material';
 
 const SettingsPage: React.FC = () => {

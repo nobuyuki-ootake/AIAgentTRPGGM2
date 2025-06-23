@@ -5,7 +5,6 @@ import {
   CardContent,
   Typography,
   Switch,
-  FormControlLabel,
   Button,
   Chip,
   Stack,
@@ -27,7 +26,6 @@ import {
   Tooltip,
   Alert,
   Collapse,
-  Divider,
 } from '@mui/material';
 import {
   PlayArrowRounded,
@@ -35,7 +33,6 @@ import {
   SettingsRounded,
   SmartToyRounded,
   FeedbackRounded,
-  BugReportRounded,
   AutoModeRounded,
   TouchAppRounded,
   WarningRounded,
@@ -69,7 +66,6 @@ export const AIControlPanel: React.FC<AIControlPanelProps> = ({
 
   const {
     isActive,
-    controller,
     recentActions,
     controlledCharacters,
     loading,
@@ -114,7 +110,7 @@ export const AIControlPanel: React.FC<AIControlPanelProps> = ({
       sessionState: {
         mode: sessionState.mode,
         round: sessionState.combat?.round,
-        turn: sessionState.combat?.turn,
+        turn: sessionState.combat?.currentTurn,
         lastActions: recentActions.slice(0, 5),
       },
     });
@@ -129,7 +125,7 @@ export const AIControlPanel: React.FC<AIControlPanelProps> = ({
       sessionState: {
         mode: sessionState.mode,
         round: sessionState.combat?.round,
-        turn: sessionState.combat?.turn,
+        turn: sessionState.combat?.currentTurn,
         lastActions: recentActions.slice(0, 5),
       },
     });
@@ -146,7 +142,7 @@ export const AIControlPanel: React.FC<AIControlPanelProps> = ({
       await sendActionFeedback(
         selectedAction.id,
         feedbackRating,
-        feedbackComment || undefined
+        feedbackComment || undefined,
       );
       setFeedbackOpen(false);
       setSelectedAction(null);
@@ -162,23 +158,6 @@ export const AIControlPanel: React.FC<AIControlPanelProps> = ({
     }
   };
 
-  const getAutomationLevelColor = (level: string) => {
-    switch (level) {
-      case 'minimal': return 'success';
-      case 'moderate': return 'warning';
-      case 'extensive': return 'error';
-      default: return 'default';
-    }
-  };
-
-  const getAutomationLevelLabel = (level: string) => {
-    switch (level) {
-      case 'minimal': return '最小限';
-      case 'moderate': return '適度';
-      case 'extensive': return '高度';
-      default: return level;
-    }
-  };
 
   if (!hasAICharacters) {
     return (

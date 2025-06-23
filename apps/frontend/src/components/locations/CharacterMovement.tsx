@@ -102,18 +102,18 @@ const CharacterMovement: React.FC<CharacterMovementProps> = ({
 
   const getMovementIcon = (type: LocationMovement['movementType']) => {
     switch (type) {
-      case 'walk':
-        return <WalkIcon />;
-      case 'run':
-        return <RunIcon />;
-      case 'ride':
-        return <RideIcon />;
-      case 'fly':
-        return <FlyIcon />;
-      case 'teleport':
-        return <TeleportIcon />;
-      default:
-        return <WalkIcon />;
+    case 'walk':
+      return <WalkIcon />;
+    case 'run':
+      return <RunIcon />;
+    case 'ride':
+      return <RideIcon />;
+    case 'fly':
+      return <FlyIcon />;
+    case 'teleport':
+      return <TeleportIcon />;
+    default:
+      return <WalkIcon />;
     }
   };
 
@@ -124,7 +124,9 @@ const CharacterMovement: React.FC<CharacterMovementProps> = ({
       ride: '騎乗',
       fly: '飛行',
       teleport: 'テレポート',
-    };
+      swim: '水泳',
+      climb: '登はん',
+    } as const;
     return labels[type] || type;
   };
 
@@ -285,7 +287,7 @@ const CharacterMovement: React.FC<CharacterMovementProps> = ({
                       setCompanions(prev =>
                         prev.includes(companion.id)
                           ? prev.filter(id => id !== companion.id)
-                          : [...prev, companion.id]
+                          : [...prev, companion.id],
                       );
                     }}
                     data-testid={`companion-${companion.id}`}

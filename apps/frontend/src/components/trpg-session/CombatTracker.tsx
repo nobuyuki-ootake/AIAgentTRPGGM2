@@ -70,7 +70,7 @@ export const CombatTracker: React.FC<CombatTrackerProps> = ({
     setSelectedParticipants(prev =>
       prev.includes(characterId)
         ? prev.filter(id => id !== characterId)
-        : [...prev, characterId]
+        : [...prev, characterId],
     );
   };
 
@@ -82,19 +82,19 @@ export const CombatTracker: React.FC<CombatTrackerProps> = ({
 
   const getCharacterTypeIcon = (character: Character) => {
     switch (character.characterType) {
-      case 'PC': return <PersonRounded />;
-      case 'NPC': return <GroupRounded />;
-      case 'Enemy': return <SecurityRounded />;
-      default: return <PersonRounded />;
+    case 'PC': return <PersonRounded />;
+    case 'NPC': return <GroupRounded />;
+    case 'Enemy': return <SecurityRounded />;
+    default: return <PersonRounded />;
     }
   };
 
   const getCharacterTypeColor = (character: Character) => {
     switch (character.characterType) {
-      case 'PC': return 'primary';
-      case 'NPC': return 'success';
-      case 'Enemy': return 'error';
-      default: return 'default';
+    case 'PC': return 'primary';
+    case 'NPC': return 'success';
+    case 'Enemy': return 'error';
+    default: return 'default';
     }
   };
 
@@ -170,7 +170,7 @@ export const CombatTracker: React.FC<CombatTrackerProps> = ({
                       {getCurrentTurnCharacter()!.name}
                     </Typography>
                     <Typography variant="caption">
-                      {getCurrentTurnCharacter()!.class} Lv.{getCurrentTurnCharacter()!.level}
+                      {(getCurrentTurnCharacter() as any)?.characterClass || ''} Lv.{getCurrentTurnCharacter()!.level}
                     </Typography>
                   </Box>
                 </Box>
@@ -256,8 +256,8 @@ export const CombatTracker: React.FC<CombatTrackerProps> = ({
                               character.derivedStats.hitPoints / character.derivedStats.maxHitPoints > 0.5
                                 ? 'success'
                                 : character.derivedStats.hitPoints / character.derivedStats.maxHitPoints > 0.25
-                                ? 'warning'
-                                : 'error'
+                                  ? 'warning'
+                                  : 'error'
                             }
                           />
                         </Tooltip>
@@ -334,7 +334,7 @@ export const CombatTracker: React.FC<CombatTrackerProps> = ({
                           {character.name}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          {character.class} Lv.{character.level} | 
+                          {(character as any).characterClass || ''} Lv.{character.level} | 
                           イニシアチブ修正: +{character.derivedStats.initiative}
                         </Typography>
                       </Box>

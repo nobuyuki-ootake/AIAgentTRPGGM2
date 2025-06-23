@@ -30,7 +30,6 @@ import {
   PlayArrow as StartIcon,
   CheckCircle as CompleteIcon,
   Add as AddIcon,
-  Schedule as ScheduleIcon,
   LocationOn as LocationIcon,
   Group as GroupIcon,
   Star as SuggestIcon,
@@ -93,7 +92,7 @@ export const EventPanel: React.FC<EventPanelProps> = ({
     const createdEvent = await createQuickEvent(
       quickEventTitle,
       quickEventDescription,
-      quickEventType
+      quickEventType,
     );
 
     if (createdEvent) {
@@ -112,12 +111,12 @@ export const EventPanel: React.FC<EventPanelProps> = ({
 
   const getTypeIcon = (type: string) => {
     switch (type) {
-      case 'combat': return '⚔️';
-      case 'social': return '💬';
-      case 'exploration': return '🗺️';
-      case 'puzzle': return '🧩';
-      case 'rest': return '😴';
-      default: return '📖';
+    case 'combat': return '⚔️';
+    case 'social': return '💬';
+    case 'exploration': return '🗺️';
+    case 'puzzle': return '🧩';
+    case 'rest': return '😴';
+    default: return '📖';
     }
   };
 
@@ -157,7 +156,7 @@ export const EventPanel: React.FC<EventPanelProps> = ({
             <Box display="flex" alignItems="center" gap={2} mb={1}>
               <Box display="flex" alignItems="center">
                 <LocationIcon fontSize="small" sx={{ mr: 0.5 }} />
-                <Typography variant="body2">{currentEvent.location}</Typography>
+                <Typography variant="body2">{currentEvent.locationId || '未設定'}</Typography>
               </Box>
               <Box display="flex" alignItems="center">
                 <GroupIcon fontSize="small" sx={{ mr: 0.5 }} />
@@ -239,7 +238,7 @@ export const EventPanel: React.FC<EventPanelProps> = ({
                   </ListItemIcon>
                   <ListItemText
                     primary={event.title}
-                    secondary={`${event.location} • ${event.difficulty}`}
+                    secondary={`${event.locationId || '未設定'} • ${event.difficulty}`}
                   />
                   <Chip
                     label={event.type}
@@ -275,7 +274,7 @@ export const EventPanel: React.FC<EventPanelProps> = ({
                   secondary={
                     <Box component="span">
                       <Typography component="span" variant="body2">
-                        {event.location} • {event.difficulty}
+                        {event.locationId || '未設定'} • {event.difficulty}
                       </Typography>
                       <br />
                       <Typography component="span" variant="caption" color="text.secondary">

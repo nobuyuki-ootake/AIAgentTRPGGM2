@@ -17,7 +17,7 @@ class CharacterAPI {
   }
 
   // キャラクター作成
-  async createCharacter(characterData: Partial<Character> & { campaignId: string }): Promise<Character> {
+  async createCharacter(characterData: Character): Promise<Character> {
     return apiClient.post<Character>('/characters', characterData);
   }
 
@@ -64,7 +64,7 @@ class CharacterAPI {
       description: 'テスト用のプレイヤーキャラクター',
       age: 25,
       race: 'ヒューマン',
-      class: 'ファイター',
+      characterClass: 'ファイター',
       level: 3,
       experience: 900,
       baseStats,
@@ -165,7 +165,7 @@ class CharacterAPI {
       description: '冒険者の宿を営む気さくな中年男性',
       age: 45,
       race: 'ヒューマン',
-      class: '一般人',
+      characterClass: '一般人',
       level: 1,
       experience: 0,
       baseStats: {
@@ -245,7 +245,7 @@ class CharacterAPI {
       description: '小柄で狡猾な人型生物',
       age: 15,
       race: 'ゴブリン',
-      class: 'モンスター',
+      characterClass: 'モンスター',
       level: 1,
       experience: 0,
       baseStats: {
@@ -326,6 +326,20 @@ class CharacterAPI {
         },
       },
     };
+  }
+
+  // 汎用モックキャラクター作成
+  createMockCharacter(campaignId: string, characterType: 'PC' | 'NPC' | 'Enemy' = 'PC'): Character {
+    switch (characterType) {
+    case 'PC':
+      return this.createMockPC(campaignId) as Character;
+    case 'NPC':
+      return this.createMockNPC(campaignId) as Character;
+    case 'Enemy':
+      return this.createMockEnemy(campaignId) as Character;
+    default:
+      return this.createMockPC(campaignId) as Character;
+    }
   }
 }
 

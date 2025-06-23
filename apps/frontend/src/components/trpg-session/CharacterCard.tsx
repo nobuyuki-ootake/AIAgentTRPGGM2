@@ -96,7 +96,7 @@ export const CharacterCard: React.FC<CharacterCardProps> = ({
                 {character.name}
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                Lv.{character.level} {character.class}
+                Lv.{character.level} {(character as any).characterClass || ''}
               </Typography>
             </Box>
             <Chip label={getTypeLabel()} size="small" color={getTypeColor()} />
@@ -154,7 +154,7 @@ export const CharacterCard: React.FC<CharacterCardProps> = ({
               <Chip label={getTypeLabel()} size="small" color={getTypeColor()} />
               <Chip label={`Lv.${character.level}`} size="small" variant="outlined" />
               <Chip label={character.race} size="small" variant="outlined" />
-              <Chip label={character.class} size="small" variant="outlined" />
+              <Chip label={(character as any).characterClass || ''} size="small" variant="outlined" />
             </Box>
           </Box>
           {onEdit && (

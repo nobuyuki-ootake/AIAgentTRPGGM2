@@ -5,8 +5,11 @@ class ApiClient {
   private client: AxiosInstance;
 
   constructor() {
+    // Docker環境では直接バックエンドURLを使用、それ以外はViteプロキシを使用
+    const baseURL = import.meta.env.VITE_API_BASE_URL || '/api';
+    
     this.client = axios.create({
-      baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+      baseURL,
       timeout: 30000, // 30秒
       headers: {
         'Content-Type': 'application/json',
@@ -32,7 +35,7 @@ class ApiClient {
       (error) => {
         console.error('❌ API Request Error:', error);
         return Promise.reject(error);
-      }
+      },
     );
 
     // レスポンスインターセプター
@@ -78,32 +81,44 @@ class ApiClient {
         }
 
         return Promise.reject(error);
-      }
+      },
     );
   }
 
   // GET リクエスト
   async get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
     const response = await this.client.get<APIResponse<T>>(url, config);
-    return response.data.data!;
+    if (!response.data.data) {
+      throw new Error('No data received from API');
+    }
+    return response.data.data;
   }
 
   // POST リクエスト
   async post<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
     const response = await this.client.post<APIResponse<T>>(url, data, config);
-    return response.data.data!;
+    if (!response.data.data) {
+      throw new Error('No data received from API');
+    }
+    return response.data.data;
   }
 
   // PUT リクエスト
   async put<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
     const response = await this.client.put<APIResponse<T>>(url, data, config);
-    return response.data.data!;
+    if (!response.data.data) {
+      throw new Error('No data received from API');
+    }
+    return response.data.data;
   }
 
   // PATCH リクエスト
   async patch<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
     const response = await this.client.patch<APIResponse<T>>(url, data, config);
-    return response.data.data!;
+    if (!response.data.data) {
+      throw new Error('No data received from API');
+    }
+    return response.data.data;
   }
 
   // DELETE リクエスト

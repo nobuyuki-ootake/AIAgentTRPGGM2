@@ -18,17 +18,19 @@ import {
   PeopleRounded,
   TimelineRounded,
   PlayArrowRounded,
+  EditRounded,
 } from '@mui/icons-material';
-import { useRecoilState } from 'recoil';
-import { currentCampaignAtom } from '@/store/atoms';
+import { useRecoilState, useRecoilValue } from 'recoil';
+import { currentCampaignAtom, appModeAtom } from '@/store/atoms';
 import { campaignAPI, characterAPI } from '@/api';
-import { TRPGCampaign } from '@ai-agent-trpg/types';
 import { LoadingScreen } from '@/components/common/LoadingScreen';
+import { Character } from '@ai-agent-trpg/types';
 
 const CampaignSetupPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [currentCampaign, setCurrentCampaign] = useRecoilState(currentCampaignAtom);
+  const appMode = useRecoilValue(appModeAtom);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [snackbar, setSnackbar] = useState<{
@@ -40,15 +42,6 @@ const CampaignSetupPage: React.FC = () => {
     message: '',
     severity: 'info',
   });
-
-  // キャンペーンIDがない場合はホームにリダイレクト
-  if (!id) {
-    return <Navigate to="/" replace />;
-  }
-
-  useEffect(() => {
-    loadCampaign();
-  }, [id]);
 
   const loadCampaign = async () => {
     if (currentCampaign?.id === id) return;
@@ -66,6 +59,17 @@ const CampaignSetupPage: React.FC = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (id) {
+      loadCampaign();
+    }
+  }, [id]);
+
+  // キャンペーンIDがない場合はホームにリダイレクト
+  if (!id) {
+    return <Navigate to="/" replace />;
+  }
 
   const showSnackbar = (message: string, severity: 'success' | 'error' | 'warning' | 'info') => {
     setSnackbar({ open: true, message, severity });
@@ -92,10 +96,10 @@ const CampaignSetupPage: React.FC = () => {
       const enemy1 = characterAPI.createMockEnemy(currentCampaign.id);
 
       await Promise.all([
-        characterAPI.createCharacter(pc1),
-        characterAPI.createCharacter(pc2),
-        characterAPI.createCharacter(npc1),
-        characterAPI.createCharacter(enemy1),
+        characterAPI.createCharacter(pc1 as Character),
+        characterAPI.createCharacter(pc2 as Character),
+        characterAPI.createCharacter(npc1 as Character),
+        characterAPI.createCharacter(enemy1 as Character),
       ]);
 
       showSnackbar('モックキャラクターを作成しました！', 'success');
@@ -260,6 +264,30 @@ const CampaignSetupPage: React.FC = () => {
                 </Button>
               </CardContent>
             </Card>
+
+            {/* シナリオエディタ（開発者モードのみ） */}
+            {appMode === 'developer' && (
+              <Card>
+                <CardContent>
+                  <Box display="flex" alignItems="center" gap={1} mb={2}>
+                    <EditRounded color="primary" />
+                    <Typography variant="h6">シナリオエディタ</Typography>
+                  </Box>
+                  
+                  <Typography variant="body2" color="text.secondary" mb={2}>
+                    AIマイルストーン生成とシナリオ管理（GM専用）
+                  </Typography>
+                  
+                  <Button
+                    variant="outlined"
+                    fullWidth
+                    onClick={() => navigate(`/campaign/${id}/scenario-editor`)}
+                  >
+                    シナリオエディタ
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
 
             {/* セッション開始 */}
             <Card>

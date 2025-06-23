@@ -1,5 +1,5 @@
 import React from 'react';
-import { ThemeProvider, createTheme, Theme } from '@mui/material/styles';
+import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { useRecoilValue } from 'recoil';
 import { themeAtom } from '@/store/atoms';
 
@@ -153,7 +153,7 @@ export const AppTheme: React.FC<AppThemeProps> = ({ children }) => {
         },
       },
     }),
-    [themeMode]
+    [themeMode],
   );
 
   return <ThemeProvider theme={theme}>{children}</ThemeProvider>;

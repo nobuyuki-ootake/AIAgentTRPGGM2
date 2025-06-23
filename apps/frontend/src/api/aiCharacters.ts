@@ -2,7 +2,7 @@ import {
   AIAction, 
   AISessionController, 
   AIDecisionContext,
-  ID 
+  ID, 
 } from '@ai-agent-trpg/types';
 import { apiClient } from './client';
 
@@ -38,11 +38,11 @@ export const aiCharacterAPI = {
    */
   async startSessionAIControl(
     sessionId: ID, 
-    aiSettings?: AISessionSettings
+    aiSettings?: AISessionSettings,
   ): Promise<AISessionController> {
     return await apiClient.post<AISessionController>(
       `/ai-characters/sessions/${sessionId}/start`,
-      { aiSettings }
+      { aiSettings },
     );
   },
 
@@ -51,7 +51,7 @@ export const aiCharacterAPI = {
    */
   async stopSessionAIControl(sessionId: ID): Promise<{ success: boolean }> {
     return await apiClient.post<{ success: boolean }>(
-      `/ai-characters/sessions/${sessionId}/stop`
+      `/ai-characters/sessions/${sessionId}/stop`,
     );
   },
 
@@ -81,11 +81,11 @@ export const aiCharacterAPI = {
   async triggerCharacterAction(
     characterId: ID,
     sessionId: ID,
-    context?: Partial<AIDecisionContext>
+    context?: Partial<AIDecisionContext>,
   ): Promise<AIAction | null> {
     return await apiClient.post<AIAction | null>(
       `/ai-characters/characters/${characterId}/trigger-action`,
-      { sessionId, context }
+      { sessionId, context },
     );
   },
 
@@ -94,7 +94,7 @@ export const aiCharacterAPI = {
    */
   async executeAIAction(actionId: ID): Promise<{ success: boolean }> {
     return await apiClient.post<{ success: boolean }>(
-      `/ai-characters/actions/${actionId}/execute`
+      `/ai-characters/actions/${actionId}/execute`,
     );
   },
 
@@ -104,11 +104,11 @@ export const aiCharacterAPI = {
   async sendActionFeedback(
     actionId: ID,
     rating: number,
-    comment?: string
+    comment?: string,
   ): Promise<{ success: boolean }> {
     return await apiClient.post<{ success: boolean }>(
       `/ai-characters/actions/${actionId}/feedback`,
-      { rating, comment }
+      { rating, comment },
     );
   },
 
@@ -117,11 +117,11 @@ export const aiCharacterAPI = {
    */
   async updateCharacterSettings(
     characterId: ID,
-    settings: AICharacterSettings
+    settings: AICharacterSettings,
   ): Promise<AICharacterSettings & { characterId: ID; updatedAt: string }> {
     return await apiClient.put<any>(
       `/ai-characters/characters/${characterId}/settings`,
-      { settings }
+      { settings },
     );
   },
 
@@ -134,7 +134,7 @@ export const aiCharacterAPI = {
    */
   async startAutoProgress(
     sessionId: ID,
-    progressSettings?: AIProgressSettings
+    progressSettings?: AIProgressSettings,
   ): Promise<{
     sessionId: ID;
     enabled: boolean;
@@ -143,7 +143,7 @@ export const aiCharacterAPI = {
   }> {
     return await apiClient.post<any>(
       `/ai-characters/sessions/${sessionId}/auto-progress`,
-      { progressSettings }
+      { progressSettings },
     );
   },
 
@@ -153,7 +153,7 @@ export const aiCharacterAPI = {
   async emergencyStop(sessionId?: ID): Promise<{ success: boolean; message: string }> {
     return await apiClient.post<{ success: boolean; message: string }>(
       '/ai-characters/emergency-stop',
-      { sessionId }
+      { sessionId },
     );
   },
 
@@ -181,11 +181,11 @@ export const aiCharacterAPI = {
   async simulateAction(
     characterId: ID,
     sessionId: ID,
-    testContext: Partial<AIDecisionContext>
+    testContext: Partial<AIDecisionContext>,
   ): Promise<AIAction | null> {
     return await apiClient.post<AIAction | null>(
       '/ai-characters/debug/simulate-action',
-      { characterId, sessionId, testContext }
+      { characterId, sessionId, testContext },
     );
   },
 
@@ -201,13 +201,13 @@ export const aiCharacterAPI = {
       characterId: ID;
       sessionId: ID;
       context?: Partial<AIDecisionContext>;
-    }>
+    }>,
   ): Promise<Array<{ characterId: ID; action: AIAction | null; error?: string }>> {
     const results = await Promise.allSettled(
       requests.map(async (req) => ({
         characterId: req.characterId,
         action: await this.triggerCharacterAction(req.characterId, req.sessionId, req.context),
-      }))
+      })),
     );
 
     return results.map((result, index) => {
@@ -228,7 +228,7 @@ export const aiCharacterAPI = {
    */
   async controlAllAICharacters(
     sessionId: ID,
-    context: Partial<AIDecisionContext>
+    context: Partial<AIDecisionContext>,
   ): Promise<Array<{ characterId: ID; action: AIAction | null; error?: string }>> {
     try {
       // セッション状況を取得
@@ -253,7 +253,7 @@ export const aiCharacterAPI = {
    */
   async toggleCharacterAI(
     characterId: ID,
-    enabled: boolean
+    enabled: boolean,
   ): Promise<{ success: boolean }> {
     try {
       await this.updateCharacterSettings(characterId, { enabled });
@@ -269,7 +269,7 @@ export const aiCharacterAPI = {
    */
   async setSessionAutomationLevel(
     sessionId: ID,
-    level: 'minimal' | 'moderate' | 'extensive'
+    level: 'minimal' | 'moderate' | 'extensive',
   ): Promise<{ success: boolean }> {
     try {
       await this.stopSessionAIControl(sessionId);

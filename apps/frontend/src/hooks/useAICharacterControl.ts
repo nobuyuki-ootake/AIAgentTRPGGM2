@@ -5,9 +5,9 @@ import {
   AIDecisionContext,
   Character,
   SessionState,
-  ID 
+  ID, 
 } from '@ai-agent-trpg/types';
-import { aiCharacterAPI, AISessionSettings, AIProgressSettings } from '@/api/aiCharacters';
+import { aiCharacterAPI, AISessionSettings } from '@/api/aiCharacters';
 import { useNotification } from '@/components/common/NotificationProvider';
 
 export interface UseAICharacterControlOptions {
@@ -32,7 +32,7 @@ export const useAICharacterControl = ({
   const [loading, setLoading] = useState(false);
   
   const { showSuccess, showInfo, showError } = useNotification();
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<number | null>(null);
 
   // AI制御対象キャラクター（NPCとEnemy）を抽出
   const aiCharacters = characters.filter(c => c.characterType === 'NPC' || c.characterType === 'Enemy');
@@ -46,7 +46,7 @@ export const useAICharacterControl = ({
       setLoading(true);
       const sessionController = await aiCharacterAPI.startSessionAIControl(
         sessionId, 
-        settings || aiSettings
+        settings || aiSettings,
       );
       
       setController(sessionController);
@@ -94,13 +94,13 @@ export const useAICharacterControl = ({
 
   const triggerCharacterAction = useCallback(async (
     characterId: ID,
-    context?: Partial<AIDecisionContext>
+    context?: Partial<AIDecisionContext>,
   ) => {
     try {
       const action = await aiCharacterAPI.triggerCharacterAction(
         characterId,
         sessionId,
-        context
+        context,
       );
       
       if (action) {
@@ -121,7 +121,7 @@ export const useAICharacterControl = ({
   }, [sessionId, characters, showInfo]);
 
   const triggerAllAICharacterActions = useCallback(async (
-    context?: Partial<AIDecisionContext>
+    context?: Partial<AIDecisionContext>,
   ) => {
     if (!isActive || controlledCharacters.length === 0) return [];
 
@@ -160,7 +160,7 @@ export const useAICharacterControl = ({
           sessionState: {
             mode: sessionState.mode,
             round: sessionState.combat?.round,
-            turn: sessionState.combat?.turn,
+            turn: sessionState.combat?.currentTurn,
             activeEvent: sessionState.currentEvent,
             lastActions: recentActions.slice(0, 5),
           },
@@ -189,7 +189,7 @@ export const useAICharacterControl = ({
   const sendActionFeedback = useCallback(async (
     actionId: ID,
     rating: number,
-    comment?: string
+    comment?: string,
   ) => {
     try {
       await aiCharacterAPI.sendActionFeedback(actionId, rating, comment);
@@ -205,7 +205,7 @@ export const useAICharacterControl = ({
   // ==========================================
 
   const updateAutomationLevel = useCallback(async (
-    level: 'minimal' | 'moderate' | 'extensive'
+    level: 'minimal' | 'moderate' | 'extensive',
   ) => {
     try {
       setLoading(true);
@@ -233,7 +233,7 @@ export const useAICharacterControl = ({
 
   const toggleCharacterAI = useCallback(async (
     characterId: ID,
-    enabled: boolean
+    enabled: boolean,
   ) => {
     try {
       await aiCharacterAPI.toggleCharacterAI(characterId, enabled);

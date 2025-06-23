@@ -13,7 +13,6 @@ import {
   Stack,
   Divider,
   IconButton,
-  Tooltip,
 } from '@mui/material';
 import {
   CasinoRounded,
@@ -22,7 +21,6 @@ import {
   HistoryRounded,
 } from '@mui/icons-material';
 import { Character } from '@ai-agent-trpg/types';
-import { sessionAPI } from '@/api';
 
 interface DiceRollUIProps {
   characters: Character[];
@@ -101,11 +99,6 @@ export const DiceRollUI: React.FC<DiceRollUIProps> = ({
     }));
   };
 
-  const previewRoll = () => {
-    const expression = getDiceExpression();
-    const result = sessionAPI.simulateDiceRoll(expression);
-    return result;
-  };
 
   return (
     <Paper sx={{ p: 2 }}>
@@ -128,7 +121,7 @@ export const DiceRollUI: React.FC<DiceRollUIProps> = ({
             </MenuItem>
             {characters.map((char) => (
               <MenuItem key={char.id} value={char.id}>
-                {char.name} (Lv.{char.level} {char.class})
+                {char.name} (Lv.{char.level} {(char as any).characterClass || ''})
               </MenuItem>
             ))}
           </Select>

@@ -28,7 +28,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
         open={!!currentNotification}
         autoHideDuration={
           currentNotification?.type === 'error' ? 8000 : 
-          currentNotification?.type === 'warning' ? 6000 : 4000
+            currentNotification?.type === 'warning' ? 6000 : 4000
         }
         onClose={() => currentNotification && handleClose(currentNotification.id)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
@@ -67,7 +67,7 @@ export const useNotification = () => {
 
   const addNotification = React.useCallback((
     type: 'success' | 'error' | 'warning' | 'info',
-    message: string
+    message: string,
   ) => {
     const notification = {
       id: crypto.randomUUID(),

@@ -3,7 +3,7 @@ import {
   ConversationMessage, 
   ConversationStartRequest,
   AIConversationResponse,
-  ID 
+  ID, 
 } from '@ai-agent-trpg/types';
 
 const API_BASE = '/api/conversations';
@@ -44,7 +44,7 @@ export async function addMessage(
   speakerId: ID,
   content: string,
   messageType: ConversationMessage['messageType'] = 'dialogue',
-  metadata?: ConversationMessage['metadata']
+  metadata?: ConversationMessage['metadata'],
 ): Promise<ConversationMessage> {
   const response = await fetch(`${API_BASE}/${conversationId}/messages`, {
     method: 'POST',
@@ -82,7 +82,7 @@ export async function getLocationConversations(locationId: ID): Promise<Characte
 // キャラクターの会話履歴を取得
 export async function getCharacterConversations(
   characterId: ID, 
-  limit: number = 10
+  limit: number = 10,
 ): Promise<CharacterConversation[]> {
   const response = await fetch(`${API_BASE}/character/${characterId}?limit=${limit}`);
 
@@ -98,7 +98,7 @@ export async function getCharacterConversations(
 export async function generateAIResponse(
   conversationId: ID,
   targetCharacterId: ID,
-  context?: any
+  context?: any,
 ): Promise<{ aiResponse: AIConversationResponse; message: ConversationMessage }> {
   const response = await fetch(`${API_BASE}/${conversationId}/ai-response`, {
     method: 'POST',

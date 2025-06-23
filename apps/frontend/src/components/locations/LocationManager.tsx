@@ -32,7 +32,6 @@ import {
   Delete as DeleteIcon,
   LocationOn as LocationIcon,
   People as PeopleIcon,
-  Event as EventIcon,
   Explore as ExploreIcon,
   Refresh as RefreshIcon,
 } from '@mui/icons-material';
@@ -44,7 +43,7 @@ interface LocationManagerProps {
   campaignId?: string;
 }
 
-const LocationManager: React.FC<LocationManagerProps> = ({ campaignId }) => {
+const LocationManager: React.FC<LocationManagerProps> = () => {
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -55,18 +54,18 @@ const LocationManager: React.FC<LocationManagerProps> = ({ campaignId }) => {
   const { 
     locations, 
     loading, 
-    error, 
+    // error, // 未使用
     fetchLocations, 
     createLocation, 
     updateLocation, 
     deleteLocation,
-    seedDefaultLocations 
+    seedDefaultLocations, 
   } = useLocations(query);
 
   const { 
     location: selectedLocation, 
     charactersInLocation, 
-    connectedLocations 
+    connectedLocations, 
   } = useLocation(selectedLocationId);
 
   const handleCreateLocation = async (data: CreateLocationData) => {

@@ -3,8 +3,7 @@ import {
   CharacterConversation, 
   ConversationMessage, 
   ConversationStartRequest,
-  Character,
-  ID 
+  ID, 
 } from '@ai-agent-trpg/types';
 import * as conversationApi from '../api/conversations';
 import { useSnackbar } from 'notistack';
@@ -53,7 +52,7 @@ export function useConversations(locationId?: ID) {
     conversationId: ID,
     speakerId: ID,
     content: string,
-    messageType: ConversationMessage['messageType'] = 'dialogue'
+    messageType: ConversationMessage['messageType'] = 'dialogue',
   ) => {
     try {
       const message = await conversationApi.addMessage(conversationId, speakerId, content, messageType);
@@ -63,13 +62,13 @@ export function useConversations(locationId?: ID) {
         prev.map(conv => 
           conv.id === conversationId 
             ? { ...conv, messages: [...conv.messages, message] }
-            : conv
-        )
+            : conv,
+        ),
       );
 
       if (activeConversation?.id === conversationId) {
         setActiveConversation(prev => 
-          prev ? { ...prev, messages: [...prev.messages, message] } : null
+          prev ? { ...prev, messages: [...prev.messages, message] } : null,
         );
       }
 
@@ -84,12 +83,12 @@ export function useConversations(locationId?: ID) {
   // AI応答を生成
   const generateAIResponse = useCallback(async (
     conversationId: ID,
-    targetCharacterId: ID
+    targetCharacterId: ID,
   ) => {
     try {
       const { aiResponse, message } = await conversationApi.generateAIResponse(
         conversationId, 
-        targetCharacterId
+        targetCharacterId,
       );
       
       // ローカル状態を更新
@@ -97,13 +96,13 @@ export function useConversations(locationId?: ID) {
         prev.map(conv => 
           conv.id === conversationId 
             ? { ...conv, messages: [...conv.messages, message] }
-            : conv
-        )
+            : conv,
+        ),
       );
 
       if (activeConversation?.id === conversationId) {
         setActiveConversation(prev => 
-          prev ? { ...prev, messages: [...prev.messages, message] } : null
+          prev ? { ...prev, messages: [...prev.messages, message] } : null,
         );
       }
 
@@ -125,8 +124,8 @@ export function useConversations(locationId?: ID) {
         prev.map(conv => 
           conv.id === conversationId 
             ? { ...conv, status: 'ended' as const }
-            : conv
-        )
+            : conv,
+        ),
       );
 
       if (activeConversation?.id === conversationId) {

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   Box,
   Paper,
@@ -25,20 +25,27 @@ import { SessionState, Character } from '@ai-agent-trpg/types';
 interface ChatPanelProps {
   session: SessionState;
   characters: Character[];
+  isPlayerMode?: boolean;
   onSendMessage: (message: string, type: 'ic' | 'ooc', characterId?: string) => void;
   onRollDice: (dice: string, purpose: string, characterId?: string) => void;
+  currentChallenge?: {
+    description: string;
+    difficulty: number;
+    modifiers: string[];
+  };
 }
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({
   session,
   characters,
+  isPlayerMode = false,
   onSendMessage,
   onRollDice,
+  _currentChallenge,
 }) => {
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'ic' | 'ooc'>('ic');
   const [selectedCharacterId, setSelectedCharacterId] = useState<string>('');
-  const [diceExpression, setDiceExpression] = useState('1d20');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -49,50 +56,64 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     scrollToBottom();
   }, [session.chatLog]);
 
-  const handleSendMessage = () => {
+  const handleSendMessage = useCallback(() => {
     if (message.trim()) {
       onSendMessage(
         message.trim(),
         messageType,
-        selectedCharacterId || undefined
+        selectedCharacterId || undefined,
       );
       setMessage('');
     }
-  };
+  }, [message, messageType, selectedCharacterId, onSendMessage]);
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
     }
-  };
+  }, [handleSendMessage]);
 
-  const handleQuickDice = (dice: string) => {
+  const handleQuickDice = useCallback((dice: string) => {
     const purpose = selectedCharacterId
       ? `${characters.find(c => c.id === selectedCharacterId)?.name} のロール`
       : 'クイックロール';
     onRollDice(dice, purpose, selectedCharacterId || undefined);
-  };
+  }, [selectedCharacterId, characters, onRollDice]);
 
-  const getMessageColor = (type: string) => {
-    switch (type) {
-      case 'ic': return 'primary';
-      case 'ooc': return 'default';
-      case 'system': return 'info';
-      case 'dice': return 'success';
-      case 'whisper': return 'secondary';
-      default: return 'default';
-    }
-  };
+  const placeholderText = useMemo(() => {
+    return messageType === 'ic'
+      ? 'キャラクターとしてメッセージを入力...'
+      : 'プレイヤーとしてメッセージを入力...';
+  }, [messageType]);
 
-  const getMessageIcon = (type: string) => {
+  const handleCharacterChange = useCallback((e: any) => {
+    setSelectedCharacterId(e.target.value);
+  }, []);
+
+  const handleMessageTypeChange = useCallback((e: any) => {
+    setMessageType(e.target.value as 'ic' | 'ooc');
+  }, []);
+
+  const getMessageColor = useCallback((type: string) => {
     switch (type) {
-      case 'ic': return <PersonRounded />;
-      case 'ooc': return <GroupsRounded />;
-      case 'dice': return <CasinoRounded />;
-      default: return null;
+    case 'ic': return 'primary';
+    case 'ooc': return 'default';
+    case 'system': return 'info';
+    case 'dice': return 'success';
+    case 'whisper': return 'secondary';
+    default: return 'default';
     }
-  };
+  }, []);
+
+  const getMessageIcon = useCallback((type: string) => {
+    switch (type) {
+    case 'ic': return <PersonRounded />;
+    case 'ooc': return <GroupsRounded />;
+    case 'dice': return <CasinoRounded />;
+    default: return null;
+    }
+  }, []);
 
   return (
     <Paper sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -166,24 +187,26 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
       <Divider />
 
-      {/* ダイスクイックボタン */}
-      <Box sx={{ p: 1, borderBottom: 1, borderColor: 'divider' }}>
-        <Stack direction="row" spacing={1}>
-          <Typography variant="caption" sx={{ alignSelf: 'center', mr: 1 }}>
-            クイックダイス:
-          </Typography>
-          {['1d4', '1d6', '1d8', '1d10', '1d12', '1d20', '1d100'].map((dice) => (
-            <Chip
-              key={dice}
-              label={dice}
-              size="small"
-              clickable
-              onClick={() => handleQuickDice(dice)}
-              icon={<CasinoRounded />}
-            />
-          ))}
-        </Stack>
-      </Box>
+      {/* ダイスクイックボタン - プレイヤーモード時は非表示 */}
+      {!isPlayerMode && (
+        <Box sx={{ p: 1, borderBottom: 1, borderColor: 'divider' }}>
+          <Stack direction="row" spacing={1}>
+            <Typography variant="caption" sx={{ alignSelf: 'center', mr: 1 }}>
+              クイックダイス:
+            </Typography>
+            {['1d4', '1d6', '1d8', '1d10', '1d12', '1d20', '1d100'].map((dice) => (
+              <Chip
+                key={dice}
+                label={dice}
+                size="small"
+                clickable
+                onClick={() => handleQuickDice(dice)}
+                icon={<CasinoRounded />}
+              />
+            ))}
+          </Stack>
+        </Box>
+      )}
 
       {/* 入力エリア */}
       <Box sx={{ p: 2 }}>
@@ -194,7 +217,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               <InputLabel>キャラクター</InputLabel>
               <Select
                 value={selectedCharacterId}
-                onChange={(e) => setSelectedCharacterId(e.target.value)}
+                onChange={handleCharacterChange}
                 label="キャラクター"
               >
                 <MenuItem value="">
@@ -212,7 +235,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               <InputLabel>タイプ</InputLabel>
               <Select
                 value={messageType}
-                onChange={(e) => setMessageType(e.target.value as 'ic' | 'ooc')}
+                onChange={handleMessageTypeChange}
                 label="タイプ"
               >
                 <MenuItem value="ic">IC</MenuItem>
@@ -225,16 +248,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           <Box display="flex" gap={1}>
             <TextField
               fullWidth
-              multiline
-              maxRows={3}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder={
-                messageType === 'ic'
-                  ? 'キャラクターとしてメッセージを入力...'
-                  : 'プレイヤーとしてメッセージを入力...'
-              }
+              placeholder={placeholderText}
               size="small"
             />
             <IconButton

@@ -236,7 +236,7 @@ const TimelinePage: React.FC = () => {
       type: event.type,
       scheduledDate: event.scheduledDate.slice(0, 16),
       duration: event.duration,
-      location: event.location,
+      location: event.locationId || '',
       participants: event.participants,
       difficulty: event.difficulty,
       challengeRating: event.challengeRating,
@@ -272,12 +272,12 @@ const TimelinePage: React.FC = () => {
 
   const getTypeIcon = (type: string) => {
     switch (type) {
-      case 'combat': return '⚔️';
-      case 'social': return '💬';
-      case 'exploration': return '🗺️';
-      case 'puzzle': return '🧩';
-      case 'rest': return '😴';
-      default: return '📖';
+    case 'combat': return '⚔️';
+    case 'social': return '💬';
+    case 'exploration': return '🗺️';
+    case 'puzzle': return '🧩';
+    case 'rest': return '😴';
+    default: return '📖';
     }
   };
 
@@ -333,7 +333,7 @@ const TimelinePage: React.FC = () => {
                   height: '100%', 
                   display: 'flex', 
                   flexDirection: 'column',
-                  position: 'relative'
+                  position: 'relative',
                 }}
                 data-testid={`event-card-${event.id}`}
               >
@@ -385,7 +385,7 @@ const TimelinePage: React.FC = () => {
 
                   <Box display="flex" alignItems="center" mb={1}>
                     <LocationIcon fontSize="small" sx={{ mr: 1 }} />
-                    <Typography variant="body2">{event.location}</Typography>
+                    <Typography variant="body2">{event.locationId || '未設定'}</Typography>
                   </Box>
 
                   <Box display="flex" alignItems="center">

@@ -61,8 +61,8 @@ export function useLocations(initialQuery?: LocationQuery) {
       const updatedLocation = await locationApi.updateLocation(id, updates);
       setLocations(prev => 
         prev.map(location => 
-          location.id === id ? updatedLocation : location
-        )
+          location.id === id ? updatedLocation : location,
+        ),
       );
       enqueueSnackbar('場所を更新しました', { variant: 'success' });
       return updatedLocation;

@@ -36,7 +36,10 @@ import {
   sidebarOpenAtom,
   themeAtom,
   developerModeAtom,
+  appModeAtom,
+  userModeAtom,
   currentCampaignAtom,
+  AppMode,
 } from '@/store/atoms';
 
 interface AppLayoutProps {
@@ -52,6 +55,8 @@ interface NavigationItem {
   path: string;
   requiresCampaign?: boolean;
   developerOnly?: boolean;
+  userOnly?: boolean;
+  modes?: AppMode[];
 }
 
 export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
@@ -63,6 +68,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useRecoilState(sidebarOpenAtom);
   const [themeMode, setThemeMode] = useRecoilState(themeAtom);
   const [developerMode, setDeveloperMode] = useRecoilState(developerModeAtom);
+  const [appMode, setAppMode] = useRecoilState(appModeAtom);
+  const [userMode, setUserMode] = useRecoilState(userModeAtom);
   const currentCampaign = useRecoilValue(currentCampaignAtom);
 
   const handleDrawerToggle = () => {
@@ -74,8 +81,24 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   };
 
   const handleDeveloperModeToggle = () => {
-    setDeveloperMode(!developerMode);
+    const newDeveloperMode = !developerMode;
+    setDeveloperMode(newDeveloperMode);
+    
+    // 開発者モードON = シナリオ編集モード、OFF = プレイヤーモード
+    if (newDeveloperMode) {
+      setAppMode('developer');
+      setUserMode(false);
+    } else {
+      setAppMode('user');
+      setUserMode(true);
+    }
   };
+
+  // const handleAppModeChange = (mode: AppMode) => {
+  //   setAppMode(mode);
+  //   setDeveloperMode(mode === 'developer');
+  //   setUserMode(mode === 'user');
+  // }; // 未使用
 
   const navigationItems: NavigationItem[] = [
     {
@@ -83,13 +106,16 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       label: 'ホーム',
       icon: <HomeRounded />,
       path: '/',
+      modes: ['standard', 'developer', 'user'],
     },
+    // 開発者モード（GM向け）専用項目
     {
       id: 'campaign-setup',
       label: 'キャンペーン設定',
       icon: <CampaignRounded />,
       path: currentCampaign ? `/campaign/${currentCampaign.id}/setup` : '/',
       requiresCampaign: true,
+      modes: ['developer'],
     },
     {
       id: 'characters',
@@ -97,6 +123,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       icon: <PeopleRounded />,
       path: currentCampaign ? `/campaign/${currentCampaign.id}/characters` : '/',
       requiresCampaign: true,
+      modes: ['developer'],
     },
     {
       id: 'locations',
@@ -104,6 +131,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       icon: <LocationIcon />,
       path: currentCampaign ? `/campaign/${currentCampaign.id}/locations` : '/',
       requiresCampaign: true,
+      modes: ['developer'],
     },
     {
       id: 'timeline',
@@ -111,25 +139,55 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       icon: <TimelineRounded />,
       path: currentCampaign ? `/campaign/${currentCampaign.id}/timeline` : '/',
       requiresCampaign: true,
+      modes: ['developer'],
     },
     {
       id: 'session',
-      label: 'TRPGセッション',
+      label: 'GMセッション',
       icon: <SportsEsportsRounded />,
       path: currentCampaign ? `/campaign/${currentCampaign.id}/session` : '/',
       requiresCampaign: true,
+      modes: ['developer'],
     },
+    // ユーザーモード（プレイヤー向け）専用項目
+    {
+      id: 'player-select',
+      label: 'キャラクター選択',
+      icon: <PeopleRounded />,
+      path: currentCampaign ? `/campaign/${currentCampaign.id}/player-select` : '/',
+      requiresCampaign: true,
+      modes: ['user'],
+    },
+    {
+      id: 'play-session',
+      label: 'ゲーム開始',
+      icon: <SportsEsportsRounded />,
+      path: currentCampaign ? `/campaign/${currentCampaign.id}/play` : '/',
+      requiresCampaign: true,
+      modes: ['user'],
+    },
+    // 共通項目
     {
       id: 'settings',
       label: '設定',
       icon: <SettingsRounded />,
       path: '/settings',
+      modes: ['standard', 'developer', 'user'],
     },
   ];
+
+  // セッション中（プレイ中）かどうかを判定
+  const isInSession = location.pathname.includes('/play/');
 
   const filteredNavigationItems = navigationItems.filter(item => {
     if (item.requiresCampaign && !currentCampaign) return false;
     if (item.developerOnly && !developerMode) return false;
+    if (item.userOnly && !userMode) return false;
+    if (item.modes && !item.modes.includes(appMode)) return false;
+    
+    // セッション中はキャラクター選択を無効化
+    if (isInSession && item.id === 'player-select') return false;
+    
     return true;
   });
 
@@ -220,6 +278,13 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           sx={{ mb: 1 }}
         />
 
+        {/* アプリケーションモード表示 */}
+        <Box sx={{ mb: 1 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+            現在: {developerMode ? 'シナリオ編集モード' : 'プレイヤーモード'}
+          </Typography>
+        </Box>
+
         <FormControlLabel
           control={
             <Switch
@@ -230,8 +295,10 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           }
           label={
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <DeveloperModeRounded />
-              <Typography variant="caption">開発者モード</Typography>
+              {developerMode ? <DeveloperModeRounded /> : <SportsEsportsRounded />}
+              <Typography variant="caption">
+                {developerMode ? 'シナリオ編集モード' : 'プレイヤーモード'}
+              </Typography>
             </Box>
           }
         />
@@ -268,19 +335,19 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             {currentCampaign ? currentCampaign.name : 'AI TRPG Game Master'}
           </Typography>
 
-          {developerMode && (
+          {appMode !== 'standard' && (
             <Typography
               variant="caption"
               sx={{
-                bgcolor: 'warning.main',
-                color: 'warning.contrastText',
+                bgcolor: appMode === 'developer' ? 'warning.main' : appMode === 'user' ? 'success.main' : 'info.main',
+                color: appMode === 'developer' ? 'warning.contrastText' : appMode === 'user' ? 'success.contrastText' : 'info.contrastText',
                 px: 1,
                 py: 0.5,
                 borderRadius: 1,
                 mr: 2,
               }}
             >
-              DEV
+              {appMode === 'developer' ? 'DEV' : appMode === 'user' ? 'PLAYER' : 'STANDARD'}
             </Typography>
           )}
         </Toolbar>

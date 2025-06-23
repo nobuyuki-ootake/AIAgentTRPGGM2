@@ -1,7 +1,7 @@
 import React, { Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { RecoilRoot } from 'recoil';
-import { ThemeProvider, CssBaseline, Box } from '@mui/material';
+import { CssBaseline, Box } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 
@@ -18,6 +18,8 @@ const CharacterManagementPage = React.lazy(() => import('@/pages/CharacterManage
 const LocationManagementPage = React.lazy(() => import('@/pages/LocationManagementPage'));
 const TimelinePage = React.lazy(() => import('@/pages/TimelinePage'));
 const TRPGSessionPage = React.lazy(() => import('@/pages/TRPGSessionPage'));
+const PlayerCharacterSelectPage = React.lazy(() => import('@/pages/PlayerCharacterSelectPage'));
+const ScenarioEditorPage = React.lazy(() => import('@/pages/ScenarioEditorPage'));
 const SettingsPage = React.lazy(() => import('@/pages/SettingsPage'));
 
 function App() {
@@ -36,14 +38,20 @@ function App() {
                         {/* ホームページ */}
                         <Route path="/" element={<HomePage />} />
                         
-                        {/* キャンペーン管理 */}
+                        {/* キャンペーン管理（開発者モード） */}
                         <Route path="/campaign/:id" element={<Navigate to="/campaign/:id/setup" replace />} />
                         <Route path="/campaign/:id/setup" element={<CampaignSetupPage />} />
                         <Route path="/campaign/:id/characters" element={<CharacterManagementPage />} />
                         <Route path="/campaign/:id/locations" element={<LocationManagementPage />} />
                         <Route path="/campaign/:id/timeline" element={<TimelinePage />} />
+                        <Route path="/campaign/:id/scenario-editor" element={<ScenarioEditorPage />} />
                         <Route path="/campaign/:id/session" element={<TRPGSessionPage />} />
                         <Route path="/campaign/:id/session/:sessionId" element={<TRPGSessionPage />} />
+                        
+                        {/* プレイヤーモード */}
+                        <Route path="/campaign/:campaignId/player-select" element={<PlayerCharacterSelectPage />} />
+                        <Route path="/campaign/:campaignId/play" element={<TRPGSessionPage />} />
+                        <Route path="/campaign/:campaignId/play/:sessionId" element={<TRPGSessionPage />} />
                         
                         {/* 設定 */}
                         <Route path="/settings" element={<SettingsPage />} />

@@ -7,8 +7,11 @@ const StrictModeWrapper = import.meta.env.DEV
   ? React.StrictMode 
   : React.Fragment;
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+const rootElement = document.getElementById('root');
+if (!rootElement) throw new Error('Root element not found');
+
+ReactDOM.createRoot(rootElement).render(
   <StrictModeWrapper>
     <App />
-  </StrictModeWrapper>
+  </StrictModeWrapper>,
 );

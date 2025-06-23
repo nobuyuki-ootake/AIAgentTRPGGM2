@@ -109,7 +109,7 @@ export const PowerCheckUI: React.FC<PowerCheckUIProps> = ({
   });
 
   const [showHelp, setShowHelp] = useState(false);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
 
   // キャラクターの筋力ボーナスを計算
@@ -225,7 +225,7 @@ export const PowerCheckUI: React.FC<PowerCheckUIProps> = ({
       // ゾーン外の場合、距離に応じてペナルティ
       const outsideDistance = Math.min(
         Math.abs(currentPowerLevel - start),
-        Math.abs(currentPowerLevel - end)
+        Math.abs(currentPowerLevel - end),
       );
       timingBonusValue = -Math.floor(outsideDistance / 10); // 距離10ごとに-1
     }
@@ -332,7 +332,7 @@ export const PowerCheckUI: React.FC<PowerCheckUIProps> = ({
         maxWidth="md"
         fullWidth
         PaperProps={{
-          sx: { minHeight: '500px' }
+          sx: { minHeight: '500px' },
         }}
       >
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -383,7 +383,7 @@ export const PowerCheckUI: React.FC<PowerCheckUIProps> = ({
                   '& .MuiLinearProgress-bar': {
                     bgcolor: getTimingZoneColor(),
                     transition: state.phase === 'result' ? 'background-color 0.3s' : 'none',
-                  }
+                  },
                 }}
               />
               

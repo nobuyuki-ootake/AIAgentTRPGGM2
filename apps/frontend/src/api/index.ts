@@ -4,6 +4,13 @@ export { campaignAPI } from './campaigns';
 export { characterAPI } from './characters';
 export { sessionAPI } from './sessions';
 export { eventAPI } from './events';
+export { questAPI } from './quests';
+export { milestoneAPI } from './milestones';
+export { timeManagementAPI } from './timeManagement';
+export { approachAnalysisAPI } from './approachAnalysis';
+export { aiCharacterGenerationAPI } from './aiCharacterGeneration';
+export { aiMilestoneGenerationAPI } from './aiMilestoneGeneration';
+export { interactiveEventsAPI } from './interactiveEvents';
 
 // Re-export types for convenience
 export type {
