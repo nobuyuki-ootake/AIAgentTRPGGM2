@@ -225,7 +225,7 @@ export const ChoicePanel: React.FC<ChoicePanelProps> = ({
               {showRequirements && (requirements.failed.length > 0 || requirements.warnings.length > 0) && (
                 <Box mt={1}>
                   {requirements.failed.length > 0 && (
-                    <Alert severity="error" size="small" sx={{ mb: 1 }}>
+                    <Alert severity="error" sx={{ mb: 1 }}>
                       <Typography variant="caption">
                         <strong>要件不足:</strong>
                       </Typography>
@@ -240,7 +240,7 @@ export const ChoicePanel: React.FC<ChoicePanelProps> = ({
                   )}
                   
                   {requirements.warnings.length > 0 && (
-                    <Alert severity="warning" size="small">
+                    <Alert severity="warning">
                       <Typography variant="caption">
                         <strong>注意:</strong>
                       </Typography>

@@ -68,7 +68,7 @@ export const DifficultyDicePanel: React.FC<DifficultyDicePanelProps> = ({
   difficultySettings,
   character,
   taskEvaluation,
-  _playerSolution,
+  playerSolution: _playerSolution,
   loading = false,
   disabled = false,
   allowManualAdjustment = false,

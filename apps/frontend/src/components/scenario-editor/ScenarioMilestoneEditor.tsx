@@ -53,6 +53,7 @@ import { useRecoilValue } from 'recoil';
 import { 
   AIMilestone, 
   EntityPool,
+  EntityPoolCollection,
   MilestoneType,
   ID,
   SessionDurationConfig,
@@ -468,60 +469,138 @@ export const ScenarioMilestoneEditor: React.FC<ScenarioMilestoneEditorProps> = (
   );
 
   // エンティティプール概要セクション
-  const EntityPoolSection = () => (
-    <Box>
-      <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <StatsIcon color="primary" />
-        エンティティプール概要
-      </Typography>
+  const EntityPoolSection = () => {
+    const getEntityCounts = () => {
+      if (!entityPool) return null;
       
-      {!entityPool ? (
-        <Paper sx={{ p: 3, textAlign: 'center' }}>
-          <Typography color="text.secondary">
-            エンティティプールがまだ生成されていません。
-          </Typography>
-        </Paper>
-      ) : (
-        <Grid container spacing={2}>
-          <Grid item xs={6} sm={2.4}>
-            <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
-              <EnemyIcon color="error" sx={{ fontSize: 40, mb: 1 }} />
-              <Typography variant="h6">{entityPool.entities.enemies.length}</Typography>
-              <Typography variant="caption" color="text.secondary">敵</Typography>
-            </Card>
-          </Grid>
-          <Grid item xs={6} sm={2.4}>
-            <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
-              <EventIcon color="primary" sx={{ fontSize: 40, mb: 1 }} />
-              <Typography variant="h6">{entityPool.entities.events.length}</Typography>
-              <Typography variant="caption" color="text.secondary">イベント</Typography>
-            </Card>
-          </Grid>
-          <Grid item xs={6} sm={2.4}>
-            <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
-              <NPCIcon color="success" sx={{ fontSize: 40, mb: 1 }} />
-              <Typography variant="h6">{entityPool.entities.npcs.length}</Typography>
-              <Typography variant="caption" color="text.secondary">NPC</Typography>
-            </Card>
-          </Grid>
-          <Grid item xs={6} sm={2.4}>
-            <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
-              <ItemIcon color="warning" sx={{ fontSize: 40, mb: 1 }} />
-              <Typography variant="h6">{entityPool.entities.items.length}</Typography>
-              <Typography variant="caption" color="text.secondary">アイテム</Typography>
-            </Card>
-          </Grid>
-          <Grid item xs={6} sm={2.4}>
-            <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
-              <QuestIcon color="info" sx={{ fontSize: 40, mb: 1 }} />
-              <Typography variant="h6">{entityPool.entities.quests.length}</Typography>
-              <Typography variant="caption" color="text.secondary">クエスト</Typography>
-            </Card>
-          </Grid>
-        </Grid>
-      )}
-    </Box>
-  );
+      const entityCollection = entityPool.entities as EntityPoolCollection;
+      if (entityCollection.coreEntities && entityCollection.bonusEntities) {
+        // 新構造
+        return {
+          enemies: entityCollection.coreEntities.enemies?.length || 0,
+          events: entityCollection.coreEntities.events?.length || 0,
+          npcs: entityCollection.coreEntities.npcs?.length || 0,
+          items: entityCollection.coreEntities.items?.length || 0,
+          quests: entityCollection.coreEntities.quests?.length || 0,
+          practicalRewards: entityCollection.bonusEntities.practicalRewards?.length || 0,
+          trophyItems: entityCollection.bonusEntities.trophyItems?.length || 0,
+          mysteryItems: entityCollection.bonusEntities.mysteryItems?.length || 0,
+        };
+      } else {
+        // 旧構造との互換性
+        const legacyEntities = entityPool.entities as any;
+        return {
+          enemies: legacyEntities.enemies?.length || 0,
+          events: legacyEntities.events?.length || 0,
+          npcs: legacyEntities.npcs?.length || 0,
+          items: legacyEntities.items?.length || 0,
+          quests: legacyEntities.quests?.length || 0,
+          practicalRewards: 0,
+          trophyItems: 0,
+          mysteryItems: 0,
+        };
+      }
+    };
+    
+    const counts = getEntityCounts();
+    const entityCollection = entityPool?.entities as EntityPoolCollection;
+    const hasNewStructure = !!(entityCollection?.coreEntities && entityCollection?.bonusEntities);
+
+    return (
+      <Box>
+        <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <StatsIcon color="primary" />
+          エンティティプール概要
+        </Typography>
+        
+        {!entityPool ? (
+          <Paper sx={{ p: 3, textAlign: 'center' }}>
+            <Typography color="text.secondary">
+              エンティティプールがまだ生成されていません。
+            </Typography>
+          </Paper>
+        ) : (
+          <Box>
+            {/* コアエンティティ */}
+            <Typography variant="subtitle1" gutterBottom sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+              {hasNewStructure && <Chip label="コア" size="small" color="primary" />}
+              基本エンティティ
+            </Typography>
+            <Grid container spacing={2} sx={{ mb: hasNewStructure ? 3 : 0 }}>
+              <Grid item xs={6} sm={2.4}>
+                <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
+                  <EnemyIcon color="error" sx={{ fontSize: 40, mb: 1 }} />
+                  <Typography variant="h6">{counts?.enemies || 0}</Typography>
+                  <Typography variant="caption" color="text.secondary">敵</Typography>
+                </Card>
+              </Grid>
+              <Grid item xs={6} sm={2.4}>
+                <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
+                  <EventIcon color="primary" sx={{ fontSize: 40, mb: 1 }} />
+                  <Typography variant="h6">{counts?.events || 0}</Typography>
+                  <Typography variant="caption" color="text.secondary">イベント</Typography>
+                </Card>
+              </Grid>
+              <Grid item xs={6} sm={2.4}>
+                <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
+                  <NPCIcon color="success" sx={{ fontSize: 40, mb: 1 }} />
+                  <Typography variant="h6">{counts?.npcs || 0}</Typography>
+                  <Typography variant="caption" color="text.secondary">NPC</Typography>
+                </Card>
+              </Grid>
+              <Grid item xs={6} sm={2.4}>
+                <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
+                  <ItemIcon color="warning" sx={{ fontSize: 40, mb: 1 }} />
+                  <Typography variant="h6">{counts?.items || 0}</Typography>
+                  <Typography variant="caption" color="text.secondary">アイテム</Typography>
+                </Card>
+              </Grid>
+              <Grid item xs={6} sm={2.4}>
+                <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
+                  <QuestIcon color="info" sx={{ fontSize: 40, mb: 1 }} />
+                  <Typography variant="h6">{counts?.quests || 0}</Typography>
+                  <Typography variant="caption" color="text.secondary">クエスト</Typography>
+                </Card>
+              </Grid>
+            </Grid>
+            
+            {/* ボーナスエンティティ（新構造のみ） */}
+            {hasNewStructure && (
+              <>
+                <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Chip label="ボーナス" size="small" color="secondary" />
+                  報酬エンティティ
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={4}>
+                    <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
+                      <ItemIcon color="warning" sx={{ fontSize: 40, mb: 1 }} />
+                      <Typography variant="h6">{counts?.practicalRewards || 0}</Typography>
+                      <Typography variant="caption" color="text.secondary">実用報酬</Typography>
+                    </Card>
+                  </Grid>
+                  <Grid item xs={4}>
+                    <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
+                      <ItemIcon color="secondary" sx={{ fontSize: 40, mb: 1 }} />
+                      <Typography variant="h6">{counts?.trophyItems || 0}</Typography>
+                      <Typography variant="caption" color="text.secondary">トロフィー</Typography>
+                    </Card>
+                  </Grid>
+                  <Grid item xs={4}>
+                    <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
+                      <ItemIcon color="primary" sx={{ fontSize: 40, mb: 1 }} />
+                      <Typography variant="h6">{counts?.mysteryItems || 0}</Typography>
+                      <Typography variant="caption" color="text.secondary">謎アイテム</Typography>
+                    </Card>
+                  </Grid>
+                </Grid>
+              </>
+            )}
+          </Box>
+        )}
+      </Box>
+    );
+  };
 
   return (
     <Box sx={{ height, overflow: 'auto' }}>
@@ -658,10 +737,10 @@ export const ScenarioMilestoneEditor: React.FC<ScenarioMilestoneEditorProps> = (
                     ターゲット詳細
                   </Typography>
                   <Typography variant="body2">
-                    エンティティタイプ: {selectedMilestone.targetDetails.entityType}
+                    エンティティタイプ: {selectedMilestone.targetDetails[0]?.entityType || 'N/A'}
                   </Typography>
                   <Typography variant="body2">
-                    エンティティID: {selectedMilestone.targetDetails.entityId}
+                    エンティティID: {selectedMilestone.targetDetails[0]?.entityId || 'N/A'}
                   </Typography>
                 </>
               )}

@@ -128,14 +128,14 @@ export const SessionInterface: React.FC<SessionInterfaceProps> = ({
   // 会話ベースのTRPGフック
   const {
     processPlayerMessage,
-    _processDiceRoll,
+    processDiceRoll: _processDiceRoll,
     isProcessing: _isProcessingMessage,
     awaitingDiceRoll,
     currentChallenge,
   } = useConversationalTRPG(
     session.id,
     session.campaignId,
-    playerCharacter,
+    playerCharacter || null,
     session,
     characters,
     onSendMessage,

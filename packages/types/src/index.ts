@@ -1795,10 +1795,12 @@ export interface AIMilestone {
   title: string;
   description: string;
   type: MilestoneType;
-  targetId: ID; // 対象エンティティのID
-  targetDetails: MilestoneTargetDetails;
+  targetEntityIds: string[]; // 複数エンティティ対応（基本3個程度）
+  targetDetails: MilestoneTargetDetails[]; // 各エンティティの詳細
+  progressContributions: number[]; // 各エンティティの進捗貢献度 [33, 33, 34] 等
   status: MilestoneStatus;
-  progress: number; // 0-100
+  progress: number; // 0-100（全体進捗）
+  hiddenFromPlayer: boolean; // プレイヤーには非表示
   requiredConditions: MilestoneCondition[];
   reward: MilestoneReward;
   createdAt: DateTime;
@@ -1820,11 +1822,116 @@ export interface EntityPool {
 }
 
 export interface EntityPoolCollection {
+  // 後方互換性のため既存構造を維持
   enemies: PoolEnemy[];
   events: InteractiveEvent[];
   npcs: PoolNPC[];
   items: PoolItem[];
   quests: PoolQuest[];
+  
+  // 新しい二層構造
+  coreEntities: CoreEntityCollection; // マイルストーン必須
+  bonusEntities: BonusEntityCollection; // 追加報酬系
+}
+
+// マイルストーン必須エンティティ（コア）
+export interface CoreEntityCollection {
+  enemies: PoolEnemy[];
+  events: InteractiveEvent[];
+  npcs: PoolNPC[];
+  items: PoolItem[];
+  quests: PoolQuest[];
+}
+
+// 追加報酬系エンティティ（ボーナス）
+export interface BonusEntityCollection {
+  practicalRewards: PracticalRewardEntity[]; // 実用的報酬
+  trophyItems: TrophyEntity[]; // トロフィー・収集系
+  mysteryItems: MysteryEntity[]; // ミステリー系
+}
+
+// ==========================================
+// 報酬分類エンティティ型定義
+// ==========================================
+
+// 実用的報酬エンティティ（回復・装備・強化系）
+export interface PracticalRewardEntity {
+  id: ID;
+  name: string;
+  description: string;
+  type: 'healing' | 'equipment' | 'enhancement';
+  locationIds: ID[]; // 配置場所
+  timeConditions?: string[]; // 時間制限
+  prerequisites?: string[]; // 前提条件
+  rewards: {
+    items: Array<{
+      name: string;
+      effect: string;
+      quantity: number;
+      rarity: ItemRarity;
+    }>;
+    experience: number;
+  };
+}
+
+// トロフィー・収集系エンティティ（効果なしアイテム）
+export interface TrophyEntity {
+  id: ID;
+  name: string;
+  description: string;
+  locationIds: ID[]; // 配置場所
+  timeConditions?: string[];
+  prerequisites?: string[];
+  rewards: {
+    items: Array<{
+      name: string;
+      effect: "なし"; // 必ず「なし」
+      description: string;
+      category: "trophy";
+      rarity: ItemRarity;
+    }>;
+    information: string[]; // 世界観・歴史情報
+    experience: number; // 低め
+  };
+}
+
+// ミステリー系エンティティ（効果不明アイテム）
+export interface MysteryEntity {
+  id: ID;
+  name: string;
+  description: string;
+  locationIds: ID[]; // 配置場所
+  timeConditions?: string[];
+  prerequisites?: string[];
+  rewards: {
+    items: Array<{
+      name: string;
+      effect: "なし" | "不明"; // 効果不明
+      description: string;
+      category: "mystery_item";
+      hint?: string; // 謎めいたヒント
+    }>;
+    information: string[]; // 謎めいた情報
+    experience: number; // 最低限
+  };
+}
+
+// ==========================================
+// 場所エンティティマッピング
+// ==========================================
+
+export interface LocationEntityMapping {
+  id: ID;
+  sessionId: ID;
+  locationId: ID;
+  entityId: ID;
+  entityType: 'core' | 'bonus'; // コア/ボーナス分類
+  entityCategory: 'enemy' | 'event' | 'npc' | 'item' | 'quest' | 'practical' | 'trophy' | 'mystery'; // 具体的カテゴリ
+  timeConditions?: string[]; // ["day_time", "night_only", "after_rain"]
+  prerequisiteEntities?: string[]; // 前提エンティティID
+  isAvailable: boolean;
+  discoveredAt?: DateTime; // 発見日時
+  createdAt: DateTime;
 }
 
 // プール用エネミー（既存のEnemyCharacterと区別）

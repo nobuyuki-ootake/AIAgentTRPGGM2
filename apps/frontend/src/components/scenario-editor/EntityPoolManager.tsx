@@ -38,6 +38,7 @@ import {
 import { useRecoilValue } from 'recoil';
 import { 
   EntityPool,
+  EntityPoolCollection,
   ID,
 } from '@ai-agent-trpg/types';
 import { appModeAtom } from '../../store/atoms';
@@ -64,7 +65,9 @@ interface EntityPoolManagerProps {
   height?: number;
 }
 
-type EntityType = 'enemies' | 'events' | 'npcs' | 'items' | 'quests';
+type CoreEntityType = 'enemies' | 'events' | 'npcs' | 'items' | 'quests';
+type BonusEntityType = 'practicalRewards' | 'trophyItems' | 'mysteryItems';
+type EntityCategory = 'core' | 'bonus';
 type SortOption = 'name' | 'difficulty' | 'level' | 'createdAt';
 
 /**
@@ -76,7 +79,8 @@ export const EntityPoolManager: React.FC<EntityPoolManagerProps> = ({
   height = 600,
 }) => {
   const appMode = useRecoilValue(appModeAtom);
-  const [selectedEntityType, setSelectedEntityType] = useState<EntityType>('enemies');
+  const [selectedEntityType, setSelectedEntityType] = useState<CoreEntityType | BonusEntityType>('enemies');
+  const [selectedCategory, setSelectedCategory] = useState<EntityCategory>('core');
   const [selectedEntity, setSelectedEntity] = useState<any>(null);
   const [showEntityDetail, setShowEntityDetail] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -89,7 +93,7 @@ export const EntityPoolManager: React.FC<EntityPoolManagerProps> = ({
   }
 
   // エンティティタイプのアイコンを取得
-  const getEntityTypeIcon = (type: EntityType, size: 'small' | 'medium' | 'large' = 'medium') => {
+  const getEntityTypeIcon = (type: CoreEntityType | BonusEntityType, size: 'small' | 'medium' | 'large' = 'medium') => {
     const iconSize = size === 'small' ? 24 : size === 'medium' ? 32 : 48;
     
     switch (type) {
@@ -98,18 +102,24 @@ export const EntityPoolManager: React.FC<EntityPoolManagerProps> = ({
       case 'npcs': return <NPCIcon style={{ fontSize: iconSize }} color="success" />;
       case 'items': return <ItemIcon style={{ fontSize: iconSize }} color="warning" />;
       case 'quests': return <QuestIcon style={{ fontSize: iconSize }} color="info" />;
+      case 'practicalRewards': return <ItemIcon style={{ fontSize: iconSize }} color="warning" />;
+      case 'trophyItems': return <ItemIcon style={{ fontSize: iconSize }} color="secondary" />;
+      case 'mysteryItems': return <ItemIcon style={{ fontSize: iconSize }} color="primary" />;
       default: return <ItemIcon style={{ fontSize: iconSize }} color="disabled" />;
     }
   };
 
   // エンティティタイプの表示名を取得
-  const getEntityTypeLabel = (type: EntityType) => {
+  const getEntityTypeLabel = (type: CoreEntityType | BonusEntityType) => {
     const labels = {
       enemies: '敵キャラクター',
       events: 'インタラクティブイベント',
       npcs: 'NPCキャラクター',
       items: 'アイテム',
       quests: 'クエスト',
+      practicalRewards: '実用報酬',
+      trophyItems: 'トロフィーアイテム',
+      mysteryItems: '謎のアイテム',
     };
     return labels[type];
   };
@@ -119,22 +129,62 @@ export const EntityPoolManager: React.FC<EntityPoolManagerProps> = ({
     if (!entityPool) return [];
     
     let entities: any[] = [];
-    switch (selectedEntityType) {
-      case 'enemies':
-        entities = entityPool.entities.enemies || [];
-        break;
-      case 'events':
-        entities = entityPool.entities.events || [];
-        break;
-      case 'npcs':
-        entities = entityPool.entities.npcs || [];
-        break;
-      case 'items':
-        entities = entityPool.entities.items || [];
-        break;
-      case 'quests':
-        entities = entityPool.entities.quests || [];
-        break;
+    
+    // 新しい二層構造をサポート
+    const entityCollection = entityPool.entities as EntityPoolCollection;
+    if (entityCollection.coreEntities && entityCollection.bonusEntities) {
+      // 新構造
+      if (selectedCategory === 'core') {
+        switch (selectedEntityType as CoreEntityType) {
+          case 'enemies':
+            entities = entityCollection.coreEntities.enemies || [];
+            break;
+          case 'events':
+            entities = entityCollection.coreEntities.events || [];
+            break;
+          case 'npcs':
+            entities = entityCollection.coreEntities.npcs || [];
+            break;
+          case 'items':
+            entities = entityCollection.coreEntities.items || [];
+            break;
+          case 'quests':
+            entities = entityCollection.coreEntities.quests || [];
+            break;
+        }
+      } else {
+        switch (selectedEntityType as BonusEntityType) {
+          case 'practicalRewards':
+            entities = entityCollection.bonusEntities.practicalRewards || [];
+            break;
+          case 'trophyItems':
+            entities = entityCollection.bonusEntities.trophyItems || [];
+            break;
+          case 'mysteryItems':
+            entities = entityCollection.bonusEntities.mysteryItems || [];
+            break;
+        }
+      }
+    } else {
+      // 旧構造との互換性
+      const legacyEntities = entityPool.entities as any;
+      switch (selectedEntityType) {
+        case 'enemies':
+          entities = legacyEntities.enemies || [];
+          break;
+        case 'events':
+          entities = legacyEntities.events || [];
+          break;
+        case 'npcs':
+          entities = legacyEntities.npcs || [];
+          break;
+        case 'items':
+          entities = legacyEntities.items || [];
+          break;
+        case 'quests':
+          entities = legacyEntities.quests || [];
+          break;
+      }
     }
 
     // フィルタリング
@@ -201,15 +251,64 @@ export const EntityPoolManager: React.FC<EntityPoolManagerProps> = ({
     setShowEntityDetail(true);
   };
 
+  // カテゴリ選択タブ
+  const CategoryTabs = () => (
+    <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+      <Box sx={{ display: 'flex', gap: 1 }}>
+        <Button
+          variant={selectedCategory === 'core' ? 'contained' : 'outlined'}
+          onClick={() => {
+            setSelectedCategory('core');
+            setSelectedEntityType('enemies');
+          }}
+          size="small"
+        >
+          コアエンティティ
+        </Button>
+        <Button
+          variant={selectedCategory === 'bonus' ? 'contained' : 'outlined'}
+          onClick={() => {
+            setSelectedCategory('bonus');
+            setSelectedEntityType('practicalRewards');
+          }}
+          size="small"
+        >
+          ボーナスエンティティ
+        </Button>
+      </Box>
+    </Box>
+  );
+
   // エンティティタイプ選択タブ
   const EntityTypeTabs = () => {
-    const entityTypes: EntityType[] = ['enemies', 'events', 'npcs', 'items', 'quests'];
+    const coreEntityTypes: CoreEntityType[] = ['enemies', 'events', 'npcs', 'items', 'quests'];
+    const bonusEntityTypes: BonusEntityType[] = ['practicalRewards', 'trophyItems', 'mysteryItems'];
+    
+    const entityTypes = selectedCategory === 'core' ? coreEntityTypes : bonusEntityTypes;
+    
+    const getEntityCount = (type: CoreEntityType | BonusEntityType) => {
+      if (!entityPool) return 0;
+      
+      const entityCollection = entityPool.entities as EntityPoolCollection;
+      if (entityCollection.coreEntities && entityCollection.bonusEntities) {
+        // 新構造
+        if (selectedCategory === 'core') {
+          return entityCollection.coreEntities[type as CoreEntityType]?.length || 0;
+        } else {
+          return entityCollection.bonusEntities[type as BonusEntityType]?.length || 0;
+        }
+      } else {
+        // 旧構造との互換性
+        const legacyEntities = entityPool.entities as any;
+        return legacyEntities[type]?.length || 0;
+      }
+    };
     
     return (
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
           {entityTypes.map((type) => {
-            const count = entityPool?.entities[type]?.length || 0;
+            const count = getEntityCount(type);
             return (
               <Button
                 key={type}
@@ -435,6 +534,9 @@ export const EntityPoolManager: React.FC<EntityPoolManagerProps> = ({
 
       {entityPool && (
         <>
+          {/* カテゴリ選択 */}
+          <CategoryTabs />
+          
           {/* エンティティタイプ選択 */}
           <EntityTypeTabs />
 

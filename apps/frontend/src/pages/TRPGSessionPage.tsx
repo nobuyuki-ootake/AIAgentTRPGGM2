@@ -280,8 +280,8 @@ const TRPGSessionPage: React.FC = () => {
             <strong>デバッグ情報:</strong><br />
             • Campaign ID: {actualCampaignId}<br />
             • Player Mode: {isPlayerMode ? 'はい' : 'いいえ'}<br />
-            • Recoil Player Character: {playerCharacter ? playerCharacter.name : 'なし'}<br />
-            • Navigation Player Character: {selectedPlayerCharacter ? selectedPlayerCharacter.name : 'なし'}<br />
+            • Recoil Player Character: {playerCharacter ? (playerCharacter as any).name || '名前不明' : 'なし'}<br />
+            • Navigation Player Character: {selectedPlayerCharacter && typeof selectedPlayerCharacter === 'object' && 'name' in selectedPlayerCharacter ? selectedPlayerCharacter.name : 'なし'}<br />
             • Current URL: {location.pathname}
           </Typography>
         </Alert>

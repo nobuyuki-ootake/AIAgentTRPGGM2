@@ -11,6 +11,8 @@ export { approachAnalysisAPI } from './approachAnalysis';
 export { aiCharacterGenerationAPI } from './aiCharacterGeneration';
 export { aiMilestoneGenerationAPI } from './aiMilestoneGeneration';
 export { interactiveEventsAPI } from './interactiveEvents';
+export { locationEntityMappingAPI } from './locationEntityMapping';
+export { playerExperienceAPI } from './playerExperience';
 
 // Re-export types for convenience
 export type {

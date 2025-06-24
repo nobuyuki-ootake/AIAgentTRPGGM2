@@ -74,7 +74,7 @@ interface EventFlowState {
 
 export const InteractiveEventManager: React.FC<InteractiveEventManagerProps> = ({
   sessionId,
-  _campaignId,
+  campaignId: _campaignId,
   character,
   sessionContext,
   eventChoices = [],
@@ -82,7 +82,7 @@ export const InteractiveEventManager: React.FC<InteractiveEventManagerProps> = (
   onClose,
   onEventComplete,
   onEventFailed,
-  _onCharacterUpdate,
+  onCharacterUpdate: _onCharacterUpdate,
 }) => {
   const [state, setState] = useState<EventFlowState>({
     eventSession: null,

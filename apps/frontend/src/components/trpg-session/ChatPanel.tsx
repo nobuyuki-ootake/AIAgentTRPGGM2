@@ -41,7 +41,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   isPlayerMode = false,
   onSendMessage,
   onRollDice,
-  _currentChallenge,
+  currentChallenge: _currentChallenge,
 }) => {
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'ic' | 'ooc'>('ic');

@@ -76,11 +76,7 @@ export const useConversationalTRPG = (
         // チェック不要な場合は、GMの応答を生成
         const sessionContext = {
           currentSession: sessionState,
-          characters: characters.map(c => ({
-            id: c.id,
-            name: c.name,
-            role: c.characterType,
-          })),
+          characters: characters,
           activeQuests: [],
           completedMilestones: [],
           recentEvents: [],
@@ -88,7 +84,7 @@ export const useConversationalTRPG = (
           playerEngagement: 70,
           storyProgression: 30,
           difficulty: 'medium',
-          mood: 'neutral',
+          mood: 'neutral'
         };
 
         await aiGameMasterAPI.generatePlayerActionResponse({

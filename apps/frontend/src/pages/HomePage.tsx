@@ -301,7 +301,7 @@ const HomePage: React.FC = () => {
       
       // ユーザーに分かりやすいエラーメッセージを表示
       let errorMsg = 'キャンペーンの作成に失敗しました。';
-      if (error.message && error.message.includes('AI')) {
+      if (error instanceof Error && error.message && error.message.includes('AI')) {
         errorMsg = 'AIキャラクター生成に失敗しました。AI設定を確認して再度お試しください。';
       }
       setErrorMessage(errorMsg);

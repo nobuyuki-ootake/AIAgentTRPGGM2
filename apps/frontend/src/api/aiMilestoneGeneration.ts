@@ -27,13 +27,35 @@ export const aiMilestoneGenerationAPI = {
     
     console.log('✅ AI milestones and pools generated successfully', {
       milestonesCount: response.milestones.length,
-      entitiesCount: {
-        enemies: response.entityPool.entities.enemies.length,
-        events: response.entityPool.entities.events.length,
-        npcs: response.entityPool.entities.npcs.length,
-        items: response.entityPool.entities.items.length,
-        quests: response.entityPool.entities.quests.length
-      }
+      entitiesCount: (() => {
+        const entities = response.entityPool.entities as any;
+        // 新構造対応
+        if (entities.coreEntities && entities.bonusEntities) {
+          return {
+            coreEntities: {
+              enemies: entities.coreEntities.enemies?.length || 0,
+              events: entities.coreEntities.events?.length || 0,
+              npcs: entities.coreEntities.npcs?.length || 0,
+              items: entities.coreEntities.items?.length || 0,
+              quests: entities.coreEntities.quests?.length || 0
+            },
+            bonusEntities: {
+              practicalRewards: entities.bonusEntities.practicalRewards?.length || 0,
+              trophyItems: entities.bonusEntities.trophyItems?.length || 0,
+              mysteryItems: entities.bonusEntities.mysteryItems?.length || 0
+            }
+          };
+        } else {
+          // 旧構造との互換性
+          return {
+            enemies: entities.enemies?.length || 0,
+            events: entities.events?.length || 0,
+            npcs: entities.npcs?.length || 0,
+            items: entities.items?.length || 0,
+            quests: entities.quests?.length || 0
+          };
+        }
+      })()
     });
     
     return response;
@@ -69,13 +91,35 @@ export const aiMilestoneGenerationAPI = {
     
     console.log('✅ Entity pool fetched successfully', {
       sessionId,
-      entityCounts: {
-        enemies: response.entities.enemies.length,
-        events: response.entities.events.length,
-        npcs: response.entities.npcs.length,
-        items: response.entities.items.length,
-        quests: response.entities.quests.length
-      }
+      entityCounts: (() => {
+        const entities = response.entities as any;
+        // 新構造対応
+        if (entities.coreEntities && entities.bonusEntities) {
+          return {
+            coreEntities: {
+              enemies: entities.coreEntities.enemies?.length || 0,
+              events: entities.coreEntities.events?.length || 0,
+              npcs: entities.coreEntities.npcs?.length || 0,
+              items: entities.coreEntities.items?.length || 0,
+              quests: entities.coreEntities.quests?.length || 0
+            },
+            bonusEntities: {
+              practicalRewards: entities.bonusEntities.practicalRewards?.length || 0,
+              trophyItems: entities.bonusEntities.trophyItems?.length || 0,
+              mysteryItems: entities.bonusEntities.mysteryItems?.length || 0
+            }
+          };
+        } else {
+          // 旧構造との互換性
+          return {
+            enemies: entities.enemies?.length || 0,
+            events: entities.events?.length || 0,
+            npcs: entities.npcs?.length || 0,
+            items: entities.items?.length || 0,
+            quests: entities.quests?.length || 0
+          };
+        }
+      })()
     });
     
     return response;
@@ -131,6 +175,42 @@ export const aiMilestoneGenerationAPI = {
       sessionId,
       milestonesCount: response.milestones.length,
       processingTime: response.generationMetadata.processingTime
+    });
+    
+    return response;
+  },
+
+  /**
+   * エンティティ発見
+   */
+  async discoverEntity(entityId: ID, sessionId: ID, characterId: ID): Promise<{
+    discovered: boolean;
+    milestone?: AIMilestone;
+    progressUpdate?: {
+      milestoneId: ID;
+      oldProgress: number;
+      newProgress: number;
+    }
+  }> {
+    console.log('🔍 Discovering entity', { entityId, sessionId, characterId });
+    
+    const response = await apiClient.patch<{
+      discovered: boolean;
+      milestone?: AIMilestone;
+      progressUpdate?: {
+        milestoneId: ID;
+        oldProgress: number;
+        newProgress: number;
+      }
+    }>(
+      `/ai-milestone-generation/entity/${entityId}/discover`,
+      { sessionId, characterId }
+    );
+    
+    console.log('✅ Entity discovery result', {
+      entityId,
+      discovered: response.discovered,
+      milestoneProgress: response.progressUpdate
     });
     
     return response;

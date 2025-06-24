@@ -94,8 +94,7 @@ class InteractiveEventsAPI {
    * インタラクティブイベントセッションを開始
    */
   async startEventSession(request: StartEventSessionRequest): Promise<InteractiveEventSession> {
-    const response = await apiClient.post('/interactive-events/start', request);
-    return response.data;
+    return await apiClient.post<InteractiveEventSession>('/interactive-events/start', request);
   }
 
   /**
@@ -105,11 +104,10 @@ class InteractiveEventsAPI {
     eventSessionId: ID, 
     request: ProcessChoiceRequest
   ): Promise<AITaskDefinition> {
-    const response = await apiClient.post(
+    return await apiClient.post<AITaskDefinition>(
       `/interactive-events/${eventSessionId}/process-choice`, 
       request
     );
-    return response.data;
   }
 
   /**
@@ -119,11 +117,10 @@ class InteractiveEventsAPI {
     eventSessionId: ID, 
     request: EvaluateSolutionRequest
   ): Promise<DynamicDifficultySettings> {
-    const response = await apiClient.post(
+    return await apiClient.post<DynamicDifficultySettings>(
       `/interactive-events/${eventSessionId}/evaluate-solution`, 
       request
     );
-    return response.data;
   }
 
   /**
@@ -133,88 +130,78 @@ class InteractiveEventsAPI {
     eventSessionId: ID, 
     request: ExecuteDiceRollRequest
   ): Promise<EventResult> {
-    const response = await apiClient.post(
+    return await apiClient.post<EventResult>(
       `/interactive-events/${eventSessionId}/execute-dice-roll`, 
       request
     );
-    return response.data;
   }
 
   /**
    * イベントセッション情報を取得
    */
   async getEventSession(eventSessionId: ID): Promise<InteractiveEventSession> {
-    const response = await apiClient.get(`/interactive-events/${eventSessionId}`);
-    return response.data;
+    return await apiClient.get<InteractiveEventSession>(`/interactive-events/${eventSessionId}`);
   }
 
   /**
    * リトライオプションを取得
    */
   async getRetryOptions(eventSessionId: ID, characterId: ID): Promise<RetryOption[]> {
-    const response = await apiClient.get(
+    return await apiClient.get<RetryOption[]>(
       `/interactive-events/${eventSessionId}/retry-options?characterId=${characterId}`
     );
-    return response.data;
   }
 
   /**
    * イベント選択肢を動的生成
    */
   async generateEventChoices(request: GenerateChoicesRequest): Promise<EventChoice[]> {
-    const response = await apiClient.post('/interactive-events/generate-choices', request);
-    return response.data;
+    return await apiClient.post<EventChoice[]>('/interactive-events/generate-choices', request);
   }
 
   /**
    * 選択肢を解釈してタスクを生成
    */
   async interpretPlayerChoice(request: InterpretChoiceRequest): Promise<AITaskDefinition> {
-    const response = await apiClient.post('/interactive-events/interpret-choice', request);
-    return response.data;
+    return await apiClient.post<AITaskDefinition>('/interactive-events/interpret-choice', request);
   }
 
   /**
    * プレイヤーソリューションを評価
    */
   async evaluatePlayerSolutionDirect(request: EvaluatePlayerSolutionRequest): Promise<TaskEvaluation> {
-    const response = await apiClient.post('/interactive-events/evaluate-solution', request);
-    return response.data;
+    return await apiClient.post<TaskEvaluation>('/interactive-events/evaluate-solution', request);
   }
 
   /**
    * 結果ナラティブを生成
    */
   async generateResultNarrative(request: GenerateNarrativeRequest): Promise<string> {
-    const response = await apiClient.post('/interactive-events/generate-narrative', request);
-    return response.data;
+    return await apiClient.post<string>('/interactive-events/generate-narrative', request);
   }
 
   /**
    * 動的難易度を計算
    */
   async calculateDynamicDifficulty(request: CalculateDifficultyRequest): Promise<DynamicDifficultySettings> {
-    const response = await apiClient.post('/interactive-events/calculate-difficulty', request);
-    return response.data;
+    return await apiClient.post<DynamicDifficultySettings>('/interactive-events/calculate-difficulty', request);
   }
 
   /**
    * ペナルティ効果を適用
    */
   async applyPenalties(eventSessionId: ID, request: ApplyPenaltiesRequest): Promise<any> {
-    const response = await apiClient.post(
+    return await apiClient.post<any>(
       `/interactive-events/${eventSessionId}/apply-penalties`, 
       request
     );
-    return response.data;
   }
 
   /**
    * イベントセッションの履歴を取得
    */
   async getEventSessionHistory(eventSessionId: ID): Promise<any> {
-    const response = await apiClient.get(`/interactive-events/${eventSessionId}/history`);
-    return response.data;
+    return await apiClient.get<any>(`/interactive-events/${eventSessionId}/history`);
   }
 
   // ==========================================
@@ -351,11 +338,14 @@ class InteractiveEventsAPI {
     modifier: number = 3
   ): DiceRollResult {
     return {
-      total,
-      naturalRoll,
-      modifier,
-      dice: [naturalRoll],
-      rollType: 'd20'
+      diceType: 'd20',
+      rawRoll: naturalRoll,
+      modifiers: modifier,
+      totalResult: total,
+      targetNumber: 15,
+      success: total >= 15,
+      criticalSuccess: naturalRoll === 20,
+      criticalFailure: naturalRoll === 1
     };
   }
 

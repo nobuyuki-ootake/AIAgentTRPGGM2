@@ -35,6 +35,9 @@ const CharacterManagementPage: React.FC = () => {
     setError(null);
 
     try {
+      if (!id) {
+        throw new Error('Campaign ID is required');
+      }
       const campaignCharacters = await characterAPI.getCharactersByCampaign(id);
       setCharacters(campaignCharacters);
     } catch (err) {

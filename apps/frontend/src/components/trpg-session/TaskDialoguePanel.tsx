@@ -22,7 +22,7 @@ import {
   SendRounded,
   ExpandMoreRounded,
   LightbulbRounded,
-  TargetRounded,
+  MyLocationRounded,
   AutoAwesomeRounded,
   HelpOutlineRounded,
 } from '@mui/icons-material';
@@ -59,7 +59,7 @@ export const TaskDialoguePanel: React.FC<TaskDialoguePanelProps> = ({
   taskDefinition,
   character,
   selectedChoice,
-  _sessionContext,
+  sessionContext: _sessionContext,
   playerSolution,
   loading = false,
   disabled = false,
@@ -159,16 +159,17 @@ export const TaskDialoguePanel: React.FC<TaskDialoguePanelProps> = ({
     const suggestions: string[] = [];
     
     // キャラクターのクラスに基づく提案
-    if (character.class.includes('戦士') || character.class.includes('ファイター')) {
+    const characterClass = (character.characterType === 'PC' && 'characterClass' in character) ? character.characterClass : '不明';
+    if (characterClass.includes('戦士') || characterClass.includes('ファイター')) {
       suggestions.push('戦闘技術や体力を活かした直接的なアプローチ');
     }
-    if (character.class.includes('魔法使い') || character.class.includes('ウィザード')) {
+    if (characterClass.includes('魔法使い') || characterClass.includes('ウィザード')) {
       suggestions.push('魔法の知識や呪文を使用した解決法');
     }
-    if (character.class.includes('盗賊') || character.class.includes('ローグ')) {
+    if (characterClass.includes('盗賊') || characterClass.includes('ローグ')) {
       suggestions.push('隠密行動や器用さを利用した巧妙な手段');
     }
-    if (character.class.includes('僧侶') || character.class.includes('クレリック')) {
+    if (characterClass.includes('僧侶') || characterClass.includes('クレリック')) {
       suggestions.push('信仰の力や癒しの能力を活用した方法');
     }
 
@@ -212,7 +213,7 @@ export const TaskDialoguePanel: React.FC<TaskDialoguePanelProps> = ({
 
           <Box display="flex" alignItems="center" gap={2} mt={2}>
             <Box display="flex" alignItems="center" gap={1}>
-              <TargetRounded fontSize="small" color="primary" />
+              <MyLocationRounded fontSize="small" color="primary" />
               <Typography variant="subtitle2">目標:</Typography>
             </Box>
             <Typography variant="body2">{taskDefinition.objective}</Typography>

@@ -50,6 +50,9 @@ const CampaignSetupPage: React.FC = () => {
     setError(null);
 
     try {
+      if (!id) {
+        throw new Error('Campaign ID is required');
+      }
       const campaign = await campaignAPI.getCampaignById(id);
       setCurrentCampaign(campaign);
     } catch (err) {

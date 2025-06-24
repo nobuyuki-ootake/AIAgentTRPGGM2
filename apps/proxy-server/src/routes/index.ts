@@ -10,6 +10,8 @@ import { aiAgentRouter } from './aiAgent';
 import { aiGameMasterRouter } from './aiGameMaster';
 import aiCharacterGenerationRouter from './aiCharacterGeneration';
 import aiMilestoneGenerationRouter from './aiMilestoneGeneration';
+import locationEntityMappingRouter from './locationEntityMapping';
+import playerExperienceRouter from './playerExperience';
 import { interactiveEventsRouter } from './interactiveEvents';
 import healthRouter from './health';
 
@@ -26,6 +28,10 @@ router.use('/ai-agent', aiAgentRouter);
 router.use('/ai-game-master', aiGameMasterRouter);
 router.use('/ai-character-generation', aiCharacterGenerationRouter);
 router.use('/ai-milestone-generation', aiMilestoneGenerationRouter);
+
+// シナリオ管理エンドポイント
+router.use('/location-entity-mapping', locationEntityMappingRouter);
+router.use('/player-experience', playerExperienceRouter);
 
 // TRPG機能エンドポイント
 router.use('/campaigns', campaignRouter);
@@ -52,6 +58,8 @@ router.get('/', (_req, res) => {
       aiGameMaster: '/api/ai-game-master',
       aiCharacterGeneration: '/api/ai-character-generation',
       aiMilestoneGeneration: '/api/ai-milestone-generation',
+      locationEntityMapping: '/api/location-entity-mapping',
+      playerExperience: '/api/player-experience',
       campaigns: '/api/campaigns',
       characters: '/api/characters', 
       sessions: '/api/sessions',
