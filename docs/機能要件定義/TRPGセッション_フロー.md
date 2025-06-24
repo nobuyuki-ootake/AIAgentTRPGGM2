@@ -311,10 +311,13 @@ flowchart TD
 - **自然な会話**: AIエージェントが人間プレイヤーを代理操作している前提での自然な反応
 - **個性表現**: 各キャラクターの職業・性格に応じた独自の反応パターン
 
-### AIゲームマスターとの連携
-- AIゲームマスターは常にプレイヤーの行動を監視し、適切な演出とフィードバックを提供
-- 仲間システムとGMは独立して動作し、自然な多角的サポートを実現
-- 難易度はプレイヤーのアプローチによって動的に調整される
+### AIゲームマスターとの連携（手探り体験の演出責任者）
+- **内部進捗監視**: マイルストーン進捗を内部で追跡し、プレイヤーには絶対に直接表示しない
+- **自然な誘導**: 「そういえば村の人が...」「気になる話を聞いたのですが...」等の自然な手がかり提示
+- **暗示的演出**: 進捗に応じて状況描写を変化させ、プレイヤーが自然に次の行動を思いつくよう誘導
+- **手探り感維持**: 「○○を達成しました」ではなく「何か重要な発見をしたようです」等の曖昧な表現
+- **仲間システムとの連携**: 仲間キャラクターを通じてさりげなくヒントを提供
+- **動的難易度調整**: プレイヤーのアプローチと内部進捗状況に応じた適切な難易度設定
 
 ### 技術的実装ポイント
 - **WebSocket通信**: Socket.IOによる安定したリアルタイム通信
@@ -324,59 +327,201 @@ flowchart TD
 
 ## マイルストーン・プールシステム詳細フロー
 
-### マイルストーン生成システムフロー
+### マイルストーン構造と紐付けシステム
+
+#### マイルストーンの基本構造
+各マイルストーンは以下の要素から構成される：
+
+1. **複数エンティティ紐付け**（基本3個）
+   - `targetEntityIds`: 達成に必要なエンティティのIDリスト
+   - `targetDetails`: 各エンティティの詳細な達成条件
+   - `requiredConditions`: 達成に必要な前提条件
+
+2. **エンティティタイプ組み合わせ例**
+   ```
+   マイルストーン: "村の謎を解明せよ"
+   └── エネミー討伐: "怪しい影を倒す" (enemy-001)
+   └── イベントクリア: "古い手紙を調査" (event-003)  
+   └── NPCコミュニケーション: "村長から真実を聞く" (npc-002)
+   ```
+
+3. **達成判定ロジック**
+   - すべての紐付けエンティティが達成されたときにマイルストーン完了
+   - 部分達成でも進捗率が更新される（33%, 66%, 100%）
+   - エンティティの達成順序は問わない（柔軟な攻略順）
+
+#### エンティティ個別達成報酬システム
+
+**各エンティティは独立した報酬を持つ**
+```
+エネミー討伐 (enemy-001):
+├── 即時報酬: 戦闘経験値 50 EXP
+├── アイテム: 怪しい布切れ
+└── 情報: "影の正体に関する手がかり"
+
+イベントクリア (event-003):
+├── 即時報酬: 調査経験値 30 EXP  
+├── アイテム: 古い鍵
+└── 情報: "村の過去に関する重要な記録"
+
+NPCコミュニケーション (npc-002):
+├── 即時報酬: 社交経験値 40 EXP
+├── 関係性: 村長好感度 +20
+└── 情報: "事件の真相と解決策"
+```
+
+**マイルストーン完了時の追加報酬**
+- 全エンティティ達成後のボーナス報酬
+- ストーリー進行報酬
+- 特別アイテム・称号の獲得
+
+### 場所ベース行動表示システム
+
+#### TRPGセッション右サイドバー行動表示の仕組み
+
+**重要**: この機能はTRPGセッション中の**右サイドバー**で動作します。左サイドバーはメイン機能用で、TRPGセッション中のみ右側に専用サイドバーが表示されます。
+
+**場所紐付けデータ構造**
+```typescript
+interface LocationEntity {
+  entityId: string;
+  entityType: 'enemy' | 'event' | 'npc' | 'item' | 'quest';
+  locationId: string;
+  isAvailable: boolean;
+  displayConditions: string[];
+  actionLabel: string; // 右サイドバー表示用ラベル
+}
+```
+
+**右サイドバー表示ロジック**
+1. **現在地確認**: プレイヤーの現在位置を取得
+2. **エンティティフィルタ**: 現在地に紐付くエンティティを抽出
+3. **可用性チェック**: 表示条件・前提条件を確認
+4. **行動ボタン生成**: 達成可能なエンティティを右サイドバー行動ボタンとして表示
+
+**右サイドバー表示例（プレイヤー視点）**
+```
+📍 現在地: 古い村の中央広場
+
+🗡️ 可能な行動:
+├── 🔍 "影の痕跡を調査"
+├── 💬 "村長と話す" 
+├── ⚔️ "怪しい影と戦う" [夜のみ]
+└── 🎯 "古い井戸を調べる"
+
+💭 気になるもの:
+├── ❓ "この村には何か秘密がありそうだ..."
+├── ❓ "住民たちが何かを隠している様子"
+└── ❓ "夜になると不気味な気配を感じる"
+```
+
+#### 動的コンテンツ更新（プレイヤーには非表示の内部処理）
+- **時間帯による変化**: 朝/昼/夕方/夜で表示内容が変化
+- **前提条件**: 他のエンティティ達成により解放される行動
+- **イベント状態**: 一度達成したエンティティは表示から除外
+- **内部進捗管理**: マイルストーン関連のエンティティを内部で追跡（プレイヤーには非表示）
+
+#### 右サイドバーからのアクション実行フロー
+
+**行動選択→実行の流れ**
+1. **右サイドバー行動選択**: プレイヤーが利用可能な行動ボタンをクリック
+2. **行動詳細表示**: 選択した行動の詳細情報をメイン画面に表示
+3. **アプローチ入力**: プレイヤーがチャットで具体的なアプローチ方法を説明
+4. **AI難易度判定**: アプローチの論理性・創造性に基づく難易度算出
+5. **チェック実行**: ダイス・パワー・スキルチェックのいずれかを実行
+6. **結果処理**: 成功時は報酬付与・マイルストーン進捗更新、失敗時はリトライ提案
+
+**内部マイルストーン進捗管理（プレイヤーには非表示）**
+- エンティティ達成時に内部でマイルストーン進捗を更新（バックエンドのみ）
+- 進捗率の変化（33% → 66% → 100%）を内部で管理
+- AIゲームマスターがそれとなく進捗をほのめかすメッセージを生成
+- 完了したエンティティは右サイドバーから除外（理由は自然に演出）
+
+#### エンティティ個別報酬システムの詳細実装
+
+**即時報酬配布システム**
+各エンティティ達成時に以下の即時報酬が配布されます：
+
+```typescript
+interface EntityReward {
+  entityId: string;
+  entityType: 'enemy' | 'event' | 'npc' | 'item' | 'quest';
+  immediateRewards: {
+    experience: number;           // 即時経験値
+    items: PoolItem[];           // 獲得アイテム
+    information: string[];        // 入手情報・手がかり
+    relationships?: {             // NPC関係性（NPC系のみ）
+      npcId: string;
+      relationshipChange: number; // 好感度変化
+    }[];
+  };
+  milestoneContribution: {
+    milestoneId: string;
+    progressContribution: number; // 33%, 66%, etc.
+  }[];
+}
+```
+
+**報酬配布タイミング（プレイヤー体験重視）**
+1. **エンティティチェック成功時**: 即座に個別報酬を配布
+2. **右サイドバー更新**: 完了したエンティティを自然に除外（「もう調べる必要がなさそうだ」等）
+3. **内部進捗計算**: 該当マイルストーンの進捗率を内部で更新（非表示）
+4. **AIゲームマスターヒント**: 進捗に応じてそれとなく次の手がかりを提示
+5. **ボーナス報酬判定**: マイルストーン完了時は自然な流れで追加報酬を配布
+
+**複数マイルストーン紐付けの処理**
+- 1つのエンティティが複数のマイルストーンに紐付けられている場合
+- 達成時にすべての関連マイルストーンの進捗が同時に更新される
+- 各マイルストーンで異なる進捗貢献度を持つことが可能
+
+### セッション開始時生成システムフロー（トップダウン設計）
 
 ```mermaid
 flowchart TD
-    SessionStart([セッション開始]) --> ThemeAnalysis[テーマ分析<br/>・キャンペーンテーマ確認<br/>・許可エンティティタイプ決定]
+    SessionStart([「セッション開始！」押下]) --> ThemeAnalysis[Phase 1: 目標設計<br/>・キャンペーンテーマ分析<br/>・プレイ時間・難易度確認<br/>・許可エンティティタイプ決定]
     
-    ThemeAnalysis --> PoolGeneration[エンティティプール生成<br/>・AIがテーマ適応コンテンツ生成<br/>・場所別配置決定]
+    ThemeAnalysis --> MilestoneOutline[マイルストーン概要生成<br/>・基本3個のストーリー目標<br/>・「村の謎解明」「遺跡探索」等<br/>・抽象レベルでの目標設定]
     
-    PoolGeneration --> EnemyPool{エネミープール<br/>生成}
-    PoolGeneration --> EventPool{イベントプール<br/>生成}
-    PoolGeneration --> NPCPool{NPCプール<br/>生成}
-    PoolGeneration --> ItemPool{アイテムプール<br/>生成}
-    PoolGeneration --> QuestPool{クエストプール<br/>生成}
+    MilestoneOutline --> MilestoneRelation[マイルストーン関係性設定<br/>・独立型 vs 連鎖型<br/>・難易度グラデーション<br/>・プレイ時間配分]
     
-    EnemyPool --> MilestoneGeneration[マイルストーン生成<br/>・基本3個程度<br/>・プールから適切な要素選択<br/>・達成条件設定]
-    EventPool --> MilestoneGeneration
-    NPCPool --> MilestoneGeneration
-    ItemPool --> MilestoneGeneration
-    QuestPool --> MilestoneGeneration
+    MilestoneRelation --> Phase2[Phase 2: コンテンツ生成]
     
-    MilestoneGeneration --> MilestoneTypes[マイルストーンタイプ決定]
-    MilestoneTypes --> EnemyDefeat[特定エネミー討伐<br/>※テーマにより無効化]
-    MilestoneTypes --> EventClear[特定イベントクリア]
-    MilestoneTypes --> NPCComm[特定NPC<br/>コミュニケーション]
-    MilestoneTypes --> KeyItem[キーアイテム取得]
-    MilestoneTypes --> QuestComplete[クエストクリア]
+    Phase2 --> EntityRequirement[マイルストーン必須エンティティ決定<br/>・各マイルストーンに3エンティティ<br/>・エネミー・イベント・NPC・アイテム・クエスト<br/>・テーマ制約適用]
     
-    EnemyDefeat --> LocationBinding[場所連携設定<br/>・エネミー・イベント配置<br/>・NPCアクセス設定]
-    EventClear --> LocationBinding
-    NPCComm --> LocationBinding
-    KeyItem --> LocationBinding
-    QuestComplete --> LocationBinding
+    EntityRequirement --> CoreEntityGeneration[コアエンティティプール生成<br/>・マイルストーン必須: 9個<br/>・AIがテーマ適応生成<br/>・達成条件と報酬設定]
     
-    LocationBinding --> GameStart[ゲーム開始<br/>プール・マイルストーン準備完了]
+    CoreEntityGeneration --> AdditionalEntityGeneration[追加エンティティプール生成<br/>・自由探索用: 6個程度<br/>・世界観深化コンテンツ<br/>・サブ報酬系エンティティ]
+    
+    AdditionalEntityGeneration --> LocationGeneration[場所生成・配置最適化<br/>・エンティティに適した場所生成<br/>・論理的な場所間つながり<br/>・移動効率を考慮した配置]
+    
+    LocationGeneration --> Phase3[Phase 3: 最終調整]
+    
+    Phase3 --> MilestoneDetailization[マイルストーン詳細化<br/>・具体的エンティティIDとの紐付け<br/>・達成条件の具体化<br/>・進捗率配分決定]
+    
+    MilestoneDetailization --> BalanceAdjustment[バランス調整<br/>・難易度確認・調整<br/>・プレイ時間配分確認<br/>・エンティティ配置の論理性確認]
+    
+    BalanceAdjustment --> DatabaseCommit[データベース一括コミット<br/>・マイルストーンテーブル<br/>・エンティティプールテーブル<br/>・場所紐付けテーブル]
+    
+    DatabaseCommit --> GameReady[ゲーム開始準備完了<br/>・右サイドバー初期表示<br/>・AIゲームマスター初期化<br/>・セッション状態初期化]
 ```
 
-### インタラクティブイベントシステムフロー
+### インタラクティブイベントシステムフロー（手探り体験重視）
 
 ```mermaid
 flowchart TD
     EventEncounter([イベント遭遇]) --> EventType{イベントタイプ<br/>判定}
     
-    EventType -->|マイルストーン| MilestoneEvent[マイルストーン<br/>関連イベント]
+    EventType -->|内部マイルストーン| HiddenMilestoneEvent[内部マイルストーン<br/>関連イベント<br/>※プレイヤーには非表示]
     EventType -->|プール内| PoolEvent[プール内<br/>自由イベント]
     
-    MilestoneEvent --> ChoicePresentation[選択肢表示<br/>・AIが複数選択肢生成<br/>・プレイヤーの行動方針選択]
-    PoolEvent --> ChoicePresentation
+    HiddenMilestoneEvent --> NaturalPresentation[自然な状況描写<br/>・AIが目標を暗示する状況生成<br/>・プレイヤーが自然に気づく仕掛け]
+    PoolEvent --> NaturalPresentation
     
-    ChoicePresentation --> PlayerChoice[プレイヤー選択<br/>・希望する行動選択]
+    NaturalPresentation --> PlayerChoice[プレイヤー選択<br/>・手探りで行動方針決定]
     
-    PlayerChoice --> GMQuestion[GM問いかけ<br/>「どのようにタスクを<br/>クリアしますか？」]
+    PlayerChoice --> GMSubtleGuide[GM微妙な誘導<br/>「そういえば...」<br/>「気になることが...」<br/>※直接的でない助言]
     
-    GMQuestion --> PlayerExplanation[プレイヤー方針説明<br/>・チャットで具体的実行方法入力<br/>・創造性・論理性を含む説明]
+    GMSubtleGuide --> PlayerExplanation[プレイヤー方針説明<br/>・チャットで具体的実行方法入力<br/>・創造性・論理性を含む説明]
     
     PlayerExplanation --> AIDifficulty[AI難易度判定<br/>・方針の論理性評価<br/>・実現可能性分析<br/>・ダイス目標値算出]
     
@@ -384,7 +529,7 @@ flowchart TD
     
     DiceCheck --> ResultJudge{結果判定}
     
-    ResultJudge -->|成功| SuccessResult[成功処理<br/>・GM詳細解説<br/>・報酬獲得<br/>・マイルストーン進捗]
+    ResultJudge -->|成功| SuccessResult[成功処理<br/>・GM詳細解説<br/>・報酬獲得<br/>・内部進捗更新（非表示）<br/>・次の手がかりほのめかし]
     ResultJudge -->|失敗| FailureResult[失敗処理<br/>・GM建設的フィードバック<br/>・リトライ提案]
     
     FailureResult --> RetryOption{リトライ？}
@@ -416,7 +561,7 @@ flowchart TD
     NPCRelation --> FeedbackGeneration
     ItemDiscovery --> FeedbackGeneration
     
-    FeedbackGeneration --> ExperienceBoost[体験価値向上<br/>・マイルストーン外でも<br/>充実したゲーム体験<br/>・自由度の高い探索奨励]
+    FeedbackGeneration --> ExperienceBoost[体験価値向上<br/>・マイルストーン外でも<br/>充実したゲーム体験<br/>・自由度の高い探索奨励<br/>・手探り感を損なわない報酬]
 ```
 
 ### 開発者モード管理フロー

@@ -1,4 +1,5 @@
 import { Database } from 'better-sqlite3';
+import { randomUUID } from 'crypto';
 import { 
   AIMilestone, 
   EntityPool, 
@@ -114,6 +115,26 @@ export class AIMilestoneGenerationService {
       const milestones = await this.generateMilestones(request, entityPool, themeAdaptation);
 
       // 4. データベースに保存
+      logger.debug('🎯 データベース保存前のデータ確認', {
+        milestonesLength: milestones?.length,
+        entityPoolExists: !!entityPool,
+        themeAdaptationExists: !!themeAdaptation,
+        firstMilestone: milestones?.[0] ? {
+          id: milestones[0].id,
+          title: milestones[0].title,
+          hasRequiredFields: {
+            id: !!milestones[0].id,
+            campaignId: !!milestones[0].campaignId,
+            sessionId: !!milestones[0].sessionId,
+            title: !!milestones[0].title,
+            description: !!milestones[0].description,
+            type: !!milestones[0].type,
+            targetId: !!milestones[0].targetId,
+            createdAt: !!milestones[0].createdAt
+          }
+        } : null
+      });
+      
       await this.saveMilestonesAndPools(milestones, entityPool, themeAdaptation);
 
       const processingTime = Date.now() - startTime;
@@ -131,8 +152,15 @@ export class AIMilestoneGenerationService {
         }
       };
 
-      // 生成履歴を保存
-      await this.saveGenerationHistory(request, response);
+      // 生成履歴を保存（エラーが発生しても全体の処理は成功とする）
+      try {
+        await this.saveGenerationHistory(request, response);
+        logger.debug('✅ 生成履歴保存完了');
+      } catch (historyError) {
+        logger.warn('⚠️ 生成履歴保存に失敗しましたが、メインの生成処理は成功しました', { 
+          error: historyError 
+        });
+      }
 
       logger.info('✅ AI マイルストーン生成完了', { 
         milestonesCount: milestones.length,
@@ -152,7 +180,7 @@ export class AIMilestoneGenerationService {
    */
   private async generateThemeAdaptation(themeId: ID, sessionConfig: SessionDurationConfig): Promise<ThemeAdaptation> {
     const aiService = getAIService();
-    const provider = process.env.DEFAULT_AI_PROVIDER || 'openai';
+    const provider = process.env.DEFAULT_AI_PROVIDER || 'google';
     
     try {
       const campaignContext = { themeId, sessionDuration: sessionConfig };
@@ -169,7 +197,7 @@ export class AIMilestoneGenerationService {
       
       if (generatedAdaptation && typeof generatedAdaptation === 'object' && !generatedAdaptation.rawData) {
         logger.info('✅ AI テーマ適応生成成功', { themeId, provider });
-        return generatedAdaptation as ThemeAdaptation;
+        return this.validateAndFormatThemeAdaptation(generatedAdaptation, themeId);
       }
 
       // AI生成に失敗した場合はフォールバック
@@ -213,26 +241,99 @@ export class AIMilestoneGenerationService {
   }
 
   /**
+   * AIで生成されたテーマ適応を検証・フォーマット
+   */
+  private validateAndFormatThemeAdaptation(aiThemeAdaptation: any, themeId: ID): ThemeAdaptation {
+    logger.debug('🔧 AIテーマ適応データ変換開始', { 
+      themeId,
+      hasContentAdaptationStrategy: !!aiThemeAdaptation.contentAdaptationStrategy,
+      hasContentModifiers: !!aiThemeAdaptation.contentModifiers,
+      topLevelKeys: Object.keys(aiThemeAdaptation)
+    });
+
+    // AI応答から必要なフィールドを抽出
+    const allowedEntityTypes = 
+      aiThemeAdaptation.allowedEntityTypes ||
+      aiThemeAdaptation.contentAdaptationStrategy?.allowedEntityTypes ||
+      ['event', 'npc', 'item', 'quest'];
+
+    const restrictedEntityTypes = 
+      aiThemeAdaptation.restrictedEntityTypes ||
+      aiThemeAdaptation.contentAdaptationStrategy?.restrictedEntityTypes ||
+      [];
+
+    const specializations = 
+      aiThemeAdaptation.specializations ||
+      aiThemeAdaptation.contentAdaptationStrategy?.specializations ||
+      [{
+        entityType: 'event',
+        categories: ['mystery', 'horror'],
+        examples: ['怪奇現象', '謎の発見'],
+        generationHints: ['雰囲気重視', '緊張感']
+      }];
+
+    const contentModifiers = 
+      aiThemeAdaptation.contentModifiers ||
+      aiThemeAdaptation.contentAdaptationStrategy?.contentModifiers ||
+      [{
+        type: 'tone',
+        value: 'mysterious',
+        description: '神秘的で不安な雰囲気'
+      }];
+
+    const formattedThemeAdaptation: ThemeAdaptation = {
+      themeId,
+      allowedEntityTypes,
+      restrictedEntityTypes,
+      specializations,
+      contentModifiers
+    };
+
+    logger.debug('✅ AIテーマ適応データ変換完了', {
+      originalKeys: Object.keys(aiThemeAdaptation),
+      formattedKeys: Object.keys(formattedThemeAdaptation),
+      allowedEntityTypesCount: allowedEntityTypes.length,
+      restrictedEntityTypesCount: restrictedEntityTypes.length,
+      specializationsCount: specializations.length,
+      contentModifiersCount: contentModifiers.length
+    });
+
+    return formattedThemeAdaptation;
+  }
+
+  /**
    * エンティティプールの生成
    */
   private async generateEntityPool(
     request: MilestoneGenerationRequest, 
     themeAdaptation: ThemeAdaptation
   ): Promise<EntityPool> {
-    const aiService = getAIService();
-    const provider = process.env.DEFAULT_AI_PROVIDER || 'openai';
-    const poolId = crypto.randomUUID();
-    const now = new Date().toISOString();
-
+    logger.debug('🎯 generateEntityPool 開始', { 
+      campaignId: request.campaignId, 
+      sessionId: request.sessionId,
+      themeId: request.themeId 
+    });
+    
+    const provider = process.env.DEFAULT_AI_PROVIDER || 'google';
+    
     try {
+      logger.debug('🔧 Getting AI service...');
+      const aiService = getAIService();
+      logger.debug('✅ AI service obtained');
+      const poolId = randomUUID();
+      const now = new Date().toISOString();
+      
+      logger.debug('🔧 Preparing campaign context...');
       const campaignContext = { 
         campaignId: request.campaignId,
         sessionId: request.sessionId,
         themeId: request.themeId,
         existingContent: request.existingContent 
       };
+      logger.debug('✅ Campaign context prepared');
 
       // AIを使ってエンティティプールを生成
+      logger.debug('🚀 AI エンティティプール生成開始', { provider, campaignId: request.campaignId });
       const result = await aiService.generateEntityPool({
         provider,
         campaignContext,
@@ -241,6 +342,14 @@ export class AIMilestoneGenerationService {
       });
 
       // AI生成結果を解析
+      logger.debug('🔍 AI エンティティプール生成結果', { 
+        resultKeys: Object.keys(result || {}),
+        hasGeneratedPool: !!result?.generatedEntityPool,
+        generatedPoolType: typeof result?.generatedEntityPool,
+        generatedPoolKeys: result?.generatedEntityPool ? Object.keys(result.generatedEntityPool) : [],
+        provider
+      });
+      
       const generatedPool = result.generatedEntityPool;
       
       if (generatedPool && typeof generatedPool === 'object' && !generatedPool.rawData) {
@@ -269,7 +378,13 @@ export class AIMilestoneGenerationService {
       return await this.createFallbackEntityPool(request, themeAdaptation);
 
     } catch (error) {
-      logger.error('❌ AI エンティティプール生成エラー', { error, campaignId: request.campaignId });
+      logger.error('❌ AI エンティティプール生成エラー', { 
+        error, 
+        campaignId: request.campaignId,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        errorStack: error instanceof Error ? error.stack : undefined,
+        provider 
+      });
       return await this.createFallbackEntityPool(request, themeAdaptation);
     }
   }
@@ -281,7 +396,7 @@ export class AIMilestoneGenerationService {
     request: MilestoneGenerationRequest, 
     themeAdaptation: ThemeAdaptation
   ): Promise<EntityPool> {
-    const poolId = crypto.randomUUID();
+    const poolId = randomUUID();
     const now = new Date().toISOString();
 
     // テーマに基づいてエンティティを生成（フォールバック）
@@ -321,7 +436,7 @@ export class AIMilestoneGenerationService {
     themeAdaptation: ThemeAdaptation
   ): Promise<AIMilestone[]> {
     const aiService = getAIService();
-    const provider = process.env.DEFAULT_AI_PROVIDER || 'openai';
+    const provider = process.env.DEFAULT_AI_PROVIDER || 'google';
 
     try {
       const campaignContext = { 
@@ -375,16 +490,16 @@ export class AIMilestoneGenerationService {
     const now = new Date().toISOString();
     
     return {
-      id: aiMilestone.id || crypto.randomUUID(),
+      id: aiMilestone.id || randomUUID(),
       campaignId: request.campaignId,
       sessionId: request.sessionId,
       title: aiMilestone.title || 'AI生成マイルストーン',
       description: aiMilestone.description || 'AIによって生成されたマイルストーン',
       type: aiMilestone.type || 'event_clear',
-      targetId: aiMilestone.targetId || crypto.randomUUID(),
+      targetId: aiMilestone.targetId || randomUUID(),
       targetDetails: aiMilestone.targetDetails || {
         entityType: 'event',
-        entityId: aiMilestone.targetId || crypto.randomUUID(),
+        entityId: aiMilestone.targetId || randomUUID(),
         specificConditions: {}
       },
       status: 'pending',
@@ -421,7 +536,7 @@ export class AIMilestoneGenerationService {
       if (!targetEntity) continue; // 対象エンティティがない場合はスキップ
 
       const milestone: AIMilestone = {
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         campaignId: request.campaignId,
         sessionId: request.sessionId,
         title: this.generateMilestoneTitle(milestoneType, targetEntity),
@@ -509,7 +624,7 @@ export class AIMilestoneGenerationService {
     // TODO: AIを使って実際のエネミーを生成
     return [
       {
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         name: 'ゴブリン',
         description: '小柄で狡猾な緑色の怪物',
         level: 1,
@@ -547,20 +662,20 @@ export class AIMilestoneGenerationService {
     // TODO: AIを使って実際のイベントを生成
     return [
       {
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         name: '古い洞窟の探索',
         description: '村の外れにある古い洞窟から不思議な光が漏れている',
         locationIds: [],
         choices: [
           {
-            id: crypto.randomUUID(),
+            id: randomUUID(),
             text: '洞窟に入る',
             description: '勇気を出して洞窟の中を調べる',
             requirements: [],
             consequences: []
           },
           {
-            id: crypto.randomUUID(),
+            id: randomUUID(),
             text: '村人に相談する',
             description: '一旦村に戻って情報を集める',
             requirements: [],
@@ -581,7 +696,7 @@ export class AIMilestoneGenerationService {
     // TODO: AIを使って実際のNPCを生成
     return [
       {
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         name: '賢者エルウィン',
         description: '古い知識に詳しい村の長老',
         personality: {
@@ -618,7 +733,7 @@ export class AIMilestoneGenerationService {
     // TODO: AIを使って実際のアイテムを生成
     return [
       {
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         name: '古代の巻物',
         description: '古代文字で書かれた謎めいた巻物',
         type: 'key_item',
@@ -633,7 +748,7 @@ export class AIMilestoneGenerationService {
         acquisitionMethods: [
           {
             type: 'exploration',
-            sourceId: crypto.randomUUID(),
+            sourceId: randomUUID(),
             probability: 0.3,
             conditions: ['洞窟の探索']
           }
@@ -651,13 +766,13 @@ export class AIMilestoneGenerationService {
     // TODO: AIを使って実際のクエストを生成
     return [
       {
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         title: '失われた村の秘宝',
         description: '村に代々伝わる秘宝が盗まれてしまった。犯人を見つけて秘宝を取り戻せ。',
         type: 'main',
         objectives: [
           {
-            id: crypto.randomUUID(),
+            id: randomUUID(),
             description: '手がかりを探す',
             completed: false,
             optional: false,
@@ -780,66 +895,194 @@ export class AIMilestoneGenerationService {
     entityPool: EntityPool, 
     themeAdaptation: ThemeAdaptation
   ): Promise<void> {
-    // マイルストーンを保存
-    const milestoneStmt = this.db.prepare(`
-      INSERT INTO ai_milestones (
-        id, campaign_id, session_id, title, description, type, target_id,
-        target_details, status, progress, required_conditions, reward, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+    logger.debug('💾 データベース保存開始', { 
+      milestonesCount: milestones.length,
+      entityPoolId: entityPool.id,
+      themeId: themeAdaptation.themeId 
+    });
 
-    for (const milestone of milestones) {
-      milestoneStmt.run([
-        milestone.id,
-        milestone.campaignId,
-        milestone.sessionId,
-        milestone.title,
-        milestone.description,
-        milestone.type,
-        milestone.targetId,
-        JSON.stringify(milestone.targetDetails),
-        milestone.status,
-        milestone.progress,
-        JSON.stringify(milestone.requiredConditions),
-        JSON.stringify(milestone.reward),
-        milestone.createdAt
-      ]);
+    try {
+      // マイルストーンを保存
+      logger.debug('💾 マイルストーン保存開始');
+      const milestoneStmt = this.db.prepare(`
+        INSERT OR REPLACE INTO ai_milestones (
+          id, campaign_id, session_id, title, description, type, target_id,
+          target_details, status, progress, required_conditions, reward, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      for (let i = 0; i < milestones.length; i++) {
+        const milestone = milestones[i];
+        
+        // 各フィールドの詳細な値チェック
+        const targetDetailsStr = JSON.stringify(milestone.targetDetails);
+        const requiredConditionsStr = JSON.stringify(milestone.requiredConditions);
+        const rewardStr = JSON.stringify(milestone.reward);
+        
+        logger.debug(`💾 マイルストーン ${i + 1} 保存詳細`, {
+          id: milestone.id,
+          title: milestone.title,
+          allFieldValues: {
+            id: milestone.id,
+            campaignId: milestone.campaignId,
+            sessionId: milestone.sessionId,
+            title: milestone.title,
+            description: milestone.description,
+            type: milestone.type,
+            targetId: milestone.targetId,
+            targetDetailsStr: targetDetailsStr,
+            status: milestone.status,
+            progress: milestone.progress,
+            requiredConditionsStr: requiredConditionsStr,
+            rewardStr: rewardStr,
+            createdAt: milestone.createdAt
+          },
+          hasNullValues: {
+            id: milestone.id == null,
+            campaignId: milestone.campaignId == null,
+            sessionId: milestone.sessionId == null,
+            title: milestone.title == null,
+            description: milestone.description == null,
+            type: milestone.type == null,
+            targetId: milestone.targetId == null,
+            targetDetailsStr: targetDetailsStr == null,
+            status: milestone.status == null,
+            progress: milestone.progress == null,
+            requiredConditionsStr: requiredConditionsStr == null,
+            rewardStr: rewardStr == null,
+            createdAt: milestone.createdAt == null
+          }
+        });
+
+        try {
+          milestoneStmt.run([
+            milestone.id,
+            milestone.campaignId,
+            milestone.sessionId,
+            milestone.title,
+            milestone.description,
+            milestone.type,
+            milestone.targetId,
+            targetDetailsStr,
+            milestone.status,
+            milestone.progress,
+            requiredConditionsStr,
+            rewardStr,
+            milestone.createdAt
+          ]);
+          logger.debug(`✅ マイルストーン ${i + 1} 保存成功`);
+        } catch (error) {
+          logger.error(`❌ マイルストーン ${i + 1} 保存エラー詳細`, { 
+            error, 
+            errorMessage: error instanceof Error ? error.message : 'Unknown error',
+            milestone: {
+              id: milestone.id,
+              title: milestone.title,
+              fields: [
+                milestone.id,
+                milestone.campaignId,
+                milestone.sessionId,
+                milestone.title,
+                milestone.description,
+                milestone.type,
+                milestone.targetId,
+                targetDetailsStr,
+                milestone.status,
+                milestone.progress,
+                requiredConditionsStr,
+                rewardStr,
+                milestone.createdAt
+              ]
+            }
+          });
+          throw error;
+        }
+      }
+      logger.debug('✅ マイルストーン保存完了');
+    } catch (error) {
+      logger.error('❌ マイルストーン保存エラー', { error });
+      throw error;
     }
 
-    // エンティティプールを保存
-    const poolStmt = this.db.prepare(`
-      INSERT INTO entity_pools (
-        id, campaign_id, session_id, theme_id, entities, generated_at, last_updated
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
+    try {
+      // エンティティプールを保存
+      logger.debug('💾 エンティティプール保存開始', {
+        entityPoolData: {
+          id: entityPool.id,
+          campaignId: entityPool.campaignId,
+          sessionId: entityPool.sessionId,
+          themeId: entityPool.themeId,
+          hasNullValues: {
+            id: entityPool.id == null,
+            campaignId: entityPool.campaignId == null,
+            sessionId: entityPool.sessionId == null,
+            themeId: entityPool.themeId == null,
+            entities: entityPool.entities == null,
+            generatedAt: entityPool.generatedAt == null,
+            lastUpdated: entityPool.lastUpdated == null
+          }
+        }
+      });
 
-    poolStmt.run([
-      entityPool.id,
-      entityPool.campaignId,
-      entityPool.sessionId,
-      entityPool.themeId,
-      JSON.stringify(entityPool.entities),
-      entityPool.generatedAt,
-      entityPool.lastUpdated
-    ]);
+      const poolStmt = this.db.prepare(`
+        INSERT OR REPLACE INTO entity_pools (
+          id, campaign_id, session_id, theme_id, entities, generated_at, last_updated
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      `);
 
-    // テーマ適応を保存
-    const themeStmt = this.db.prepare(`
-      INSERT OR REPLACE INTO theme_adaptations (
-        id, theme_id, allowed_entity_types, restricted_entity_types,
-        specializations, content_modifiers, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
+      poolStmt.run([
+        entityPool.id,
+        entityPool.campaignId,
+        entityPool.sessionId,
+        entityPool.themeId,
+        JSON.stringify(entityPool.entities),
+        entityPool.generatedAt,
+        entityPool.lastUpdated
+      ]);
+      logger.debug('✅ エンティティプール保存完了');
+    } catch (error) {
+      logger.error('❌ エンティティプール保存エラー', { error, entityPool });
+      throw error;
+    }
 
-    themeStmt.run([
-      crypto.randomUUID(),
-      themeAdaptation.themeId,
-      JSON.stringify(themeAdaptation.allowedEntityTypes),
-      JSON.stringify(themeAdaptation.restrictedEntityTypes),
-      JSON.stringify(themeAdaptation.specializations),
-      JSON.stringify(themeAdaptation.contentModifiers),
-      new Date().toISOString()
-    ]);
+    try {
+      // テーマ適応を保存
+      logger.debug('💾 テーマ適応保存開始', {
+        themeAdaptationData: {
+          themeId: themeAdaptation.themeId,
+          hasNullValues: {
+            themeId: themeAdaptation.themeId == null,
+            allowedEntityTypes: themeAdaptation.allowedEntityTypes == null,
+            restrictedEntityTypes: themeAdaptation.restrictedEntityTypes == null,
+            specializations: themeAdaptation.specializations == null,
+            contentModifiers: themeAdaptation.contentModifiers == null
+          }
+        }
+      });
+
+      const themeStmt = this.db.prepare(`
+        INSERT OR REPLACE INTO theme_adaptations (
+          id, theme_id, allowed_entity_types, restricted_entity_types,
+          specializations, content_modifiers, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      themeStmt.run([
+        randomUUID(),
+        themeAdaptation.themeId,
+        JSON.stringify(themeAdaptation.allowedEntityTypes),
+        JSON.stringify(themeAdaptation.restrictedEntityTypes),
+        JSON.stringify(themeAdaptation.specializations),
+        JSON.stringify(themeAdaptation.contentModifiers),
+        new Date().toISOString()
+      ]);
+      logger.debug('✅ テーマ適応保存完了');
+    } catch (error) {
+      logger.error('❌ テーマ適応保存エラー', { error, themeAdaptation });
+      throw error;
+    }
+
+    logger.debug('✅ データベース保存完了');
   }
 
   /**
@@ -856,7 +1099,7 @@ export class AIMilestoneGenerationService {
     `);
 
     stmt.run([
-      crypto.randomUUID(),
+      randomUUID(),
       request.campaignId,
       request.sessionId,
       JSON.stringify(response.generationMetadata),
@@ -938,6 +1181,26 @@ export class AIMilestoneGenerationService {
     `);
 
     stmt.run(values);
+  }
+
+  /**
+   * マイルストーン削除
+   */
+  async deleteAIMilestone(milestoneId: ID): Promise<void> {
+    const stmt = this.db.prepare(`
+      DELETE FROM ai_milestones WHERE id = ?
+    `);
+
+    const result = stmt.run(milestoneId);
+    
+    if (result.changes === 0) {
+      throw new Error(`Milestone with ID ${milestoneId} not found`);
+    }
+
+    logger.info('✅ マイルストーン削除成功', { 
+      milestoneId,
+      deletedRows: result.changes 
+    });
   }
 }
 

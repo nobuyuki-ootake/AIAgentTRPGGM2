@@ -33,7 +33,7 @@ class AIService {
   private readonly defaultModels = {
     openai: 'gpt-3.5-turbo',
     anthropic: 'claude-3-haiku-20240307',
-    google: 'gemini-1.5-pro',
+    google: 'gemini-2.0-flash-lite',
   };
 
   private readonly defaultTemperature = 0.7;
@@ -784,34 +784,46 @@ Please provide clear rules assistance including:
     entityPool: any;
     milestoneCount?: number;
   }) {
-    const systemPrompt = systemPrompts.getMilestoneGenerationPrompt();
+    const systemPrompt = `あなたは熟練したTRPGゲームマスターとして、魅力的で達成感のあるマイルストーンを生成する専門家です。
+
+以下の要件に従って、日本語でマイルストーンを生成してください：
+
+**マイルストーンの特徴:**
+1. プレイヤーに明確な目標を提供する
+2. キャンペーンテーマと一貫性がある
+3. 適切な難易度とバランス
+4. 達成時に意味のある報酬を提供
+5. ストーリー進行に貢献する
+
+**生成するマイルストーン数:** ${params.milestoneCount || 3}個
+
+各マイルストーンには以下を含めてください：
+- id: ユニークなID
+- title: 魅力的で分かりやすい日本語タイトル
+- description: 詳細な説明（日本語）
+- type: マイルストーンタイプ (enemy_defeat, event_clear, npc_communication, item_acquisition, quest_completion)
+- targetId: 対象エンティティのID
+- targetDetails: 対象の詳細情報
+- requiredConditions: 達成に必要な条件
+- reward: 報酬情報（経験値、アイテム、ストーリー進行）
+
+JSON形式で回答してください。`;
     
     const contextMessage = `
-Campaign Context: ${JSON.stringify(params.campaignContext, null, 2)}
-Session Duration: ${JSON.stringify(params.sessionDuration, null, 2)}
-Theme Adaptation: ${JSON.stringify(params.themeAdaptation, null, 2)}
-Entity Pool: ${JSON.stringify(params.entityPool, null, 2)}
-Requested Milestone Count: ${params.milestoneCount || 3}
+キャンペーンコンテキスト:
+${JSON.stringify(params.campaignContext, null, 2)}
 
-Please generate approximately ${params.milestoneCount || 3} milestones for this TRPG session with:
-1. Variety in milestone types (enemy_defeat, event_clear, npc_communication, item_acquisition, quest_completion)
-2. Appropriate difficulty for the session duration
-3. Clear objectives and success criteria
-4. Meaningful rewards that enhance player experience
-5. Integration with the provided entity pool and campaign context
-6. Adaptation to the specified theme requirements
+セッション期間設定:
+${JSON.stringify(params.sessionDuration, null, 2)}
 
-For each milestone, provide:
-- Unique ID and descriptive title
-- Clear description of what must be accomplished
-- Milestone type (one of the 5 types above)
-- Target entity from the pool (with entity ID)
-- Specific conditions for completion
-- Progress tracking mechanism (0-100%)
-- Appropriate rewards (experience points, items, story progression)
-- Integration points with campaign elements
+テーマ適応:
+${JSON.stringify(params.themeAdaptation, null, 2)}
 
-Return the response as a structured JSON array compatible with the AIMilestone interface.
+利用可能なエンティティプール:
+${JSON.stringify(params.entityPool, null, 2)}
+
+上記の情報を基に、${params.milestoneCount || 3}個の魅力的なマイルストーンを日本語で生成してください。
+キャンペーンテーマ「${params.campaignContext.themeId}」に適したマイルストーンを作成し、エンティティプールの要素を活用してください。
 `;
 
     const response = await this.makeAIRequest({
@@ -843,6 +855,28 @@ Return the response as a structured JSON array compatible with the AIMilestone i
       milestonesData: response.response,
       generatedMilestones: this.parseMilestonesResponse(response.response),
     };
+  }
+
+  /**
+   * マイルストーンレスポンスをパース
+   */
+  private parseMilestonesResponse(response: string): any[] {
+    try {
+      const cleanedResponse = this.cleanJsonResponse(response);
+      const parsed = JSON.parse(cleanedResponse);
+      
+      // 配列として返す
+      if (Array.isArray(parsed)) {
+        return parsed;
+      } else if (parsed.milestones && Array.isArray(parsed.milestones)) {
+        return parsed.milestones;
+      } else {
+        return [parsed]; // 単一オブジェクトの場合は配列にラップ
+      }
+    } catch (error) {
+      logger.error('Failed to parse milestones response:', error);
+      return [];
+    }
   }
 
   /**
@@ -1037,17 +1071,6 @@ Return the response as a structured JSON object compatible with the ThemeAdaptat
     };
   }
 
-  // マイルストーン関連のヘルパーメソッド
-  private parseMilestonesResponse(response: string) {
-    try {
-      const cleanedJson = this.cleanJsonString(response);
-      const parsed = JSON.parse(cleanedJson);
-      return Array.isArray(parsed) ? parsed : [parsed];
-    } catch (error) {
-      logger.warn('Failed to parse milestones response as JSON:', error);
-      return { rawData: response, parseError: error };
-    }
-  }
 
   private parseEntityPoolResponse(response: string) {
     try {
@@ -1099,6 +1122,7 @@ Return the response as a structured JSON object compatible with the ThemeAdaptat
     
     return cleaned;
   }
+
 
   // ==========================================
   // インタラクティブイベントシステム用メソッド

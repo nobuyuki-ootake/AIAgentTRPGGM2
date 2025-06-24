@@ -149,10 +149,38 @@ router.get('/session/:sessionId/entity-pool', async (req: Request, res: Response
     const service = getAIMilestoneGenerationService();
     const entityPool: EntityPool | null = await service.getEntityPoolBySession(sessionId);
 
+    // データが存在しない場合は空のエンティティプールを返す（404エラーではない）
     if (!entityPool) {
-      res.status(404).json({
-        success: false,
-        error: 'Entity pool not found for this session',
+      const emptyEntityPool: EntityPool = {
+        id: '',
+        campaignId: '',
+        sessionId,
+        themeId: '',
+        entities: {
+          enemies: [],
+          events: [],
+          npcs: [],
+          items: [],
+          quests: []
+        },
+        generatedAt: new Date().toISOString(),
+        lastUpdated: new Date().toISOString()
+      };
+
+      logger.info('✅ エンティティプール取得完了（未生成のため空）', { 
+        sessionId,
+        entityCounts: {
+          enemies: 0,
+          events: 0,
+          npcs: 0,
+          items: 0,
+          quests: 0
+        }
+      });
+
+      res.json({
+        success: true,
+        data: emptyEntityPool,
         timestamp: new Date().toISOString()
       });
       return;
@@ -325,6 +353,55 @@ router.post('/regenerate/:sessionId', async (req: Request, res: Response): Promi
     res.status(500).json({
       success: false,
       error: 'Internal server error during regeneration',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+/**
+ * DELETE /api/ai-milestone-generation/milestone/:milestoneId
+ * マイルストーン削除
+ */
+router.delete('/milestone/:milestoneId', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { milestoneId } = req.params;
+
+    if (!milestoneId) {
+      throw new ValidationError('Milestone ID is required');
+    }
+
+    logger.info('🗑️ マイルストーン削除リクエスト', { milestoneId });
+
+    const service = getAIMilestoneGenerationService();
+    await service.deleteAIMilestone(milestoneId);
+
+    logger.info('✅ マイルストーン削除完了', { milestoneId });
+
+    res.json({
+      success: true,
+      message: 'Milestone deleted successfully',
+      data: {
+        milestoneId
+      },
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    logger.error('❌ マイルストーン削除エラー', { error });
+    
+    if (error instanceof ValidationError) {
+      res.status(400).json({
+        success: false,
+        error: error.message,
+        details: error.details,
+        timestamp: new Date().toISOString()
+      });
+      return;
+    }
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to delete milestone',
       timestamp: new Date().toISOString()
     });
   }

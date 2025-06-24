@@ -29,6 +29,7 @@ import {
   Brightness7Rounded,
   DeveloperModeRounded,
   LocationOn as LocationIcon,
+  Edit as EditIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useRecoilState, useRecoilValue } from 'recoil';
@@ -138,6 +139,14 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       label: 'タイムライン',
       icon: <TimelineRounded />,
       path: currentCampaign ? `/campaign/${currentCampaign.id}/timeline` : '/',
+      requiresCampaign: true,
+      modes: ['developer'],
+    },
+    {
+      id: 'scenario-editor',
+      label: 'シナリオエディタ',
+      icon: <EditIcon />,
+      path: currentCampaign ? `/campaign/${currentCampaign.id}/scenario-editor` : '/',
       requiresCampaign: true,
       modes: ['developer'],
     },

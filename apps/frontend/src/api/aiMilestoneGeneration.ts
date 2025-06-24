@@ -21,7 +21,8 @@ export const aiMilestoneGenerationAPI = {
     
     const response = await apiClient.post<MilestoneGenerationResponse>(
       '/ai-milestone-generation/generate',
-      request
+      request,
+      { timeout: 180000 } // 3分タイムアウト（AI生成処理用）
     );
     
     console.log('✅ AI milestones and pools generated successfully', {
@@ -99,6 +100,19 @@ export const aiMilestoneGenerationAPI = {
   },
 
   /**
+   * マイルストーン削除
+   */
+  async deleteAIMilestone(milestoneId: ID): Promise<void> {
+    console.log('🗑️ Deleting AI milestone', { milestoneId });
+    
+    await apiClient.delete<any>(
+      `/ai-milestone-generation/milestone/${milestoneId}`
+    );
+    
+    console.log('✅ AI milestone deleted successfully', { milestoneId });
+  },
+
+  /**
    * セッションのマイルストーン・プール再生成
    */
   async regenerateMilestonesAndPools(
@@ -109,7 +123,8 @@ export const aiMilestoneGenerationAPI = {
     
     const response = await apiClient.post<MilestoneGenerationResponse>(
       `/ai-milestone-generation/regenerate/${sessionId}`,
-      request
+      request,
+      { timeout: 180000 } // 3分タイムアウト（AI生成処理用）
     );
     
     console.log('✅ AI milestones and pools regenerated successfully', {

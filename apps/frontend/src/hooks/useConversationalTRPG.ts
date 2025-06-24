@@ -3,7 +3,7 @@ import { Character, SessionState, ID } from '@ai-agent-trpg/types';
 import { aiGameMasterAPI } from '../api/aiGameMaster';
 import { useNotification } from './useNotification';
 import { useRecoilValue } from 'recoil';
-import { aiSettingsAtom } from '../store/atoms';
+import { aiProviderAtom, aiModelAtom } from '../store/atoms';
 
 interface ConversationalTRPGState {
   isProcessing: boolean;
@@ -31,7 +31,8 @@ export const useConversationalTRPG = (
   });
 
   const { showError, showInfo } = useNotification();
-  const aiSettings = useRecoilValue(aiSettingsAtom) as { provider: string; model?: string };
+  const aiProvider = useRecoilValue(aiProviderAtom);
+  const aiModel = useRecoilValue(aiModelAtom);
 
   // プレイヤーのメッセージを処理
   const processPlayerMessage = useCallback(async (message: string) => {
@@ -95,8 +96,8 @@ export const useConversationalTRPG = (
           playerCharacterId: playerCharacter.id,
           playerAction: message,
           sessionContext,
-          provider: aiSettings.provider,
-          model: aiSettings.model,
+          provider: aiProvider,
+          model: aiModel,
         });
       }
     } catch (error) {
@@ -111,7 +112,8 @@ export const useConversationalTRPG = (
     sessionId,
     sessionState,
     characters,
-    aiSettings,
+    aiProvider,
+    aiModel,
     onSendMessage,
     onRollDice,
     showError,

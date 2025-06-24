@@ -23,7 +23,7 @@ import { useRecoilValue, useRecoilState } from 'recoil';
 import { currentCampaignAtom, appModeAtom } from '@/store/atoms';
 import { ScenarioMilestoneEditor } from '@/components/scenario-editor/ScenarioMilestoneEditor';
 import { EntityPoolManager } from '@/components/scenario-editor/EntityPoolManager';
-import { campaignAPI } from '@/api';
+import { campaignAPI, aiMilestoneGenerationAPI } from '@/api';
 import { LoadingScreen } from '@/components/common/LoadingScreen';
 import { AIMilestone, EntityPool, SessionDurationConfig } from '@ai-agent-trpg/types';
 
@@ -114,19 +114,43 @@ const ScenarioEditorPage: React.FC = () => {
   useEffect(() => {
     if (id) {
       loadCampaign();
+      loadMilestones();
     }
   }, [id]);
+
+  const loadMilestones = async () => {
+    if (!id) return;
+    
+    try {
+      const campaignMilestones = await aiMilestoneGenerationAPI.getAIMilestonesByCampaign(id);
+      setMilestones(campaignMilestones);
+      
+      // エンティティプールも取得
+      try {
+        const sessionEntityPool = await aiMilestoneGenerationAPI.getEntityPoolBySession('scenario-edit-session');
+        setEntityPool(sessionEntityPool);
+      } catch (poolError) {
+        console.log('エンティティプールが見つかりません（初回アクセス時は正常）');
+      }
+    } catch (err) {
+      console.error('マイルストーンの読み込みに失敗しました:', err);
+    }
+  };
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);
   };
 
-  const handleMilestonesUpdate = (newMilestones: AIMilestone[]) => {
+  const handleMilestonesUpdate = async (newMilestones: AIMilestone[]) => {
     setMilestones(newMilestones);
+    // 生成後に最新データを再取得
+    await loadMilestones();
   };
 
-  const handleEntityPoolUpdate = (newEntityPool: EntityPool) => {
+  const handleEntityPoolUpdate = async (newEntityPool: EntityPool) => {
     setEntityPool(newEntityPool);
+    // 生成後に最新データを再取得
+    await loadMilestones();
   };
 
   if (loading) {

@@ -47,6 +47,7 @@ import {
   EventNote as EventIcon,
   Inventory as ItemIcon,
   Assignment as QuestIcon,
+  Delete as DeleteIcon,
 } from '@mui/icons-material';
 import { useRecoilValue } from 'recoil';
 import { 
@@ -129,6 +130,11 @@ export const ScenarioMilestoneEditor: React.FC<ScenarioMilestoneEditorProps> = (
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [milestoneCount, setMilestoneCount] = useState(3);
+  const [generationStep, setGenerationStep] = useState<string>('');
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [milestoneToDelete, setMilestoneToDelete] = useState<AIMilestone | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // 開発者モードでない場合は何も表示しない（プレイヤーには見せない）
   if (appMode !== 'developer') {
@@ -173,6 +179,8 @@ export const ScenarioMilestoneEditor: React.FC<ScenarioMilestoneEditorProps> = (
   const generateMilestones = async () => {
     setIsGenerating(true);
     setGenerationError(null);
+    setGenerationStep('準備中...');
+    setGenerationProgress(10);
     
     try {
       const request: MilestoneGenerationRequest = {
@@ -188,7 +196,27 @@ export const ScenarioMilestoneEditor: React.FC<ScenarioMilestoneEditorProps> = (
         },
       };
 
+      // 進捗表示の更新
+      setGenerationStep('テーマ適応を生成中...');
+      setGenerationProgress(25);
+      
+      // 少し待ってから次のステップ
+      await new Promise(resolve => setTimeout(resolve, 500));
+      setGenerationStep('エンティティプールを生成中...');
+      setGenerationProgress(50);
+      
+      await new Promise(resolve => setTimeout(resolve, 500));
+      setGenerationStep('マイルストーンを生成中...');
+      setGenerationProgress(75);
+      
+      await new Promise(resolve => setTimeout(resolve, 500));
+      setGenerationStep('データベースに保存中...');
+      setGenerationProgress(90);
+
       const response = await aiMilestoneGenerationAPI.generateMilestonesAndPools(request);
+      
+      setGenerationStep('完了！');
+      setGenerationProgress(100);
       
       if (onMilestonesUpdate && response.milestones) {
         onMilestonesUpdate(response.milestones);
@@ -202,7 +230,12 @@ export const ScenarioMilestoneEditor: React.FC<ScenarioMilestoneEditorProps> = (
       console.error('マイルストーン生成エラー:', error);
       setGenerationError(error instanceof Error ? error.message : 'マイルストーン生成に失敗しました');
     } finally {
-      setIsGenerating(false);
+      // 完了後に少し待ってからリセット
+      setTimeout(() => {
+        setIsGenerating(false);
+        setGenerationStep('');
+        setGenerationProgress(0);
+      }, 1000);
     }
   };
 
@@ -210,6 +243,43 @@ export const ScenarioMilestoneEditor: React.FC<ScenarioMilestoneEditorProps> = (
   const showMilestoneDetails = (milestone: AIMilestone) => {
     setSelectedMilestone(milestone);
     setShowMilestoneDetail(true);
+  };
+
+  // マイルストーン削除確認ダイアログを開く
+  const openDeleteConfirm = (milestone: AIMilestone) => {
+    setMilestoneToDelete(milestone);
+    setDeleteConfirmOpen(true);
+  };
+
+  // マイルストーン削除を実行
+  const handleDeleteMilestone = async () => {
+    if (!milestoneToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      await aiMilestoneGenerationAPI.deleteAIMilestone(milestoneToDelete.id);
+      
+      // 成功したら一覧から削除されたマイルストーンを除外
+      const updatedMilestones = milestones.filter(m => m.id !== milestoneToDelete.id);
+      if (onMilestonesUpdate) {
+        onMilestonesUpdate(updatedMilestones);
+      }
+      
+      // ダイアログを閉じる
+      setDeleteConfirmOpen(false);
+      setMilestoneToDelete(null);
+    } catch (error) {
+      console.error('マイルストーン削除エラー:', error);
+      // エラーハンドリング（必要に応じてスナックバー等で通知）
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // 削除確認ダイアログを閉じる
+  const handleCancelDelete = () => {
+    setDeleteConfirmOpen(false);
+    setMilestoneToDelete(null);
   };
 
   // AI生成セクション
@@ -274,6 +344,26 @@ export const ScenarioMilestoneEditor: React.FC<ScenarioMilestoneEditorProps> = (
           </Button>
         )}
       </Box>
+
+      {/* 詳細進捗表示 */}
+      {isGenerating && (
+        <Box sx={{ mb: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            <CircularProgress size={20} />
+            <Typography variant="body2" color="primary">
+              {generationStep}
+            </Typography>
+          </Box>
+          <LinearProgress 
+            variant="determinate" 
+            value={generationProgress}
+            sx={{ height: 8, borderRadius: 4 }}
+          />
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+            {generationProgress}% 完了
+          </Typography>
+        </Box>
+      )}
 
       {generationError && (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -358,6 +448,15 @@ export const ScenarioMilestoneEditor: React.FC<ScenarioMilestoneEditorProps> = (
                     onClick={() => showMilestoneDetails(milestone)}
                   >
                     <PreviewIcon />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="削除">
+                  <IconButton 
+                    size="small" 
+                    onClick={() => openDeleteConfirm(milestone)}
+                    color="error"
+                  >
+                    <DeleteIcon />
                   </IconButton>
                 </Tooltip>
               </Box>
@@ -572,6 +671,56 @@ export const ScenarioMilestoneEditor: React.FC<ScenarioMilestoneEditorProps> = (
         <DialogActions>
           <Button onClick={() => setShowMilestoneDetail(false)}>
             閉じる
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* 削除確認ダイアログ */}
+      <Dialog
+        open={deleteConfirmOpen}
+        onClose={handleCancelDelete}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <DeleteIcon color="error" />
+          マイルストーン削除確認
+        </DialogTitle>
+        <DialogContent>
+          {milestoneToDelete && (
+            <Box>
+              <Typography variant="body1" gutterBottom>
+                以下のマイルストーンを削除しますか？
+              </Typography>
+              <Box sx={{ p: 2, bgcolor: 'grey.100', borderRadius: 1, mt: 2 }}>
+                <Typography variant="h6" color="error">
+                  {milestoneToDelete.title}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {milestoneToDelete.description}
+                </Typography>
+              </Box>
+              <Alert severity="warning" sx={{ mt: 2 }}>
+                この操作は取り消せません。削除されたマイルストーンは復元できません。
+              </Alert>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={handleCancelDelete}
+            disabled={isDeleting}
+          >
+            キャンセル
+          </Button>
+          <Button 
+            onClick={handleDeleteMilestone}
+            color="error"
+            variant="contained"
+            disabled={isDeleting}
+            startIcon={isDeleting ? <CircularProgress size={16} /> : <DeleteIcon />}
+          >
+            {isDeleting ? '削除中...' : '削除'}
           </Button>
         </DialogActions>
       </Dialog>
