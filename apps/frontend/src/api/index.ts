@@ -13,6 +13,7 @@ export { aiMilestoneGenerationAPI } from './aiMilestoneGeneration';
 export { interactiveEventsAPI } from './interactiveEvents';
 export { locationEntityMappingAPI } from './locationEntityMapping';
 export { playerExperienceAPI } from './playerExperience';
+export { entityPoolAPI } from './entityPool';
 
 // Re-export types for convenience
 export type {

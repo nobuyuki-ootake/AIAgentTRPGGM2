@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -43,6 +43,7 @@ import {
   Clear as ClearSelectionIcon,
   Download as ExportIcon,
   Upload as ImportIcon,
+  SaveAlt as QuickSaveIcon,
   Cancel as CancelIcon,
 } from '@mui/icons-material';
 import { useRecoilValue } from 'recoil';
@@ -53,8 +54,6 @@ import {
 } from '@ai-agent-trpg/types';
 import { appModeAtom } from '../../store/atoms';
 import { entityPoolAPI } from '../../api';
-import { EventEditForm } from './entity-forms/EventEditForm';
-import { ItemEditForm } from './entity-forms/ItemEditForm';
 
 interface EntityPoolManagerProps {
   /**
@@ -120,6 +119,7 @@ export const EntityPoolManager: React.FC<EntityPoolManagerProps> = ({
   const [filterDifficulty, setFilterDifficulty] = useState<string>('all');
   
   // CRUD機能のための新しい状態管理
+  const [quickEditMode, setQuickEditMode] = useState<ID | null>(null);
   const [selectedEntities, setSelectedEntities] = useState<ID[]>([]);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingEntity, setEditingEntity] = useState<any>(null);
@@ -137,29 +137,8 @@ export const EntityPoolManager: React.FC<EntityPoolManagerProps> = ({
     setSelectedCategory(initialCategory);
     // エンティティタイプが変わったら選択をクリア
     setSelectedEntities([]);
+    setQuickEditMode(null);
   }, [initialEntityType, initialCategory]);
-
-  // 強制再レンダリング用のstate
-  const [forceRenderKey, setForceRenderKey] = useState(0);
-
-  // entityPool更新時に選択をクリアして再レンダリングを促す
-  useEffect(() => {
-    if (entityPool) {
-      setSelectedEntities([]);
-      setForceRenderKey(prev => prev + 1); // 強制再レンダリング
-      
-      const eventsData = entityPool.entities?.coreEntities?.events || [];
-      console.log('EntityPoolManager: EntityPool updated, forcing re-render', {
-        lastUpdated: entityPool.lastUpdated,
-        forceRenderKey: forceRenderKey + 1,
-        eventsCount: eventsData.length,
-        firstEventName: eventsData[0]?.name,
-        firstEventUpdated: eventsData[0]?.updatedAt,
-        selectedEntityType,
-        selectedCategory
-      });
-    }
-  }, [entityPool, selectedEntityType, selectedCategory]);
 
   // CRUD操作のヘルパー関数
   const handleEntitySelect = (entityId: ID, isSelected: boolean) => {
@@ -171,7 +150,7 @@ export const EntityPoolManager: React.FC<EntityPoolManagerProps> = ({
   };
 
   const handleSelectAll = () => {
-    const entities = getCurrentEntities;
+    const entities = getCurrentEntities();
     const allIds = entities.map(entity => entity.id || entity.name).filter(Boolean);
     setSelectedEntities(allIds as ID[]);
   };
@@ -185,14 +164,44 @@ export const EntityPoolManager: React.FC<EntityPoolManagerProps> = ({
     setSnackbarOpen(true);
   };
 
-  // エンティティ編集状態の安全な更新関数
-  const updateEditingEntity = useCallback((updates: Partial<any>) => {
-    setEditingEntity((prevEntity: any) => ({
-      ...prevEntity,
-      ...updates
-    }));
-  }, []);
+  const handleQuickEdit = (entityId: ID) => {
+    setQuickEditMode(entityId);
+  };
 
+  const cancelQuickEdit = () => {
+    setQuickEditMode(null);
+  };
+
+  const saveQuickEdit = async (entityId: ID, updates: Partial<any>) => {
+    if (!sessionId) {
+      showMessage('セッションIDが見つかりません');
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      await entityPoolAPI.updateEntity(sessionId, {
+        entityType: selectedEntityType,
+        entityCategory: selectedCategory,
+        entityId,
+        updates
+      });
+      
+      // エンティティプールを再読み込み
+      const updatedPool = await entityPoolAPI.getEntityPool(sessionId);
+      if (updatedPool && onEntityPoolUpdate) {
+        onEntityPoolUpdate(updatedPool);
+      }
+      
+      showMessage('エンティティを更新しました');
+      setQuickEditMode(null);
+    } catch (error) {
+      console.error('Failed to save entity:', error);
+      showMessage('更新に失敗しました: ' + (error instanceof Error ? error.message : '不明なエラー'));
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   const handleAddEntity = () => {
     setEditingEntity(null);
@@ -212,59 +221,6 @@ export const EntityPoolManager: React.FC<EntityPoolManagerProps> = ({
   const handleBulkDelete = () => {
     if (selectedEntities.length > 0) {
       setBulkDeleteConfirmOpen(true);
-    }
-  };
-
-  const handleSaveEntity = async () => {
-    if (!sessionId || !editingEntity) {
-      showMessage('セッションIDまたはエンティティデータが見つかりません');
-      return;
-    }
-
-    setIsProcessing(true);
-    try {
-      // エンティティIDを取得
-      const entityId = editingEntity.id || editingEntity.name;
-      
-      // 更新データを準備
-      const updates = {
-        name: editingEntity.name,
-        description: editingEntity.description,
-        type: editingEntity.type,
-        difficulty: editingEntity.difficulty,
-        duration: editingEntity.duration,
-        outcomes: editingEntity.outcomes || {}
-      };
-
-      // APIを通じてエンティティを更新
-      await entityPoolAPI.updateEntity(sessionId, {
-        entityType: selectedEntityType,
-        entityCategory: selectedCategory,
-        entityId,
-        updates
-      });
-      
-      // エンティティプールを再読み込み
-      const updatedPool = await entityPoolAPI.getEntityPool(sessionId);
-      console.log('Updated entity pool received:', {
-        hasUpdatedPool: !!updatedPool,
-        lastUpdated: updatedPool?.lastUpdated,
-        eventsCount: updatedPool?.entities?.coreEntities?.events?.length || 0,
-        firstEvent: updatedPool?.entities?.coreEntities?.events?.[0]
-      });
-      
-      if (updatedPool && onEntityPoolUpdate) {
-        onEntityPoolUpdate(updatedPool);
-      }
-      
-      showMessage('エンティティを保存しました');
-      setEditDialogOpen(false);
-      setEditingEntity(null);
-    } catch (error) {
-      console.error('Failed to save entity:', error);
-      showMessage('保存に失敗しました: ' + (error instanceof Error ? error.message : '不明なエラー'));
-    } finally {
-      setIsProcessing(false);
     }
   };
 
@@ -305,8 +261,8 @@ export const EntityPoolManager: React.FC<EntityPoolManagerProps> = ({
     return labels[type];
   };
 
-  // 現在選択されたエンティティリストを取得（useMemoでメモ化）
-  const getCurrentEntities = useMemo(() => {
+  // 現在選択されたエンティティリストを取得
+  const getCurrentEntities = () => {
     if (!entityPool) return [];
     
     let entities: any[] = [];
@@ -404,7 +360,7 @@ export const EntityPoolManager: React.FC<EntityPoolManagerProps> = ({
     });
 
     return filteredEntities;
-  }, [entityPool, selectedEntityType, selectedCategory, searchQuery, filterDifficulty, sortBy, forceRenderKey]);
+  };
 
   // 難易度に応じた色を取得
   const getDifficultyColor = (difficulty: string) => {
@@ -510,7 +466,7 @@ export const EntityPoolManager: React.FC<EntityPoolManagerProps> = ({
 
   // ツールバー（一括操作用）
   const EntityToolbar = () => {
-    const entities = getCurrentEntities;
+    const entities = getCurrentEntities();
     const hasEntities = entities.length > 0;
     const hasSelection = selectedEntities.length > 0;
     const isAllSelected = hasEntities && selectedEntities.length === entities.length;
@@ -637,9 +593,12 @@ export const EntityPoolManager: React.FC<EntityPoolManagerProps> = ({
   const EntityCard = ({ entity }: { entity: any }) => {
     const entityId = entity.id || entity.name;
     const isSelected = selectedEntities.includes(entityId);
+    const isQuickEditing = quickEditMode === entityId;
+    const [quickEditName, setQuickEditName] = useState(entity.name || '');
+    const [quickEditDescription, setQuickEditDescription] = useState(entity.description || '');
 
     return (
-      <Card sx={{ mb: 2, border: isSelected ? 2 : 0, borderColor: isSelected ? 'primary.main' : 'transparent' }}>
+    <Card sx={{ mb: 2, border: isSelected ? 2 : 0, borderColor: isSelected ? 'primary.main' : 'transparent' }}>
       <CardContent>
         <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 1 }}>
           {/* チェックボックス */}
@@ -653,14 +612,40 @@ export const EntityPoolManager: React.FC<EntityPoolManagerProps> = ({
 
           {/* エンティティ名 */}
           <Box sx={{ flexGrow: 1 }}>
-              <Typography variant="h6" component="div">
+            {isQuickEditing ? (
+              <TextField
+                fullWidth
+                size="small"
+                value={quickEditName}
+                onChange={(e) => setQuickEditName(e.target.value)}
+                variant="outlined"
+                sx={{ mb: 1 }}
+              />
+            ) : (
+              <Typography variant="h6" component="div" sx={{ cursor: 'pointer' }} 
+                         onClick={() => handleQuickEdit(entityId)}>
                 {entity.name || 'Unnamed Entity'}
               </Typography>
+            )}
 
             {/* エンティティ説明 */}
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            {isQuickEditing ? (
+              <TextField
+                fullWidth
+                multiline
+                rows={2}
+                size="small"
+                value={quickEditDescription}
+                onChange={(e) => setQuickEditDescription(e.target.value)}
+                variant="outlined"
+                sx={{ mb: 1 }}
+              />
+            ) : (
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1, cursor: 'pointer' }}
+                         onClick={() => handleQuickEdit(entityId)}>
                 {entity.description || 'No description available'}
               </Typography>
+            )}
           </Box>
 
           {/* ステータスチップ */}
@@ -678,6 +663,29 @@ export const EntityPoolManager: React.FC<EntityPoolManagerProps> = ({
           </Box>
         </Box>
 
+        {/* クイック編集の保存・キャンセルボタン */}
+        {isQuickEditing && (
+          <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
+            <Button
+              size="small"
+              startIcon={<QuickSaveIcon />}
+              onClick={() => saveQuickEdit(entityId, { name: quickEditName, description: quickEditDescription })}
+              variant="contained"
+              color="primary"
+              disabled={isProcessing}
+            >
+              保存
+            </Button>
+            <Button
+              size="small"
+              startIcon={<CancelIcon />}
+              onClick={cancelQuickEdit}
+              variant="outlined"
+            >
+              キャンセル
+            </Button>
+          </Box>
+        )}
 
         {/* エンティティタイプ固有の情報 */}
         {selectedEntityType === 'enemies' && (
@@ -705,13 +713,8 @@ export const EntityPoolManager: React.FC<EntityPoolManagerProps> = ({
           </Box>
         )}
 
-        {selectedEntityType === 'events' && (
-          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1 }}>
-            {entity.type && <Chip label={entity.type} size="small" color="primary" />}
-            {entity.duration && <Chip label={`${entity.duration}分`} size="small" color="info" />}
-            {entity.outcomes?.experience && <Chip label={`EXP: ${entity.outcomes.experience}`} size="small" color="success" />}
-            {entity.updatedAt && <Chip label={`更新: ${new Date(entity.updatedAt).toLocaleTimeString()}`} size="small" color="secondary" />}
-          </Box>
+        {selectedEntityType === 'events' && entity.eventType && (
+          <Chip label={entity.eventType} size="small" color="primary" sx={{ mb: 1 }} />
         )}
       </CardContent>
       
@@ -729,7 +732,7 @@ export const EntityPoolManager: React.FC<EntityPoolManagerProps> = ({
             startIcon={<EditIcon />}
             onClick={() => handleEditEntity(entity)}
           >
-            編集
+            フル編集
           </Button>
         </Box>
         <Button
@@ -743,12 +746,11 @@ export const EntityPoolManager: React.FC<EntityPoolManagerProps> = ({
         </Button>
       </CardActions>
     </Card>
-    );
-  };
+  );
 
   // エンティティリスト
   const EntityList = () => {
-    const entities = getCurrentEntities;
+    const entities = getCurrentEntities();
 
     if (entities.length === 0) {
       return (
@@ -779,9 +781,9 @@ export const EntityPoolManager: React.FC<EntityPoolManagerProps> = ({
     }
 
     return (
-      <Box key={`${selectedEntityType}-${selectedCategory}-${entityPool?.lastUpdated || 'no-pool'}-${forceRenderKey}`}>
+      <Box>
         {entities.map((entity, index) => (
-          <EntityCard key={`${entity.id || index}-${entityPool?.lastUpdated}-${forceRenderKey}`} entity={entity} />
+          <EntityCard key={entity.id || index} entity={entity} />
         ))}
       </Box>
     );
@@ -953,36 +955,10 @@ export const EntityPoolManager: React.FC<EntityPoolManagerProps> = ({
           {editingEntity?.name || 'エンティティ'}を編集
         </DialogTitle>
         <DialogContent>
-          {editingEntity && (
-            <Box sx={{ mt: 1 }}>
-              {/* エンティティタイプに応じた編集フォーム */}
-              {selectedEntityType === 'events' && (
-                <EventEditForm
-                  entity={editingEntity}
-                  onEntityUpdate={updateEditingEntity}
-                />
-              )}
-              
-              {selectedEntityType === 'items' && (
-                <ItemEditForm
-                  entity={editingEntity}
-                  onEntityUpdate={updateEditingEntity}
-                />
-              )}
-              
-              {/* 他のエンティティタイプ（将来実装） */}
-              {!['events', 'items'].includes(selectedEntityType) && (
-                <Box sx={{ p: 3, textAlign: 'center' }}>
-                  <Typography variant="h6" gutterBottom>
-                    {getEntityTypeLabel(selectedEntityType)}の編集フォーム
-                  </Typography>
-                  <Alert severity="info">
-                    この機能は今後実装予定です。
-                  </Alert>
-                </Box>
-              )}
-            </Box>
-          )}
+          <Alert severity="info" sx={{ mb: 2 }}>
+            この機能は今後実装予定です。クイック編集または詳細表示をご利用ください。
+          </Alert>
+          {/* TODO: エンティティ編集フォーム実装 */}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEditDialogOpen(false)}>
@@ -990,8 +966,7 @@ export const EntityPoolManager: React.FC<EntityPoolManagerProps> = ({
           </Button>
           <Button
             variant="contained"
-            onClick={() => handleSaveEntity()}
-            disabled={isProcessing}
+            disabled={true}
           >
             保存
           </Button>

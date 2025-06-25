@@ -64,55 +64,29 @@ export class TopDownGeneratorService {
 
     const aiService = getAIService();
     
-    const allowedTypes = ['特定エネミー討伐', '特定イベントクリア', '特定NPCとの特定コミュニケーション', 'キーアイテム取得', 'クエストクリア'];
-    const restrictedTypes = themeAdaptation.restrictedEntityTypes || [];
-    const availableTypes = allowedTypes.filter(type => !restrictedTypes.includes(type as any));
-
-    const prompt = `
-以下の条件でTRPGマイルストーンの概要を生成してください：
-
-**基本設定:**
-- セッション時間: ${request.sessionDuration?.estimatedPlayTime || 60}分
-- マイルストーン数: ${request.milestoneCount || 3}個
-- テーマ: ${request.themeId}
-- 利用可能なマイルストーンタイプ: ${availableTypes.join(', ')}
-
-**マイルストーン概要要件:**
-1. 各マイルストーンは3つのエンティティで構成される
-2. プレイヤーには進捗を直接表示しない（手探り感重視）
-3. 物語的な一貫性を保つ
-4. 難易度は段階的に上昇
-
-**出力形式:**
-[
-  {
-    "id": "milestone-1",
-    "title": "謎の事件の発端",
-    "description": "村で起こった不可解な事件の真相に迫る最初の手がかりを見つける",
-    "type": "特定イベントクリア",
-    "estimatedDuration": 20,
-    "difficulty": "easy"
-  }
-]
-
-JSON配列のみを返してください。`;
-
     try {
-      const response = await aiService.chat({
+      // Phase 5の特化メソッドを使用
+      const result = await aiService.generateMilestoneOutlines({
         provider: 'google-gemini',
-        message: prompt
-      });
-      const parsed = JSON.parse(response.message);
-      
-      logger.info('✅ マイルストーン概要生成完了', { 
-        generatedCount: parsed.length
+        campaignContext: { themeId: request.themeId },
+        sessionDuration: request.sessionDuration,
+        themeAdaptation,
+        milestoneCount: request.milestoneCount
       });
       
-      return parsed;
+      logger.info('✅ マイルストーン概要生成完了（AI Service使用）', { 
+        generatedCount: result.generatedOutlines?.length || 0
+      });
+      
+      return result.generatedOutlines || [];
     } catch (error) {
       logger.warn('🔄 AI生成失敗、フォールバック使用', { error });
       
       // フォールバック実装
+      const allowedTypes = ['特定エネミー討伐', '特定イベントクリア', '特定NPCとの特定コミュニケーション', 'キーアイテム取得', 'クエストクリア'];
+      const restrictedTypes = themeAdaptation.restrictedEntityTypes || [];
+      const availableTypes = allowedTypes.filter(type => !restrictedTypes.includes(type as any));
+      
       return Array.from({ length: request.milestoneCount || 3 }, (_, i) => ({
         id: `milestone-${i + 1}`,
         title: `マイルストーン ${i + 1}`,
@@ -184,81 +158,26 @@ JSON配列のみを返してください。`;
 
     const aiService = getAIService();
     
-    const prompt = `
-以下の要件でTRPGコアエンティティを生成してください：
-
-**生成要件:**
-${JSON.stringify(coreEntityRequirements, null, 2)}
-
-**テーマ適応:**
-${JSON.stringify(themeAdaptation, null, 2)}
-
-**出力形式:**
-{
-  "enemies": [],
-  "events": [
-    {
-      "id": "event-1",
-      "name": "血痕の調査",
-      "description": "事件現場で発見された血痕を詳しく調べる",
-      "milestoneId": "milestone-1",
-      "progressContribution": 40,
-      "rewards": {
-        "experience": 50,
-        "information": ["犯人は左利きの可能性"],
-        "items": []
-      }
-    }
-  ],
-  "npcs": [
-    {
-      "id": "npc-1", 
-      "name": "目撃者のおばあさん",
-      "description": "事件の夜に怪しい人影を見たという高齢の女性",
-      "milestoneId": "milestone-1",
-      "progressContribution": 30,
-      "rewards": {
-        "experience": 40,
-        "information": ["事件当夜の怪しい人影"],
-        "relationships": [{"npcId": "witness-001", "change": 20}]
-      }
-    }
-  ],
-  "items": [
-    {
-      "id": "item-1",
-      "name": "古い日記",
-      "description": "事件に関連する手がかりが書かれた日記",
-      "milestoneId": "milestone-1", 
-      "progressContribution": 30,
-      "rewards": {
-        "experience": 30,
-        "information": ["重要な日付の記録"],
-        "items": [{"name": "証拠の日記", "effect": "情報+1"}]
-      }
-    }
-  ],
-  "quests": []
-}
-
-JSON形式のみを返してください。`;
-
     try {
-      const response = await aiService.chat({
+      // Phase 5の特化メソッドを使用
+      const result = await aiService.generateCoreEntities({
         provider: 'google-gemini',
-        message: prompt
-      });
-      const parsed = JSON.parse(response.message);
-      
-      logger.info('✅ コアエンティティ生成完了', {
-        enemies: parsed.enemies?.length || 0,
-        events: parsed.events?.length || 0,
-        npcs: parsed.npcs?.length || 0,
-        items: parsed.items?.length || 0,
-        quests: parsed.quests?.length || 0
+        coreEntityRequirements,
+        campaignContext: { themeId: request.themeId },
+        themeAdaptation
       });
       
-      return parsed;
+      logger.info('✅ コアエンティティ生成完了（AI Service使用）', {
+        entities: result.generatedCoreEntities ? Object.keys(result.generatedCoreEntities).length : 0
+      });
+      
+      return result.generatedCoreEntities || {
+        enemies: [],
+        events: [],
+        npcs: [],
+        items: [],
+        quests: []
+      };
     } catch (error) {
       logger.warn('🔄 AI生成失敗、フォールバック使用', { error });
       
@@ -306,89 +225,26 @@ JSON形式のみを返してください。`;
 
     const aiService = getAIService();
     
-    const prompt = `
-以下のコアエンティティに対応する追加報酬エンティティを生成してください：
-
-**コアエンティティ:**
-${JSON.stringify(coreEntities, null, 2)}
-
-**追加エンティティ要件:**
-1. 実用的報酬エンティティ（実戦に役立つアイテム・装備）
-2. トロフィー系エンティティ（収集要素・世界観深化）
-3. ミステリー系エンティティ（隠し要素・好奇心満足）
-
-**出力形式:**
-{
-  "practicalRewards": [
-    {
-      "id": "practical-1",
-      "name": "薬草の発見",
-      "description": "治療に使える貴重な薬草を発見",
-      "rewards": {
-        "items": [
-          {"name": "上級治療薬", "effect": "HP+50", "quantity": 3},
-          {"name": "魔力回復薬", "effect": "MP+30", "quantity": 2}
-        ],
-        "experience": 20
-      }
-    }
-  ],
-  "trophyItems": [
-    {
-      "id": "trophy-1",
-      "name": "古い人形の発見",
-      "description": "村の歴史を感じさせる精巧な人形",
-      "rewards": {
-        "items": [
-          {
-            "name": "村娘の人形",
-            "effect": "なし",
-            "description": "特に効果はないが、村の歴史を感じさせる",
-            "category": "trophy"
-          }
-        ],
-        "information": ["村の古い伝統について"],
-        "experience": 10
-      }
-    }
-  ],
-  "mysteryItems": [
-    {
-      "id": "mystery-1", 
-      "name": "謎めいた老人との遭遇",
-      "description": "意味深な言葉を残して去っていく老人",
-      "rewards": {
-        "items": [
-          {
-            "name": "謎の石ころ",
-            "effect": "なし",
-            "description": "『いつか役に立つ』と老人が言っていた普通の石",
-            "category": "mystery_item"
-          }
-        ],
-        "information": ["意味深な言葉"],
-        "experience": 5
-      }
-    }
-  ]
-}
-
-JSON形式のみを返してください。`;
-
     try {
-      const response = await aiService.chat({
+      // Phase 5の特化メソッドを使用
+      const result = await aiService.generateBonusEntities({
         provider: 'google-gemini',
-        message: prompt
-      });
-      const parsed = JSON.parse(response.message);
-      
-      logger.info('✅ 追加エンティティ生成完了', {
-        practicalRewards: parsed.practicalRewards?.length || 0,
-        trophyItems: parsed.trophyItems?.length || 0,
-        mysteryItems: parsed.mysteryItems?.length || 0
+        coreEntities,
+        campaignContext: { themeId: request.themeId },
+        themeAdaptation: { themeId: request.themeId } // 簡易的なthemeAdaptation
       });
       
-      return parsed;
+      logger.info('✅ 追加エンティティ生成完了（AI Service使用）', {
+        practicalRewards: result.generatedBonusEntities?.practicalRewards?.length || 0,
+        trophyItems: result.generatedBonusEntities?.trophyItems?.length || 0,
+        mysteryItems: result.generatedBonusEntities?.mysteryItems?.length || 0
+      });
+      
+      return result.generatedBonusEntities || {
+        practicalRewards: [],
+        trophyItems: [],
+        mysteryItems: []
+      };
     } catch (error) {
       logger.warn('🔄 AI生成失敗、フォールバック使用', { error });
       
@@ -432,37 +288,53 @@ JSON形式のみを返してください。`;
   ): Promise<any[]> {
     logger.info('📍 場所エンティティマッピング生成開始');
 
-    // シンプルな配置ロジック（実際の実装では場所データベースと連携）
-    const mappings = [
-      {
-        locationId: 'village-center',
-        locationName: '村の中央広場',
-        coreEntities: [coreEntities.npcs?.[0]?.id].filter(Boolean),
-        bonusEntities: [bonusEntities.practicalRewards?.[0]?.id].filter(Boolean),
-        timeConditions: ['day_time']
-      },
-      {
-        locationId: 'investigation-site', 
-        locationName: '調査現場',
-        coreEntities: [coreEntities.events?.[0]?.id].filter(Boolean),
-        bonusEntities: [bonusEntities.trophyItems?.[0]?.id].filter(Boolean),
-        timeConditions: ['any']
-      },
-      {
-        locationId: 'hidden-location',
-        locationName: '隠れた場所',
-        coreEntities: [coreEntities.items?.[0]?.id].filter(Boolean),
-        bonusEntities: [bonusEntities.mysteryItems?.[0]?.id].filter(Boolean),
-        timeConditions: ['night_only'],
-        prerequisiteEntities: []
-      }
-    ];
+    const aiService = getAIService();
+    
+    try {
+      // Phase 5の特化メソッドを使用
+      const result = await aiService.generateLocationMapping({
+        provider: 'google-gemini',
+        coreEntities,
+        bonusEntities,
+        sessionContext: { gameType: 'TRPG' }
+      });
+      
+      logger.info('✅ 場所エンティティマッピング生成完了（AI Service使用）', { 
+        mappingsCount: result.generatedLocationMapping?.length || 0
+      });
+      
+      return result.generatedLocationMapping || [];
+    } catch (error) {
+      logger.warn('🔄 AI生成失敗、フォールバック使用', { error });
+      
+      // フォールバック実装（シンプルな配置ロジック）
+      const mappings = [
+        {
+          locationId: 'village-center',
+          locationName: '村の中央広場',
+          coreEntities: [coreEntities.npcs?.[0]?.id].filter(Boolean),
+          bonusEntities: [bonusEntities.practicalRewards?.[0]?.id].filter(Boolean),
+          timeConditions: ['day_time']
+        },
+        {
+          locationId: 'investigation-site', 
+          locationName: '調査現場',
+          coreEntities: [coreEntities.events?.[0]?.id].filter(Boolean),
+          bonusEntities: [bonusEntities.trophyItems?.[0]?.id].filter(Boolean),
+          timeConditions: ['any']
+        },
+        {
+          locationId: 'hidden-location',
+          locationName: '隠れた場所',
+          coreEntities: [coreEntities.items?.[0]?.id].filter(Boolean),
+          bonusEntities: [bonusEntities.mysteryItems?.[0]?.id].filter(Boolean),
+          timeConditions: ['night_only'],
+          prerequisiteEntities: []
+        }
+      ];
 
-    logger.info('✅ 場所エンティティマッピング生成完了', { 
-      mappingsCount: mappings.length 
-    });
-
-    return mappings;
+      return mappings;
+    }
   }
 
   /**
@@ -475,7 +347,7 @@ JSON形式のみを返してください。`;
   ): Promise<AIMilestone[]> {
     logger.info('🔧 マイルストーン詳細化開始');
 
-    const detailedMilestones: AIMilestone[] = milestoneOutlines.map((outline, index) => {
+    const detailedMilestones: AIMilestone[] = milestoneOutlines.map((outline) => {
       // 該当するエンティティを特定
       const relatedEvent = coreEntities.events?.find((e: any) => e.milestoneId === outline.id);
       const relatedNPC = coreEntities.npcs?.find((n: any) => n.milestoneId === outline.id);

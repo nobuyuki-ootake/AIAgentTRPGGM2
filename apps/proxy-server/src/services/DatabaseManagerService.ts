@@ -25,7 +25,7 @@ export class DatabaseManagerService {
    * テーブル初期化
    */
   private initTables(): void {
-    // AI マイルストーンテーブル（拡張版）
+    // AI マイルストーンテーブル（実際のスキーマに合わせて修正）
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS ai_milestones (
         id TEXT PRIMARY KEY,
@@ -34,15 +34,16 @@ export class DatabaseManagerService {
         title TEXT NOT NULL,
         description TEXT NOT NULL,
         type TEXT NOT NULL,
-        target_entity_ids TEXT NOT NULL DEFAULT '[]',
-        progress_contributions TEXT NOT NULL DEFAULT '[]',
-        target_details TEXT NOT NULL,
+        target_entity_ids TEXT NOT NULL DEFAULT '[]', -- JSON array
+        milestone_targets TEXT NOT NULL DEFAULT '[]', -- JSON array  
         status TEXT NOT NULL DEFAULT 'pending',
         progress INTEGER NOT NULL DEFAULT 0,
-        hidden_from_player BOOLEAN NOT NULL DEFAULT true,
         required_conditions TEXT NOT NULL DEFAULT '[]',
         reward TEXT NOT NULL DEFAULT '{}',
+        player_hints TEXT NOT NULL DEFAULT '[]', -- JSON array
+        guidance_messages TEXT NOT NULL DEFAULT '[]', -- JSON array
         created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
         completed_at TEXT,
         FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
       )
@@ -112,13 +113,14 @@ export class DatabaseManagerService {
       const milestoneStmt = this.db.prepare(`
         INSERT INTO ai_milestones (
           id, campaign_id, session_id, title, description, type, 
-          target_entity_ids, progress_contributions, target_details, 
-          status, progress, hidden_from_player, required_conditions, 
-          reward, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          target_entity_ids, milestone_targets, 
+          status, progress, required_conditions, 
+          reward, player_hints, guidance_messages, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       milestones.forEach(milestone => {
+        const currentTime = new Date().toISOString();
         milestoneStmt.run(
           milestone.id,
           milestone.campaignId,
@@ -127,14 +129,15 @@ export class DatabaseManagerService {
           milestone.description,
           milestone.type,
           JSON.stringify(milestone.targetEntityIds),
-          JSON.stringify(milestone.progressContributions),
-          JSON.stringify(milestone.targetDetails),
+          JSON.stringify(milestone.targetDetails || []),
           milestone.status,
           milestone.progress,
-          milestone.hiddenFromPlayer ? 1 : 0,
           JSON.stringify(milestone.requiredConditions),
           JSON.stringify(milestone.reward),
-          milestone.createdAt
+          JSON.stringify([]), // player_hints - empty for now
+          JSON.stringify([]), // guidance_messages - empty for now
+          milestone.createdAt,
+          currentTime
         );
       });
 
@@ -142,21 +145,17 @@ export class DatabaseManagerService {
       const poolStmt = this.db.prepare(`
         INSERT OR REPLACE INTO entity_pools (
           id, campaign_id, session_id, theme_id, 
-          core_entities, bonus_entities, entities, 
-          generated_at, last_updated
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          entities, generated_at, last_updated, metadata
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       const entityPoolId = `pool_${sessionId}_${Date.now()}`;
       const currentTime = new Date().toISOString();
 
-      // 後方互換性のため、既存のentitiesフィールドも作成
-      const legacyEntities = {
-        enemies: entityPool.coreEntities?.enemies || [],
-        events: entityPool.coreEntities?.events || [],
-        npcs: entityPool.coreEntities?.npcs || [],
-        items: entityPool.coreEntities?.items || [],
-        quests: entityPool.coreEntities?.quests || []
+      // EntityPoolCollectionを適切な形式で保存
+      const entitiesData = {
+        core: entityPool.coreEntities || {},
+        bonus: entityPool.bonusEntities || {}
       };
 
       poolStmt.run(
@@ -164,11 +163,10 @@ export class DatabaseManagerService {
         campaignId,
         sessionId,
         themeId,
-        JSON.stringify(entityPool.coreEntities),
-        JSON.stringify(entityPool.bonusEntities),
-        JSON.stringify(legacyEntities),
+        JSON.stringify(entitiesData),
         currentTime,
-        currentTime
+        currentTime,
+        JSON.stringify({ pool_type: 'mixed' })
       );
 
       // 生成履歴を保存
@@ -207,11 +205,7 @@ export class DatabaseManagerService {
           campaignId,
           sessionId,
           themeId,
-          entities: {
-            ...entityPool,
-            // 後方互換性
-            ...legacyEntities
-          },
+          entities: entityPool,
           generatedAt: currentTime,
           lastUpdated: currentTime
         }
@@ -247,14 +241,14 @@ export class DatabaseManagerService {
       title: row.title,
       description: row.description,
       type: row.type as MilestoneType,
-      targetEntityIds: JSON.parse(row.target_entity_ids),
-      progressContributions: JSON.parse(row.progress_contributions),
-      targetDetails: JSON.parse(row.target_details),
+      targetEntityIds: JSON.parse(row.target_entity_ids || '[]'),
+      targetDetails: JSON.parse(row.milestone_targets || '[]'),
+      progressContributions: [33, 33, 34], // デフォルト値（3エンティティ均等分割）
       status: row.status,
       progress: row.progress,
-      hiddenFromPlayer: Boolean(row.hidden_from_player),
-      requiredConditions: JSON.parse(row.required_conditions),
-      reward: JSON.parse(row.reward),
+      hiddenFromPlayer: true, // GM専用なので常にtrue
+      requiredConditions: JSON.parse(row.required_conditions || '[]'),
+      reward: JSON.parse(row.reward || '{}'),
       createdAt: row.created_at,
       completedAt: row.completed_at
     }));
@@ -285,8 +279,9 @@ export class DatabaseManagerService {
       return null;
     }
 
-    const coreEntities = JSON.parse(row.core_entities);
-    const bonusEntities = JSON.parse(row.bonus_entities);
+    const entitiesData = JSON.parse(row.entities || '{"core": {}, "bonus": {}}');
+    const coreEntities = entitiesData.core || {};
+    const bonusEntities = entitiesData.bonus || {};
 
     const entityPool: EntityPool = {
       id: row.id,
@@ -313,6 +308,39 @@ export class DatabaseManagerService {
     });
 
     return entityPool;
+  }
+
+  /**
+   * エンティティプールを更新・保存
+   */
+  async saveEntityPool(sessionId: ID, entityPool: EntityPool): Promise<void> {
+    const updateStmt = this.db.prepare(`
+      UPDATE entity_pools 
+      SET entities = ?, last_updated = ?
+      WHERE session_id = ?
+    `);
+
+    // EntityPoolのentities構造を適切に変換
+    const entityCollection = entityPool.entities as EntityPoolCollection;
+    const entitiesData = {
+      core: entityCollection.coreEntities || {},
+      bonus: entityCollection.bonusEntities || {}
+    };
+
+    const currentTime = new Date().toISOString();
+    
+    const result = updateStmt.run(
+      JSON.stringify(entitiesData),
+      currentTime,
+      sessionId
+    );
+
+    if (result.changes === 0) {
+      logger.warn('エンティティプールの更新に失敗しました', { sessionId });
+      throw new Error('Failed to update entity pool');
+    }
+
+    logger.info('✅ エンティティプール更新成功', { sessionId });
   }
 
   /**

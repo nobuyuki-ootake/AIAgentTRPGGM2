@@ -107,6 +107,11 @@ interface ScenarioMilestoneEditorProps {
    * エンティティプール更新のコールバック
    */
   onEntityPoolUpdate?: (entityPool: EntityPool) => void;
+  
+  /**
+   * エンティティ詳細画面への遷移コールバック
+   */
+  onNavigateToEntity?: (entityType: string, category: 'core' | 'bonus') => void;
 }
 
 /**
@@ -123,6 +128,7 @@ export const ScenarioMilestoneEditor: React.FC<ScenarioMilestoneEditorProps> = (
   height = 600,
   onMilestonesUpdate,
   onEntityPoolUpdate,
+  onNavigateToEntity,
 }) => {
   const appMode = useRecoilValue(appModeAtom);
   const [expandedSection, setExpandedSection] = useState<string>('generation');
@@ -528,35 +534,100 @@ export const ScenarioMilestoneEditor: React.FC<ScenarioMilestoneEditorProps> = (
             </Typography>
             <Grid container spacing={2} sx={{ mb: hasNewStructure ? 3 : 0 }}>
               <Grid item xs={6} sm={2.4}>
-                <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
+                <Card 
+                  variant="outlined" 
+                  sx={{ 
+                    p: 2, 
+                    textAlign: 'center', 
+                    cursor: 'pointer',
+                    '&:hover': { bgcolor: 'action.hover' }
+                  }}
+                  onClick={() => {
+                    if (onNavigateToEntity) {
+                      onNavigateToEntity('enemies', 'core');
+                    }
+                  }}
+                >
                   <EnemyIcon color="error" sx={{ fontSize: 40, mb: 1 }} />
                   <Typography variant="h6">{counts?.enemies || 0}</Typography>
                   <Typography variant="caption" color="text.secondary">敵</Typography>
                 </Card>
               </Grid>
               <Grid item xs={6} sm={2.4}>
-                <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
+                <Card 
+                  variant="outlined" 
+                  sx={{ 
+                    p: 2, 
+                    textAlign: 'center', 
+                    cursor: 'pointer',
+                    '&:hover': { bgcolor: 'action.hover' }
+                  }}
+                  onClick={() => {
+                    if (onNavigateToEntity) {
+                      onNavigateToEntity('events', 'core');
+                    }
+                  }}
+                >
                   <EventIcon color="primary" sx={{ fontSize: 40, mb: 1 }} />
                   <Typography variant="h6">{counts?.events || 0}</Typography>
                   <Typography variant="caption" color="text.secondary">イベント</Typography>
                 </Card>
               </Grid>
               <Grid item xs={6} sm={2.4}>
-                <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
+                <Card 
+                  variant="outlined" 
+                  sx={{ 
+                    p: 2, 
+                    textAlign: 'center', 
+                    cursor: 'pointer',
+                    '&:hover': { bgcolor: 'action.hover' }
+                  }}
+                  onClick={() => {
+                    if (onNavigateToEntity) {
+                      onNavigateToEntity('npcs', 'core');
+                    }
+                  }}
+                >
                   <NPCIcon color="success" sx={{ fontSize: 40, mb: 1 }} />
                   <Typography variant="h6">{counts?.npcs || 0}</Typography>
                   <Typography variant="caption" color="text.secondary">NPC</Typography>
                 </Card>
               </Grid>
               <Grid item xs={6} sm={2.4}>
-                <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
+                <Card 
+                  variant="outlined" 
+                  sx={{ 
+                    p: 2, 
+                    textAlign: 'center', 
+                    cursor: 'pointer',
+                    '&:hover': { bgcolor: 'action.hover' }
+                  }}
+                  onClick={() => {
+                    if (onNavigateToEntity) {
+                      onNavigateToEntity('items', 'core');
+                    }
+                  }}
+                >
                   <ItemIcon color="warning" sx={{ fontSize: 40, mb: 1 }} />
                   <Typography variant="h6">{counts?.items || 0}</Typography>
                   <Typography variant="caption" color="text.secondary">アイテム</Typography>
                 </Card>
               </Grid>
               <Grid item xs={6} sm={2.4}>
-                <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
+                <Card 
+                  variant="outlined" 
+                  sx={{ 
+                    p: 2, 
+                    textAlign: 'center', 
+                    cursor: 'pointer',
+                    '&:hover': { bgcolor: 'action.hover' }
+                  }}
+                  onClick={() => {
+                    if (onNavigateToEntity) {
+                      onNavigateToEntity('quests', 'core');
+                    }
+                  }}
+                >
                   <QuestIcon color="info" sx={{ fontSize: 40, mb: 1 }} />
                   <Typography variant="h6">{counts?.quests || 0}</Typography>
                   <Typography variant="caption" color="text.secondary">クエスト</Typography>
@@ -573,21 +644,60 @@ export const ScenarioMilestoneEditor: React.FC<ScenarioMilestoneEditorProps> = (
                 </Typography>
                 <Grid container spacing={2}>
                   <Grid item xs={4}>
-                    <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
+                    <Card 
+                      variant="outlined" 
+                      sx={{ 
+                        p: 2, 
+                        textAlign: 'center',
+                        cursor: 'pointer',
+                        '&:hover': { bgcolor: 'action.hover' }
+                      }}
+                      onClick={() => {
+                        if (onNavigateToEntity) {
+                          onNavigateToEntity('practicalRewards', 'bonus');
+                        }
+                      }}
+                    >
                       <ItemIcon color="warning" sx={{ fontSize: 40, mb: 1 }} />
                       <Typography variant="h6">{counts?.practicalRewards || 0}</Typography>
                       <Typography variant="caption" color="text.secondary">実用報酬</Typography>
                     </Card>
                   </Grid>
                   <Grid item xs={4}>
-                    <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
+                    <Card 
+                      variant="outlined" 
+                      sx={{ 
+                        p: 2, 
+                        textAlign: 'center',
+                        cursor: 'pointer',
+                        '&:hover': { bgcolor: 'action.hover' }
+                      }}
+                      onClick={() => {
+                        if (onNavigateToEntity) {
+                          onNavigateToEntity('trophyItems', 'bonus');
+                        }
+                      }}
+                    >
                       <ItemIcon color="secondary" sx={{ fontSize: 40, mb: 1 }} />
                       <Typography variant="h6">{counts?.trophyItems || 0}</Typography>
                       <Typography variant="caption" color="text.secondary">トロフィー</Typography>
                     </Card>
                   </Grid>
                   <Grid item xs={4}>
-                    <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
+                    <Card 
+                      variant="outlined" 
+                      sx={{ 
+                        p: 2, 
+                        textAlign: 'center',
+                        cursor: 'pointer',
+                        '&:hover': { bgcolor: 'action.hover' }
+                      }}
+                      onClick={() => {
+                        if (onNavigateToEntity) {
+                          onNavigateToEntity('mysteryItems', 'bonus');
+                        }
+                      }}
+                    >
                       <ItemIcon color="primary" sx={{ fontSize: 40, mb: 1 }} />
                       <Typography variant="h6">{counts?.mysteryItems || 0}</Typography>
                       <Typography variant="caption" color="text.secondary">謎アイテム</Typography>

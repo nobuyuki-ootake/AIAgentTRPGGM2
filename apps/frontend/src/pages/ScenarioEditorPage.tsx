@@ -12,12 +12,15 @@ import {
   Card,
   CardContent,
   Chip,
+  Button,
+  CircularProgress,
 } from '@mui/material';
 import {
   Edit as EditIcon,
   Timeline as TimelineIcon,
   Groups as GroupsIcon,
   Warning as WarningIcon,
+  Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import { useRecoilValue, useRecoilState } from 'recoil';
 import { currentCampaignAtom, appModeAtom } from '@/store/atoms';
@@ -71,6 +74,10 @@ const ScenarioEditorPage: React.FC = () => {
   // シナリオエディタ用のステート
   const [milestones, setMilestones] = useState<AIMilestone[]>([]);
   const [entityPool, setEntityPool] = useState<EntityPool | undefined>();
+  const [milestonesError, setMilestonesError] = useState<string | null>(null);
+  const [loadingMilestones, setLoadingMilestones] = useState(false);
+  const [selectedEntityType, setSelectedEntityType] = useState<string>('enemies');
+  const [selectedEntityCategory, setSelectedEntityCategory] = useState<'core' | 'bonus'>('core');
 
   // キャンペーンIDがない場合はホームにリダイレクト
   if (!id) {
@@ -121,6 +128,9 @@ const ScenarioEditorPage: React.FC = () => {
   const loadMilestones = async () => {
     if (!id) return;
     
+    setLoadingMilestones(true);
+    setMilestonesError(null);
+    
     try {
       const campaignMilestones = await aiMilestoneGenerationAPI.getAIMilestonesByCampaign(id);
       setMilestones(campaignMilestones);
@@ -134,6 +144,16 @@ const ScenarioEditorPage: React.FC = () => {
       }
     } catch (err) {
       console.error('マイルストーンの読み込みに失敗しました:', err);
+      setMilestonesError(
+        err instanceof Error 
+          ? `マイルストーンの読み込みに失敗しました: ${err.message}` 
+          : 'マイルストーンの読み込みに失敗しました。API接続を確認してください。'
+      );
+      // エラー時は空配列にして、フォールバック値を表示しない
+      setMilestones([]);
+      setEntityPool(undefined);
+    } finally {
+      setLoadingMilestones(false);
     }
   };
 
@@ -147,10 +167,29 @@ const ScenarioEditorPage: React.FC = () => {
     await loadMilestones();
   };
 
-  const handleEntityPoolUpdate = async (newEntityPool: EntityPool) => {
-    setEntityPool(newEntityPool);
-    // 生成後に最新データを再取得
-    await loadMilestones();
+  const handleEntityPoolUpdate = (newEntityPool: EntityPool) => {
+    console.log('ScenarioEditorPage: handleEntityPoolUpdate called', {
+      hasNewPool: !!newEntityPool,
+      lastUpdated: newEntityPool?.lastUpdated,
+      currentPoolLastUpdated: entityPool?.lastUpdated,
+      referenceChanged: newEntityPool !== entityPool
+    });
+    
+    // 強制的に新しい参照を作成してReactの再レンダリングを確実にする
+    const forcedNewPool = {
+      ...newEntityPool,
+      __forceUpdate: Date.now() // タイムスタンプを追加して強制的に参照を変更
+    };
+    
+    setEntityPool(forcedNewPool);
+  };
+
+  const handleNavigateToEntity = (entityType: string, category: 'core' | 'bonus') => {
+    // エンティティ詳細タブに移動
+    setActiveTab(2);
+    // 選択されたエンティティタイプとカテゴリを設定
+    setSelectedEntityType(entityType);
+    setSelectedEntityCategory(category);
   };
 
   if (loading) {
@@ -239,16 +278,40 @@ const ScenarioEditorPage: React.FC = () => {
               <Typography variant="h6" gutterBottom>
                 生成済みコンテンツ
               </Typography>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="body2">マイルストーン:</Typography>
-                  <Chip label={milestones.length} size="small" color={milestones.length > 0 ? 'success' : 'default'} />
+              
+              {milestonesError ? (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  <Typography variant="body2" gutterBottom>
+                    {milestonesError}
+                  </Typography>
+                  <Button 
+                    variant="outlined" 
+                    size="small" 
+                    startIcon={loadingMilestones ? <CircularProgress size={16} /> : <RefreshIcon />}
+                    onClick={loadMilestones}
+                    disabled={loadingMilestones}
+                    sx={{ mt: 1 }}
+                  >
+                    {loadingMilestones ? '読み込み中...' : 'リトライ'}
+                  </Button>
+                </Alert>
+              ) : loadingMilestones ? (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                  <CircularProgress size={20} />
+                  <Typography variant="body2">読み込み中...</Typography>
                 </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="body2">エンティティプール:</Typography>
-                  <Chip label={entityPool ? '生成済み' : '未生成'} size="small" color={entityPool ? 'success' : 'default'} />
+              ) : (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="body2">マイルストーン:</Typography>
+                    <Chip label={milestones.length} size="small" color={milestones.length > 0 ? 'success' : 'default'} />
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="body2">エンティティプール:</Typography>
+                    <Chip label={entityPool ? '生成済み' : '未生成'} size="small" color={entityPool ? 'success' : 'default'} />
+                  </Box>
                 </Box>
-              </Box>
+              )}
             </CardContent>
           </Card>
         </Grid>
@@ -313,6 +376,7 @@ const ScenarioEditorPage: React.FC = () => {
           height={800}
           onMilestonesUpdate={handleMilestonesUpdate}
           onEntityPoolUpdate={handleEntityPoolUpdate}
+          onNavigateToEntity={handleNavigateToEntity}
         />
       </TabPanel>
 
@@ -330,8 +394,11 @@ const ScenarioEditorPage: React.FC = () => {
       <TabPanel value={activeTab} index={2}>
         <EntityPoolManager
           entityPool={entityPool}
+          sessionId="scenario-edit-session"
           onEntityPoolUpdate={handleEntityPoolUpdate}
           height={800}
+          initialEntityType={selectedEntityType}
+          initialCategory={selectedEntityCategory}
         />
       </TabPanel>
     </Container>

@@ -1430,6 +1430,430 @@ Please generate ${params.choiceCount || 3} diverse and engaging choices for this
     
     return cleaned;
   }
+
+  // ==========================================
+  // Phase 5: AI Service 拡張メソッド
+  // ==========================================
+
+  /**
+   * マイルストーン概要生成（トップダウンアプローチ専用）
+   */
+  async generateMilestoneOutlines(params: {
+    provider: string;
+    apiKey?: string;
+    model?: string;
+    campaignContext: any;
+    sessionDuration: any;
+    themeAdaptation: any;
+    milestoneCount?: number;
+  }) {
+    const systemPrompt = systemPrompts.getMilestoneOutlinesPrompt();
+    
+    const contextMessage = `
+キャンペーンコンテキスト:
+${JSON.stringify(params.campaignContext, null, 2)}
+
+セッション期間設定:
+${JSON.stringify(params.sessionDuration, null, 2)}
+
+テーマ適応:
+${JSON.stringify(params.themeAdaptation, null, 2)}
+
+マイルストーン数: ${params.milestoneCount || 3}
+
+上記の情報を基に、手探り感を重視したマイルストーン概要を${params.milestoneCount || 3}個生成してください。
+各マイルストーンは3つのエンティティで構成され、プレイヤーには進捗を直接表示しない設計にしてください。
+`;
+
+    const response = await this.makeAIRequest({
+      provider: params.provider,
+      apiKey: params.apiKey,
+      model: params.model,
+      message: contextMessage,
+      systemPrompt,
+      temperature: 0.7,
+      maxTokens: 2000,
+    });
+
+    await this.logAIRequest({
+      provider: params.provider,
+      model: response.model,
+      prompt: contextMessage,
+      response: response.response,
+      tokensUsed: response.tokensUsed,
+      processingTime: response.processingTime,
+      category: 'milestone_outlines_generation',
+      context: { 
+        milestoneCount: params.milestoneCount,
+        themeId: params.themeAdaptation?.themeId 
+      },
+    });
+
+    return {
+      outlineData: response.response,
+      generatedOutlines: this.parseMilestoneOutlinesResponse(response.response),
+    };
+  }
+
+  /**
+   * コアエンティティ生成（マイルストーン必須）
+   */
+  async generateCoreEntities(params: {
+    provider: string;
+    apiKey?: string;
+    model?: string;
+    coreEntityRequirements: any[];
+    campaignContext: any;
+    themeAdaptation: any;
+  }) {
+    const systemPrompt = systemPrompts.getCoreEntitiesPrompt();
+    
+    const contextMessage = `
+コアエンティティ要件:
+${JSON.stringify(params.coreEntityRequirements, null, 2)}
+
+キャンペーンコンテキスト:
+${JSON.stringify(params.campaignContext, null, 2)}
+
+テーマ適応:
+${JSON.stringify(params.themeAdaptation, null, 2)}
+
+上記の要件に基づいて、マイルストーン達成に必須のコアエンティティを生成してください。
+各マイルストーンに対して3つのエンティティ（event, npc, item）を用意し、進捗貢献度を適切に配分してください。
+`;
+
+    const response = await this.makeAIRequest({
+      provider: params.provider,
+      apiKey: params.apiKey,
+      model: params.model,
+      message: contextMessage,
+      systemPrompt,
+      temperature: 0.8,
+      maxTokens: 4000,
+    });
+
+    await this.logAIRequest({
+      provider: params.provider,
+      model: response.model,
+      prompt: contextMessage,
+      response: response.response,
+      tokensUsed: response.tokensUsed,
+      processingTime: response.processingTime,
+      category: 'core_entities_generation',
+      context: { 
+        requirementsCount: params.coreEntityRequirements?.length,
+        themeId: params.themeAdaptation?.themeId 
+      },
+    });
+
+    return {
+      coreEntitiesData: response.response,
+      generatedCoreEntities: this.parseCoreEntitiesResponse(response.response),
+    };
+  }
+
+  /**
+   * ボーナスエンティティ生成（追加報酬系）
+   */
+  async generateBonusEntities(params: {
+    provider: string;
+    apiKey?: string;
+    model?: string;
+    coreEntities: any;
+    campaignContext: any;
+    themeAdaptation: any;
+  }) {
+    const systemPrompt = systemPrompts.getBonusEntitiesPrompt();
+    
+    const contextMessage = `
+コアエンティティ:
+${JSON.stringify(params.coreEntities, null, 2)}
+
+キャンペーンコンテキスト:
+${JSON.stringify(params.campaignContext, null, 2)}
+
+テーマ適応:
+${JSON.stringify(params.themeAdaptation, null, 2)}
+
+コアエンティティに基づいて、以下の3つのカテゴリの追加報酬エンティティを生成してください：
+1. 実用的報酬エンティティ（実戦に役立つアイテム・装備）
+2. トロフィー系エンティティ（収集要素・世界観深化）
+3. ミステリー系エンティティ（隠し要素・好奇心満足）
+`;
+
+    const response = await this.makeAIRequest({
+      provider: params.provider,
+      apiKey: params.apiKey,
+      model: params.model,
+      message: contextMessage,
+      systemPrompt,
+      temperature: 0.9,
+      maxTokens: 3500,
+    });
+
+    await this.logAIRequest({
+      provider: params.provider,
+      model: response.model,
+      prompt: contextMessage,
+      response: response.response,
+      tokensUsed: response.tokensUsed,
+      processingTime: response.processingTime,
+      category: 'bonus_entities_generation',
+      context: { 
+        themeId: params.themeAdaptation?.themeId 
+      },
+    });
+
+    return {
+      bonusEntitiesData: response.response,
+      generatedBonusEntities: this.parseBonusEntitiesResponse(response.response),
+    };
+  }
+
+  /**
+   * 暗示的ヒント生成（手探り感演出）
+   */
+  async generateSubtleHints(params: {
+    provider: string;
+    apiKey?: string;
+    model?: string;
+    milestoneProgress: number;
+    milestoneId: string;
+    sessionContext: any;
+    locationContext?: any;
+  }) {
+    const systemPrompt = systemPrompts.getSubtleHintsPrompt();
+    
+    const contextMessage = `
+マイルストーン進捗: ${params.milestoneProgress}%
+マイルストーンID: ${params.milestoneId}
+
+セッションコンテキスト:
+${JSON.stringify(params.sessionContext, null, 2)}
+
+${params.locationContext ? `現在の場所コンテキスト:
+${JSON.stringify(params.locationContext, null, 2)}` : ''}
+
+プレイヤーに進捗を直接明かすことなく、自然で暗示的なヒントを生成してください。
+「気になるもの」「興味深い発見」といった表現で好奇心を喚起する内容にしてください。
+`;
+
+    const response = await this.makeAIRequest({
+      provider: params.provider,
+      apiKey: params.apiKey,
+      model: params.model,
+      message: contextMessage,
+      systemPrompt,
+      temperature: 0.8,
+      maxTokens: 1000,
+    });
+
+    await this.logAIRequest({
+      provider: params.provider,
+      model: response.model,
+      prompt: contextMessage,
+      response: response.response,
+      tokensUsed: response.tokensUsed,
+      processingTime: response.processingTime,
+      category: 'subtle_hints_generation',
+      context: { 
+        milestoneId: params.milestoneId,
+        progress: params.milestoneProgress 
+      },
+    });
+
+    return {
+      hintsData: response.response,
+      generatedHints: this.parseSubtleHintsResponse(response.response),
+    };
+  }
+
+  /**
+   * 自然な誘導メッセージ生成
+   */
+  async generateNaturalGuidance(params: {
+    provider: string;
+    apiKey?: string;
+    model?: string;
+    sessionContext: any;
+    playerActions?: any[];
+    availableEntities?: any[];
+  }) {
+    const systemPrompt = systemPrompts.getNaturalGuidancePrompt();
+    
+    const contextMessage = `
+セッションコンテキスト:
+${JSON.stringify(params.sessionContext, null, 2)}
+
+${params.playerActions ? `最近のプレイヤー行動:
+${JSON.stringify(params.playerActions, null, 2)}` : ''}
+
+${params.availableEntities ? `利用可能なエンティティ:
+${JSON.stringify(params.availableEntities, null, 2)}` : ''}
+
+プレイヤーを強制的に誘導するのではなく、自然な流れで興味を引く誘導メッセージを生成してください。
+雰囲気作りと好奇心の喚起を重視した内容にしてください。
+`;
+
+    const response = await this.makeAIRequest({
+      provider: params.provider,
+      apiKey: params.apiKey,
+      model: params.model,
+      message: contextMessage,
+      systemPrompt,
+      temperature: 0.7,
+      maxTokens: 800,
+    });
+
+    await this.logAIRequest({
+      provider: params.provider,
+      model: response.model,
+      prompt: contextMessage,
+      response: response.response,
+      tokensUsed: response.tokensUsed,
+      processingTime: response.processingTime,
+      category: 'natural_guidance_generation',
+      context: { 
+        hasPlayerActions: !!params.playerActions,
+        entitiesCount: params.availableEntities?.length || 0 
+      },
+    });
+
+    return {
+      guidanceData: response.response,
+      generatedGuidance: response.response.trim(),
+    };
+  }
+
+  /**
+   * 場所配置最適化
+   */
+  async generateLocationMapping(params: {
+    provider: string;
+    apiKey?: string;
+    model?: string;
+    coreEntities: any;
+    bonusEntities: any;
+    sessionContext: any;
+    availableLocations?: any[];
+  }) {
+    const systemPrompt = systemPrompts.getLocationMappingPrompt();
+    
+    const contextMessage = `
+コアエンティティ:
+${JSON.stringify(params.coreEntities, null, 2)}
+
+ボーナスエンティティ:
+${JSON.stringify(params.bonusEntities, null, 2)}
+
+セッションコンテキスト:
+${JSON.stringify(params.sessionContext, null, 2)}
+
+${params.availableLocations ? `利用可能な場所:
+${JSON.stringify(params.availableLocations, null, 2)}` : ''}
+
+エンティティを場所に効果的に配置し、発見の流れと物語的な一貫性を考慮した配置計画を生成してください。
+時間条件や前提条件も含めて、自然な探索体験を演出してください。
+`;
+
+    const response = await this.makeAIRequest({
+      provider: params.provider,
+      apiKey: params.apiKey,
+      model: params.model,
+      message: contextMessage,
+      systemPrompt,
+      temperature: 0.6,
+      maxTokens: 2500,
+    });
+
+    await this.logAIRequest({
+      provider: params.provider,
+      model: response.model,
+      prompt: contextMessage,
+      response: response.response,
+      tokensUsed: response.tokensUsed,
+      processingTime: response.processingTime,
+      category: 'location_mapping_generation',
+      context: { 
+        coreEntitiesCount: Object.keys(params.coreEntities || {}).length,
+        bonusEntitiesCount: Object.keys(params.bonusEntities || {}).length 
+      },
+    });
+
+    return {
+      locationMappingData: response.response,
+      generatedLocationMapping: this.parseLocationMappingResponse(response.response),
+    };
+  }
+
+  // ==========================================
+  // Phase 5: 専用パーサーメソッド
+  // ==========================================
+
+  private parseMilestoneOutlinesResponse(response: string): any[] {
+    try {
+      const cleanedResponse = this.cleanJsonResponse(response);
+      const parsed = JSON.parse(cleanedResponse);
+      return Array.isArray(parsed) ? parsed : [parsed];
+    } catch (error) {
+      logger.error('Failed to parse milestone outlines response:', error);
+      return [];
+    }
+  }
+
+  private parseCoreEntitiesResponse(response: string): any {
+    try {
+      const cleanedResponse = this.cleanJsonResponse(response);
+      return JSON.parse(cleanedResponse);
+    } catch (error) {
+      logger.error('Failed to parse core entities response:', error);
+      return { enemies: [], events: [], npcs: [], items: [], quests: [] };
+    }
+  }
+
+  private parseBonusEntitiesResponse(response: string): any {
+    try {
+      const cleanedResponse = this.cleanJsonResponse(response);
+      return JSON.parse(cleanedResponse);
+    } catch (error) {
+      logger.error('Failed to parse bonus entities response:', error);
+      return { practicalRewards: [], trophyItems: [], mysteryItems: [] };
+    }
+  }
+
+  private parseSubtleHintsResponse(response: string): string[] {
+    try {
+      const cleanedResponse = this.cleanJsonResponse(response);
+      const parsed = JSON.parse(cleanedResponse);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      } else if (parsed.hints && Array.isArray(parsed.hints)) {
+        return parsed.hints;
+      } else {
+        return [response.trim()];
+      }
+    } catch (error) {
+      logger.error('Failed to parse subtle hints response:', error);
+      return [response.trim()];
+    }
+  }
+
+  private parseLocationMappingResponse(response: string): any[] {
+    try {
+      const cleanedResponse = this.cleanJsonResponse(response);
+      const parsed = JSON.parse(cleanedResponse);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      } else if (parsed.mappings && Array.isArray(parsed.mappings)) {
+        return parsed.mappings;
+      } else {
+        return [parsed];
+      }
+    } catch (error) {
+      logger.error('Failed to parse location mapping response:', error);
+      return [];
+    }
+  }
 }
 
 // Lazy initialization to avoid early instantiation

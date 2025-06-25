@@ -13,6 +13,7 @@ import aiMilestoneGenerationRouter from './aiMilestoneGeneration';
 import locationEntityMappingRouter from './locationEntityMapping';
 import playerExperienceRouter from './playerExperience';
 import { interactiveEventsRouter } from './interactiveEvents';
+import { entityPoolRouter } from './entityPool';
 import healthRouter from './health';
 
 export const router = Router();
@@ -32,6 +33,7 @@ router.use('/ai-milestone-generation', aiMilestoneGenerationRouter);
 // シナリオ管理エンドポイント
 router.use('/location-entity-mapping', locationEntityMappingRouter);
 router.use('/player-experience', playerExperienceRouter);
+router.use('/entity-pool', entityPoolRouter);
 
 // TRPG機能エンドポイント
 router.use('/campaigns', campaignRouter);
@@ -60,6 +62,7 @@ router.get('/', (_req, res) => {
       aiMilestoneGeneration: '/api/ai-milestone-generation',
       locationEntityMapping: '/api/location-entity-mapping',
       playerExperience: '/api/player-experience',
+      entityPool: '/api/entity-pool',
       campaigns: '/api/campaigns',
       characters: '/api/characters', 
       sessions: '/api/sessions',

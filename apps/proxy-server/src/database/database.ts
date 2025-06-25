@@ -403,6 +403,61 @@ async function createTables(): Promise<void> {
       updated_at TEXT NOT NULL,
       FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE CASCADE,
       FOREIGN KEY (game_day_id) REFERENCES game_days (id) ON DELETE CASCADE
+    )`,
+
+    // AI マイルストーンテーブル - Phase 1.2実装
+    `CREATE TABLE IF NOT EXISTS ai_milestones (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL,
+      type TEXT NOT NULL,
+      target_entity_ids TEXT NOT NULL DEFAULT '[]', -- JSON array
+      milestone_targets TEXT NOT NULL DEFAULT '[]', -- JSON array  
+      status TEXT NOT NULL DEFAULT 'pending',
+      progress INTEGER NOT NULL DEFAULT 0,
+      required_conditions TEXT NOT NULL DEFAULT '[]',
+      reward TEXT NOT NULL DEFAULT '{}',
+      player_hints TEXT NOT NULL DEFAULT '[]', -- JSON array
+      guidance_messages TEXT NOT NULL DEFAULT '[]', -- JSON array
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      completed_at TEXT,
+      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
+    )`,
+
+    // AI エンティティプールテーブル - Phase 1.2実装  
+    `CREATE TABLE IF NOT EXISTS entity_pools (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      theme_id TEXT NOT NULL,
+      pool_type TEXT NOT NULL DEFAULT 'mixed', -- 'core', 'bonus', 'mixed'
+      entities TEXT NOT NULL, -- JSON object {core: EntityPool, bonus: EntityPool}
+      generated_at TEXT NOT NULL,
+      last_updated TEXT NOT NULL,
+      metadata TEXT NOT NULL DEFAULT '{}', -- JSON
+      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
+    )`,
+
+    // 場所エンティティマッピングテーブル - Phase 1.2実装
+    `CREATE TABLE IF NOT EXISTS location_entity_mappings (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      location_id TEXT NOT NULL,
+      entity_type TEXT NOT NULL, -- 'npc', 'item', 'event', 'quest', 'enemy'
+      entity_id TEXT NOT NULL,
+      mapping_type TEXT NOT NULL, -- 'permanent', 'temporary', 'dynamic'
+      placement_reason TEXT, -- AI決定理由
+      accessibility TEXT NOT NULL DEFAULT 'public', -- 'public', 'hidden', 'conditional'
+      discovery_conditions TEXT DEFAULT '[]', -- JSON array
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      expires_at TEXT, -- 一時的配置の場合
+      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
+      FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE
     )`
   ];
 
@@ -439,6 +494,16 @@ async function createTables(): Promise<void> {
     'CREATE INDEX IF NOT EXISTS idx_conversations_status ON conversations(status)',
     'CREATE INDEX IF NOT EXISTS idx_conversation_messages_conversation ON conversation_messages(conversation_id)',
     'CREATE INDEX IF NOT EXISTS idx_conversation_messages_speaker ON conversation_messages(speaker_id)',
+    // AI関連テーブルのインデックス - Phase 1.2実装
+    'CREATE INDEX IF NOT EXISTS idx_ai_milestones_campaign ON ai_milestones(campaign_id)',
+    'CREATE INDEX IF NOT EXISTS idx_ai_milestones_session ON ai_milestones(session_id)',
+    'CREATE INDEX IF NOT EXISTS idx_ai_milestones_status ON ai_milestones(status)',
+    'CREATE INDEX IF NOT EXISTS idx_entity_pools_campaign ON entity_pools(campaign_id)',
+    'CREATE INDEX IF NOT EXISTS idx_entity_pools_session ON entity_pools(session_id)',
+    'CREATE INDEX IF NOT EXISTS idx_entity_pools_theme ON entity_pools(theme_id)',
+    'CREATE INDEX IF NOT EXISTS idx_location_entity_mappings_campaign ON location_entity_mappings(campaign_id)',
+    'CREATE INDEX IF NOT EXISTS idx_location_entity_mappings_location ON location_entity_mappings(location_id)',
+    'CREATE INDEX IF NOT EXISTS idx_location_entity_mappings_entity ON location_entity_mappings(entity_type, entity_id)',
     // 'CREATE INDEX IF NOT EXISTS idx_characters_location ON characters(current_location_id)',
     // 'CREATE INDEX IF NOT EXISTS idx_events_location ON events(location_id)',
     // 'CREATE INDEX IF NOT EXISTS idx_location_movements_character ON location_movements(character_id)',
