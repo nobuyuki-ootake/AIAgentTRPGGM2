@@ -1,6 +1,10 @@
 import { Router, Request, Response } from 'express';
 import { LocationEntityMapping } from '@ai-agent-trpg/types';
-import { getLocationEntityMappingService, EntityReference } from '../services/locationEntityMappingService';
+import { 
+  getLocationEntityMappingService, 
+  EntityReference, 
+  ExplorationResult 
+} from '../services/locationEntityMappingService';
 import { logger } from '../utils/logger';
 import { ValidationError } from '../middleware/errorHandler';
 
@@ -393,6 +397,176 @@ router.put('/session/:sessionId/update-dynamic-availability', async (req: Reques
     res.status(500).json({
       success: false,
       error: 'Failed to update dynamic availability',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+/**
+ * POST /api/location-entity-mapping/location/:locationId/explore
+ * 場所探索アクション - 「探索している感」の核心機能
+ */
+router.post('/location/:locationId/explore', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { locationId } = req.params;
+    const { 
+      characterId, 
+      sessionId, 
+      explorationIntensity = 'thorough' 
+    } = req.body;
+
+    // バリデーション
+    if (!locationId) {
+      throw new ValidationError('Location ID is required');
+    }
+
+    if (!characterId || !sessionId) {
+      throw new ValidationError('Character ID and Session ID are required', {
+        missingFields: ['characterId', 'sessionId'].filter(field => !req.body[field])
+      });
+    }
+
+    const validIntensities = ['light', 'thorough', 'exhaustive'];
+    if (!validIntensities.includes(explorationIntensity)) {
+      throw new ValidationError('Invalid exploration intensity', {
+        validValues: validIntensities,
+        provided: explorationIntensity
+      });
+    }
+
+    logger.info('🔍 場所探索アクション開始', { 
+      locationId, 
+      characterId, 
+      sessionId,
+      explorationIntensity 
+    });
+
+    const service = getLocationEntityMappingService();
+    const explorationResult: ExplorationResult = await service.exploreLocation(
+      locationId,
+      characterId, 
+      sessionId,
+      explorationIntensity as 'light' | 'thorough' | 'exhaustive'
+    );
+
+    logger.info('✅ 場所探索完了', { 
+      locationId,
+      discoveredCount: explorationResult.discoveredEntities.length,
+      totalExplorationLevel: explorationResult.totalExplorationLevel,
+      timeSpent: explorationResult.timeSpent,
+      isFullyExplored: explorationResult.isFullyExplored
+    });
+
+    res.json({
+      success: true,
+      data: explorationResult,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    logger.error('❌ 場所探索エラー', { 
+      locationId: req.params.locationId,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
+    });
+
+    if (error instanceof ValidationError) {
+      res.status(400).json({
+        success: false,
+        error: error.message,
+        details: error.details,
+        timestamp: new Date().toISOString()
+      });
+      return;
+    }
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to explore location',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+/**
+ * GET /api/location-entity-mapping/location/:locationId/exploration-status
+ * 場所の探索状況取得
+ */
+router.get('/location/:locationId/exploration-status', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { locationId } = req.params;
+    const { sessionId } = req.query;
+
+    if (!locationId) {
+      throw new ValidationError('Location ID is required');
+    }
+
+    if (!sessionId || typeof sessionId !== 'string') {
+      throw new ValidationError('Session ID is required as query parameter');
+    }
+
+    logger.info('📊 場所探索状況取得', { locationId, sessionId });
+
+    const service = getLocationEntityMappingService();
+    
+    // 利用可能エンティティ取得
+    const allEntities = await service.getAvailableEntitiesForLocation(locationId, sessionId);
+    const discoveredEntities = allEntities.filter(e => e.discoveredAt);
+    const hiddenEntities = allEntities.filter(e => !e.discoveredAt);
+    
+    // Phase 1実装：簡易探索レベル計算
+    const explorationLevel = allEntities.length > 0 
+      ? Math.round((discoveredEntities.length / allEntities.length) * 100)
+      : 100;
+
+    const explorationStatus = {
+      locationId,
+      sessionId,
+      explorationLevel,
+      isFullyExplored: explorationLevel >= 100 && hiddenEntities.length === 0,
+      totalEntities: allEntities.length,
+      discoveredEntities: discoveredEntities.length,
+      hiddenEntities: hiddenEntities.length,
+      discoveredEntityList: discoveredEntities.map(e => ({
+        id: e.id,
+        name: e.name,
+        category: e.category,
+        discoveredAt: e.discoveredAt
+      })),
+      explorationHints: hiddenEntities.length > 0 
+        ? ['まだ隠されたものがありそうです。'] 
+        : ['この場所は完全に探索されました。']
+    };
+
+    logger.info('✅ 場所探索状況取得完了', { 
+      locationId,
+      explorationLevel,
+      discoveredCount: discoveredEntities.length,
+      hiddenCount: hiddenEntities.length
+    });
+
+    res.json({
+      success: true,
+      data: explorationStatus,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    logger.error('❌ 場所探索状況取得エラー', { error });
+
+    if (error instanceof ValidationError) {
+      res.status(400).json({
+        success: false,
+        error: error.message,
+        details: error.details,
+        timestamp: new Date().toISOString()
+      });
+      return;
+    }
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get exploration status',
       timestamp: new Date().toISOString()
     });
   }

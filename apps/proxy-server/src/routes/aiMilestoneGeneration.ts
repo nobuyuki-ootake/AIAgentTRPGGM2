@@ -2,6 +2,9 @@ import { Router, Request, Response } from 'express';
 import { 
   MilestoneGenerationRequest, 
   MilestoneGenerationResponse,
+  ScenarioGenerationRequest,
+  ScenarioGenerationResponse,
+  SessionScenario,
   AIMilestone,
   EntityPool,
   SessionDurationConfig
@@ -777,6 +780,188 @@ router.get('/session/:sessionId/subtle-hints', async (req: Request, res: Respons
     res.status(500).json({
       success: false,
       error: 'Failed to get subtle hints',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+/**
+ * POST /api/ai-milestone-generation/generate-scenario
+ * 3層統合生成：シナリオ→マイルストーン→エンティティプールの一括生成
+ * Phase 1 実装：AI Agent GM 対話による物語追体験システム
+ */
+router.post('/generate-scenario', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const {
+      campaignId,
+      sessionId,
+      themeId,
+      sessionDuration,
+      scenarioPreferences,
+      existingContent,
+      generationOptions = {}
+    } = req.body;
+
+    // バリデーション
+    if (!campaignId || !sessionId || !themeId || !sessionDuration || !scenarioPreferences) {
+      throw new ValidationError('Required fields missing for scenario generation', {
+        missingFields: ['campaignId', 'sessionId', 'themeId', 'sessionDuration', 'scenarioPreferences']
+          .filter(field => !req.body[field])
+      });
+    }
+
+    // シナリオ設定のバリデーション
+    if (!scenarioPreferences.theme || !scenarioPreferences.complexity || !scenarioPreferences.narrativeStyle) {
+      throw new ValidationError('Scenario preferences incomplete', {
+        missingPreferences: ['theme', 'complexity', 'narrativeStyle']
+          .filter(field => !scenarioPreferences[field])
+      });
+    }
+
+    logger.info('🎭 3層統合シナリオ生成リクエスト', {
+      campaignId,
+      sessionId,
+      themeId,
+      theme: scenarioPreferences.theme,
+      complexity: scenarioPreferences.complexity,
+      targetPlayTime: scenarioPreferences.targetPlayTime
+    });
+
+    // リクエスト構築
+    const request: ScenarioGenerationRequest = {
+      campaignId,
+      sessionId,
+      themeId,
+      sessionDuration: sessionDuration as SessionDurationConfig,
+      scenarioPreferences: {
+        theme: scenarioPreferences.theme,
+        complexity: scenarioPreferences.complexity || 'moderate',
+        focusAreas: scenarioPreferences.focusAreas || ['探索', '謎解き'],
+        narrativeStyle: scenarioPreferences.narrativeStyle || 'immersive',
+        targetPlayTime: scenarioPreferences.targetPlayTime || 240
+      },
+      existingContent,
+      generationOptions: {
+        guidanceLevel: generationOptions.guidanceLevel || 'moderate',
+        mysteryLevel: generationOptions.mysteryLevel || 'hinted',
+        milestoneCount: generationOptions.milestoneCount || 3,
+        entityComplexity: generationOptions.entityComplexity || 'detailed'
+      }
+    };
+
+    // サービス取得
+    const aiMilestoneService = getAIMilestoneGenerationService();
+
+    // 3層統合生成実行
+    logger.info('🚀 3層統合生成開始', { sessionId });
+    const startTime = Date.now();
+
+    // Phase 1実装: 既存のマイルストーン生成を拡張して使用
+    // TODO: Phase 2でシナリオ特化生成ロジックを実装
+    const milestoneRequest: MilestoneGenerationRequest = {
+      campaignId: request.campaignId,
+      sessionId: request.sessionId,
+      themeId: request.themeId,
+      sessionDuration: request.sessionDuration,
+      milestoneCount: request.generationOptions?.milestoneCount || 3,
+      existingContent: request.existingContent
+    };
+
+    const milestoneResponse = await aiMilestoneService.generateMilestonesAndPools(milestoneRequest);
+    const processingTime = Date.now() - startTime;
+
+    // シナリオ概要を生成（Phase 1実装）
+    const scenario: SessionScenario = {
+      sessionId: request.sessionId,
+      title: `${request.scenarioPreferences.theme}シナリオ`,
+      scenario: `${request.scenarioPreferences.theme}をテーマとした物語。` +
+               `${request.scenarioPreferences.focusAreas.join('と')}を中心とした体験を通じて、` +
+               `プレイヤーは段階的に謎を解き明かしていく。` +
+               `AI Agent GMとの対話により、没入感の高い${request.sessionDuration.description}の物語を追体験できる。`,
+      theme: request.scenarioPreferences.theme,
+      estimatedPlayTime: request.scenarioPreferences.targetPlayTime,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      generatedBy: 'ai',
+      narrativeStyle: request.scenarioPreferences.narrativeStyle,
+      guidanceLevel: request.generationOptions?.guidanceLevel || 'moderate',
+      mysteryLevel: request.generationOptions?.mysteryLevel || 'hinted'
+    };
+
+    // レスポンス構築
+    const response: ScenarioGenerationResponse = {
+      scenario,
+      milestones: milestoneResponse.milestones,
+      entityPool: milestoneResponse.entityPool,
+      themeAdaptation: milestoneResponse.themeAdaptation,
+      narrativeFlow: {
+        introduction: `${scenario.theme}の世界へようこそ。あなたの冒険が始まります。`,
+        progression: [
+          '情報収集フェーズ：周囲を探索し、手がかりを集める',
+          '推理・検証フェーズ：集めた情報から仮説を立てる',
+          '解決・実行フェーズ：決断を下し、行動に移す'
+        ],
+        climax: '全ての手がかりが繋がり、真相に辿り着く瞬間',
+        resolution: 'プレイヤーの選択によって結末が決まる'
+      },
+      gmPersona: {
+        style: 'プレイヤーの想像力を刺激する自然な誘導',
+        specializations: request.scenarioPreferences.focusAreas,
+        responsePatterns: [
+          '興味を引く情報の段階的開示',
+          '選択肢の自然な提示',
+          '物語世界への没入感促進'
+        ]
+      },
+      generationMetadata: {
+        model: milestoneResponse.generationMetadata.model,
+        totalTokensUsed: milestoneResponse.generationMetadata.tokensUsed,
+        processingTime,
+        generatedAt: new Date().toISOString(),
+        layersGenerated: ['scenario', 'milestones', 'entities'],
+        qualityScore: 85 // Phase 1暫定値
+      }
+    };
+
+    logger.info('✅ 3層統合生成完了', {
+      sessionId,
+      processingTime,
+      milestoneCount: response.milestones.length,
+      scenarioTitle: response.scenario.title
+    });
+
+    res.json({
+      success: true,
+      data: response,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    logger.error('❌ 3層統合生成エラー', { error });
+
+    if (error instanceof ValidationError) {
+      res.status(400).json({
+        success: false,
+        error: error.message,
+        details: error.details,
+        timestamp: new Date().toISOString()
+      });
+      return;
+    }
+
+    if (error instanceof AIServiceError) {
+      res.status(503).json({
+        success: false,
+        error: 'AI service error during scenario generation',
+        details: error.details,
+        timestamp: new Date().toISOString()
+      });
+      return;
+    }
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to generate scenario',
       timestamp: new Date().toISOString()
     });
   }

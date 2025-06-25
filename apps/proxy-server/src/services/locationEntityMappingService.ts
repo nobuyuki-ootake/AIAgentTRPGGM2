@@ -40,6 +40,36 @@ export interface PrerequisiteResult {
 }
 
 /**
+ * 探索アクション結果
+ */
+export interface ExplorationResult {
+  success: boolean;
+  locationId: string;
+  characterId: string;
+  explorationLevel: number; // 0-100 この探索での達成レベル
+  totalExplorationLevel: number; // 0-100 場所の総探索レベル
+  
+  // 発見されたエンティティ
+  discoveredEntities: {
+    entity: EntityReference;
+    discoveryMessage: string; // AI generated discovery message
+    rarity: 'common' | 'uncommon' | 'rare' | 'epic';
+  }[];
+  
+  // 探索情報
+  timeSpent: number; // 分
+  encounterChance: number; // 0-1 遭遇確率
+  
+  // AI生成コンテンツ
+  narrativeDescription: string; // 探索の物語的描写
+  hints: string[]; // 次の探索に向けたヒント
+  
+  // 探索状態
+  isFullyExplored: boolean;
+  hiddenEntitiesRemaining: number;
+}
+
+/**
  * 場所エンティティマッピング管理サービス
  * 
  * 目的：
@@ -461,6 +491,307 @@ export class LocationEntityMappingService {
   private async getEntityDescription(entityId: string, category: string): Promise<string> {
     // TODO: 実際のエンティティデータベースと連携
     return `${category}カテゴリのエンティティ (ID: ${entityId})`;
+  }
+
+  /**
+   * 場所を探索してエンティティを発見する
+   * 「探索している感」を実現する核心機能
+   */
+  async exploreLocation(
+    locationId: string, 
+    characterId: string, 
+    sessionId: string,
+    explorationIntensity: 'light' | 'thorough' | 'exhaustive' = 'thorough'
+  ): Promise<ExplorationResult> {
+    logger.info(`🔍 探索アクション開始`, { locationId, characterId, explorationIntensity });
+    
+    try {
+      // 1. 場所の未発見エンティティを取得
+      const hiddenEntities = await this.getHiddenEntitiesAtLocation(locationId, sessionId);
+      
+      // 2. 探索設定に基づく発見確率計算
+      const baseDiscoveryRate = this.getDiscoveryRate(explorationIntensity);
+      const timeSpent = this.getExplorationTime(explorationIntensity);
+      
+      // 3. エンティティ発見判定
+      const discoveredEntities = [];
+      for (const entity of hiddenEntities) {
+        const discoveryChance = this.calculateDiscoveryChance(entity, baseDiscoveryRate);
+        if (Math.random() < discoveryChance) {
+          // エンティティ発見！
+          await this.markEntityDiscovered(entity.id, characterId);
+          
+          discoveredEntities.push({
+            entity,
+            discoveryMessage: await this.generateDiscoveryMessage(entity, locationId),
+            rarity: this.determineEntityRarity(entity)
+          });
+        }
+      }
+      
+      // 4. 探索レベル計算
+      const explorationLevel = Math.min(
+        this.getExplorationLevelGain(explorationIntensity, discoveredEntities.length),
+        100
+      );
+      
+      // 5. 総探索レベル更新
+      const totalExplorationLevel = await this.updateLocationExplorationLevel(
+        locationId, sessionId, explorationLevel
+      );
+      
+      // 6. 残り隠しエンティティ数計算
+      const remainingHidden = hiddenEntities.length - discoveredEntities.length;
+      
+      // 7. 結果構築
+      const result: ExplorationResult = {
+        success: true,
+        locationId,
+        characterId,
+        explorationLevel,
+        totalExplorationLevel,
+        discoveredEntities,
+        timeSpent,
+        encounterChance: this.calculateEncounterChance(explorationIntensity),
+        narrativeDescription: await this.generateNarrativeDescription(
+          locationId, explorationIntensity, discoveredEntities
+        ),
+        hints: await this.generateExplorationHints(locationId, remainingHidden),
+        isFullyExplored: totalExplorationLevel >= 100 && remainingHidden === 0,
+        hiddenEntitiesRemaining: remainingHidden
+      };
+      
+      logger.info(`✅ 探索完了`, {
+        locationId,
+        discoveredCount: discoveredEntities.length,
+        totalExploration: totalExplorationLevel,
+        timeSpent
+      });
+      
+      return result;
+      
+    } catch (error) {
+      logger.error(`❌ 探索エラー`, { locationId, characterId, error });
+      throw new Error(`探索に失敗しました: ${error instanceof Error ? error.message : '不明なエラー'}`);
+    }
+  }
+
+  /**
+   * 場所の未発見エンティティを取得
+   */
+  private async getHiddenEntitiesAtLocation(
+    locationId: string, 
+    sessionId: string
+  ): Promise<EntityReference[]> {
+    const stmt = this.db.prepare(`
+      SELECT * FROM location_entity_mappings 
+      WHERE location_id = ? AND session_id = ? 
+        AND is_available = 1 
+        AND discovered_at IS NULL
+      ORDER BY entity_type, entity_category
+    `);
+    
+    const rows = stmt.all(locationId, sessionId) as any[];
+    const mappings = rows.map(this.rowToLocationEntityMapping);
+    
+    // EntityReferenceに変換
+    const entities = [];
+    for (const mapping of mappings) {
+      // 時間条件・前提条件チェック
+      const timeCheck = await this.checkTimeConditions(mapping.id);
+      const prereqCheck = await this.checkPrerequisites(mapping.id);
+      
+      if (timeCheck.isValid && prereqCheck.isValid) {
+        entities.push({
+          id: mapping.entityId,
+          name: await this.getEntityName(mapping.entityId, mapping.entityCategory),
+          type: mapping.entityType as 'core' | 'bonus',
+          category: mapping.entityCategory as any,
+          description: await this.getEntityDescription(mapping.entityId, mapping.entityCategory),
+          isAvailable: true,
+          timeConditions: mapping.discoveryConditions,
+          prerequisiteEntities: mapping.prerequisiteEntities
+        });
+      }
+    }
+    
+    return entities;
+  }
+
+  /**
+   * 探索強度に基づく発見率を取得
+   */
+  private getDiscoveryRate(intensity: 'light' | 'thorough' | 'exhaustive'): number {
+    const rates = {
+      light: 0.3,      // 30% 基本発見率
+      thorough: 0.6,   // 60% 基本発見率  
+      exhaustive: 0.9  // 90% 基本発見率
+    };
+    return rates[intensity];
+  }
+
+  /**
+   * 探索強度に基づく所要時間を取得（分）
+   */
+  private getExplorationTime(intensity: 'light' | 'thorough' | 'exhaustive'): number {
+    const times = {
+      light: 15,      // 15分
+      thorough: 45,   // 45分
+      exhaustive: 90  // 90分
+    };
+    return times[intensity];
+  }
+
+  /**
+   * エンティティ発見確率を計算
+   */
+  private calculateDiscoveryChance(entity: EntityReference, baseRate: number): number {
+    // エンティティタイプによる補正
+    const typeModifier = entity.type === 'core' ? 1.2 : 0.8; // コアエンティティは見つかりやすい
+    
+    // カテゴリによる補正
+    const categoryModifiers = {
+      item: 1.0,      // アイテムは標準
+      npc: 0.9,       // NPCは少し見つかりにくい
+      event: 0.8,     // イベントは隠れている  
+      quest: 0.7,     // クエストは発見困難
+      enemy: 0.6,     // 敵は隠れている
+      practical: 1.0,
+      trophy: 0.5,    // トロフィーは稀少
+      mystery: 0.3    // ミステリーは最も稀少
+    };
+    
+    const categoryModifier = categoryModifiers[entity.category] || 1.0;
+    
+    return Math.min(baseRate * typeModifier * categoryModifier, 1.0);
+  }
+
+  /**
+   * エンティティを発見済みとしてマーク
+   */
+  private async markEntityDiscovered(entityId: string, characterId: string): Promise<void> {
+    const stmt = this.db.prepare(`
+      UPDATE location_entity_mappings 
+      SET discovered_at = ?
+      WHERE entity_id = ?
+    `);
+    
+    stmt.run(new Date().toISOString(), entityId);
+  }
+
+  /**
+   * 発見メッセージを生成
+   */
+  private async generateDiscoveryMessage(entity: EntityReference, locationId: string): Promise<string> {
+    // Phase 1実装：シンプルなメッセージ
+    // Phase 2でAI生成に拡張予定
+    const messages = {
+      item: `${entity.name}を発見しました！`,
+      npc: `${entity.name}と出会いました。`,
+      event: `興味深い出来事を発見：${entity.name}`,
+      quest: `新たな任務を発見：${entity.name}`,
+      enemy: `危険な存在を発見：${entity.name}`,
+      practical: `実用的な報酬を発見：${entity.name}`,
+      trophy: `貴重なトロフィーを発見：${entity.name}`,
+      mystery: `謎めいた何かを発見：${entity.name}`
+    };
+    
+    return messages[entity.category] || `${entity.name}を発見しました。`;
+  }
+
+  /**
+   * エンティティレア度を判定
+   */
+  private determineEntityRarity(entity: EntityReference): 'common' | 'uncommon' | 'rare' | 'epic' {
+    if (entity.category === 'mystery') return 'epic';
+    if (entity.category === 'trophy') return 'rare';
+    if (entity.type === 'bonus') return 'uncommon';
+    return 'common';
+  }
+
+  /**
+   * 探索レベル上昇値を計算
+   */
+  private getExplorationLevelGain(
+    intensity: 'light' | 'thorough' | 'exhaustive',
+    discoveredCount: number
+  ): number {
+    const baseGains = {
+      light: 10,      // 基本10%上昇
+      thorough: 25,   // 基本25%上昇
+      exhaustive: 40  // 基本40%上昇
+    };
+    
+    const baseGain = baseGains[intensity];
+    const discoveryBonus = discoveredCount * 5; // 発見1個につき5%ボーナス
+    
+    return baseGain + discoveryBonus;
+  }
+
+  /**
+   * 場所の総探索レベルを更新
+   */
+  private async updateLocationExplorationLevel(
+    locationId: string,
+    sessionId: string,
+    additionalLevel: number
+  ): Promise<number> {
+    // Phase 1実装：単純な計算
+    // 実際の実装では場所テーブルの exploration_level を更新
+    return Math.min(additionalLevel, 100);
+  }
+
+  /**
+   * 遭遇確率を計算
+   */
+  private calculateEncounterChance(intensity: 'light' | 'thorough' | 'exhaustive'): number {
+    const encounterRates = {
+      light: 0.1,      // 10%
+      thorough: 0.2,   // 20%  
+      exhaustive: 0.35 // 35%
+    };
+    return encounterRates[intensity];
+  }
+
+  /**
+   * 物語的描写を生成
+   */
+  private async generateNarrativeDescription(
+    locationId: string,
+    intensity: 'light' | 'thorough' | 'exhaustive',
+    discoveries: any[]
+  ): Promise<string> {
+    // Phase 1実装：テンプレートベース
+    // Phase 2でAI生成に拡張予定
+    const intensityDesc = {
+      light: 'ざっと辺りを見回し',
+      thorough: '注意深く調査し',
+      exhaustive: '徹底的に探索し'
+    };
+    
+    if (discoveries.length === 0) {
+      return `${intensityDesc[intensity]}ましたが、特に目立つものは見つかりませんでした。`;
+    }
+    
+    return `${intensityDesc[intensity]}、${discoveries.length}個の興味深いものを発見しました。`;
+  }
+
+  /**
+   * 探索ヒントを生成
+   */
+  private async generateExplorationHints(locationId: string, remainingHidden: number): Promise<string[]> {
+    // Phase 1実装：シンプルなヒント
+    // Phase 2でAI生成に拡張予定
+    const hints = [];
+    
+    if (remainingHidden > 0) {
+      hints.push('まだ見つけていないものがありそうです。');
+      hints.push('別の時間帯や条件で探索すると、新たな発見があるかもしれません。');
+    } else {
+      hints.push('この場所は十分に探索されたようです。');
+    }
+    
+    return hints;
   }
 }
 

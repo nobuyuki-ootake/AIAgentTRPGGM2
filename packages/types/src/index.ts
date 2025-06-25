@@ -494,6 +494,33 @@ export interface SessionParticipant {
   lastActivity: DateTime;
 }
 
+// ==========================================
+// シナリオ追体験システム - 3層抽象設計
+// ==========================================
+
+/**
+ * セッションシナリオ - 超抽象層
+ * プレイヤーが追体験する物語全体の概要を定義
+ * AI Agent GMとの対話による物語追体験の基盤
+ */
+export interface SessionScenario {
+  sessionId: ID;
+  title: string;           // シナリオタイトル（例: "古城の失踪事件"）
+  scenario: string;        // 400字程度の物語概要・プレイヤーが体験する物語の全容
+  theme: string;           // シナリオテーマ（例: "ミステリー", "冒険", "ホラー", "政治陰謀"）
+  estimatedPlayTime: number; // 推定プレイ時間（分）
+  
+  // メタデータ
+  createdAt: DateTime;
+  updatedAt: DateTime;
+  generatedBy?: 'ai' | 'manual'; // 生成方法
+  
+  // AI Agent GM 対話設定
+  narrativeStyle?: 'immersive' | 'dramatic' | 'casual' | 'epic'; // 物語演出スタイル
+  guidanceLevel?: 'subtle' | 'moderate' | 'direct'; // プレイヤー誘導レベル
+  mysteryLevel?: 'transparent' | 'hinted' | 'hidden'; // 謎の開示レベル
+}
+
 export interface SessionState {
   id: ID;
   campaignId: ID;
@@ -2430,6 +2457,82 @@ export interface ContentModifier {
   type: 'tone' | 'difficulty' | 'complexity' | 'focus';
   value: string;
   description: string;
+}
+
+// ==========================================
+// AI シナリオ統合生成システム型 - 3層抽象設計
+// ==========================================
+
+/**
+ * 3層統合生成リクエスト
+ * シナリオ（超抽象）→ マイルストーン（抽象）→ エンティティ（具体）の一括生成
+ */
+export interface ScenarioGenerationRequest {
+  campaignId: ID;
+  sessionId: ID;
+  themeId: ID;
+  sessionDuration: SessionDurationConfig;
+  
+  // シナリオ生成設定
+  scenarioPreferences: {
+    theme: string;           // "ミステリー", "冒険", "ホラー" など
+    complexity: 'simple' | 'moderate' | 'complex';
+    focusAreas: string[];    // ["探索", "戦闘", "謎解き", "交渉"] など
+    narrativeStyle: 'immersive' | 'dramatic' | 'casual' | 'epic';
+    targetPlayTime: number;  // 推定プレイ時間（分）
+  };
+  
+  // 既存コンテンツ（任意）
+  existingContent?: {
+    characters: Character[];
+    locations: Location[];
+    quests: Quest[];
+  };
+  
+  // AI生成オプション
+  generationOptions?: {
+    guidanceLevel: 'subtle' | 'moderate' | 'direct';
+    mysteryLevel: 'transparent' | 'hinted' | 'hidden';
+    milestoneCount: number; // デフォルト3個
+    entityComplexity: 'basic' | 'detailed' | 'rich';
+  };
+}
+
+/**
+ * 3層統合生成レスポンス
+ * 完全な物語追体験システムを一括で提供
+ */
+export interface ScenarioGenerationResponse {
+  // 3層構造の完全セット
+  scenario: SessionScenario;      // 超抽象層
+  milestones: AIMilestone[];      // 抽象層  
+  entityPool: EntityPool;         // 具体層
+  
+  // 統合情報
+  themeAdaptation: ThemeAdaptation;
+  narrativeFlow: {
+    introduction: string;         // シナリオ導入文
+    progression: string[];        // 段階的進行ガイド
+    climax: string;              // クライマックス設定
+    resolution: string;          // 解決パターン
+  };
+  
+  // AI Agent GM 設定
+  gmPersona: {
+    style: string;               // GM の口調・性格
+    specializations: string[];   // 得意分野
+    responsePatterns: string[];  // 応答パターン
+  };
+  
+  // 生成メタデータ
+  generationMetadata: {
+    model: string;
+    totalTokensUsed: number;
+    processingTime: number;
+    generatedAt: DateTime;
+    layersGenerated: ('scenario' | 'milestones' | 'entities')[];
+    qualityScore?: number;       // 生成品質スコア（0-100）
+  };
 }
 
 // ==========================================

@@ -58,6 +58,9 @@ import {
   ID,
   SessionDurationConfig,
   MilestoneGenerationRequest,
+  ScenarioGenerationRequest,
+  ScenarioGenerationResponse,
+  SessionScenario,
 } from '@ai-agent-trpg/types';
 import { appModeAtom } from '../../store/atoms';
 import { aiMilestoneGenerationAPI } from '../../api';
@@ -94,6 +97,11 @@ interface ScenarioMilestoneEditorProps {
   entityPool?: EntityPool;
   
   /**
+   * セッションシナリオ（3層設計の超抽象層）
+   */
+  scenario?: SessionScenario;
+  
+  /**
    * パネルの高さ
    */
   height?: number;
@@ -107,6 +115,11 @@ interface ScenarioMilestoneEditorProps {
    * エンティティプール更新のコールバック
    */
   onEntityPoolUpdate?: (entityPool: EntityPool) => void;
+  
+  /**
+   * シナリオ更新のコールバック（3層設計対応）
+   */
+  onScenarioUpdate?: (scenario: SessionScenario) => void;
   
   /**
    * エンティティ詳細画面への遷移コールバック
@@ -125,20 +138,31 @@ export const ScenarioMilestoneEditor: React.FC<ScenarioMilestoneEditorProps> = (
   sessionDuration,
   milestones = [],
   entityPool,
+  scenario,
   height = 600,
   onMilestonesUpdate,
   onEntityPoolUpdate,
+  onScenarioUpdate,
   onNavigateToEntity,
 }) => {
   const appMode = useRecoilValue(appModeAtom);
-  const [expandedSection, setExpandedSection] = useState<string>('generation');
+  
+  // UI状態管理
+  const [expandedSection, setExpandedSection] = useState<string>('scenario');
   const [selectedMilestone, setSelectedMilestone] = useState<AIMilestone | null>(null);
   const [showMilestoneDetail, setShowMilestoneDetail] = useState(false);
+  
+  // 3層統合生成状態管理
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
-  const [milestoneCount, setMilestoneCount] = useState(3);
   const [generationStep, setGenerationStep] = useState<string>('');
   const [generationProgress, setGenerationProgress] = useState(0);
+  
+  // シナリオ設定状態
+  const [scenarioTheme, setScenarioTheme] = useState('ミステリー');
+  const [scenarioComplexity, setScenarioComplexity] = useState<'simple' | 'moderate' | 'complex'>('moderate');
+  const [narrativeStyle, setNarrativeStyle] = useState<'immersive' | 'dramatic' | 'casual' | 'epic'>('immersive');
+  const [milestoneCount, setMilestoneCount] = useState(3);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [milestoneToDelete, setMilestoneToDelete] = useState<AIMilestone | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -182,48 +206,72 @@ export const ScenarioMilestoneEditor: React.FC<ScenarioMilestoneEditorProps> = (
     }
   };
 
-  // AIマイルストーン生成
-  const generateMilestones = async () => {
+  // 3層統合生成：シナリオ→マイルストーン→エンティティプール
+  const generateScenario = async () => {
     setIsGenerating(true);
     setGenerationError(null);
-    setGenerationStep('準備中...');
-    setGenerationProgress(10);
+    setGenerationStep('3層統合生成を準備中...');
+    setGenerationProgress(5);
     
     try {
-      const request: MilestoneGenerationRequest = {
+      const request: ScenarioGenerationRequest = {
         campaignId,
         sessionId,
         themeId,
         sessionDuration,
-        milestoneCount,
+        scenarioPreferences: {
+          theme: scenarioTheme,
+          complexity: scenarioComplexity,
+          focusAreas: ['探索', '謎解き', '対話'],
+          narrativeStyle,
+          targetPlayTime: sessionDuration.estimatedPlayTime,
+        },
         existingContent: {
           characters: [], // TODO: Get characters from campaign
           locations: [], // TODO: Get locations from campaign
           quests: [], // TODO: Get quests from campaign
         },
+        generationOptions: {
+          guidanceLevel: 'moderate',
+          mysteryLevel: 'hinted',
+          milestoneCount,
+          entityComplexity: 'detailed',
+        },
       };
 
-      // 進捗表示の更新
-      setGenerationStep('テーマ適応を生成中...');
-      setGenerationProgress(25);
+      // Phase 1: シナリオ概要生成
+      setGenerationStep('🎭 シナリオ概要を生成中...');
+      setGenerationProgress(20);
+      await new Promise(resolve => setTimeout(resolve, 800));
       
-      // 少し待ってから次のステップ
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setGenerationStep('エンティティプールを生成中...');
-      setGenerationProgress(50);
+      // Phase 2: マイルストーン設計
+      setGenerationStep('🎯 マイルストーンを設計中...');
+      setGenerationProgress(40);
+      await new Promise(resolve => setTimeout(resolve, 800));
       
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setGenerationStep('マイルストーンを生成中...');
-      setGenerationProgress(75);
+      // Phase 3: エンティティプール生成
+      setGenerationStep('⚙️ エンティティプールを生成中...');
+      setGenerationProgress(60);
+      await new Promise(resolve => setTimeout(resolve, 800));
       
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setGenerationStep('データベースに保存中...');
+      // Phase 4: AI Agent GM設定
+      setGenerationStep('🤖 AI Agent GM設定を構成中...');
+      setGenerationProgress(80);
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      // Phase 5: 統合・最適化
+      setGenerationStep('🔗 3層構造を統合中...');
       setGenerationProgress(90);
 
-      const response = await aiMilestoneGenerationAPI.generateMilestonesAndPools(request);
+      const response = await aiMilestoneGenerationAPI.generateScenario(request);
       
-      setGenerationStep('完了！');
+      setGenerationStep('✅ 3層統合生成完了！');
       setGenerationProgress(100);
+      
+      // 3層統合結果の更新通知
+      if (onScenarioUpdate && response.scenario) {
+        onScenarioUpdate(response.scenario);
+      }
       
       if (onMilestonesUpdate && response.milestones) {
         onMilestonesUpdate(response.milestones);
@@ -233,9 +281,16 @@ export const ScenarioMilestoneEditor: React.FC<ScenarioMilestoneEditorProps> = (
         onEntityPoolUpdate(response.entityPool);
       }
       
+      console.log('🎉 3層統合生成成功', {
+        scenarioTitle: response.scenario?.title,
+        milestonesCount: response.milestones?.length,
+        entityPoolGenerated: !!response.entityPool,
+        qualityScore: response.generationMetadata?.qualityScore
+      });
+      
     } catch (error) {
-      console.error('マイルストーン生成エラー:', error);
-      setGenerationError(error instanceof Error ? error.message : 'マイルストーン生成に失敗しました');
+      console.error('🚨 3層統合生成エラー:', error);
+      setGenerationError(error instanceof Error ? error.message : '3層統合生成に失敗しました。API接続を確認してください。');
     } finally {
       // 完了後に少し待ってからリセット
       setTimeout(() => {
@@ -333,18 +388,18 @@ export const ScenarioMilestoneEditor: React.FC<ScenarioMilestoneEditorProps> = (
         <Button
           variant="contained"
           startIcon={isGenerating ? <CircularProgress size={16} /> : <AIIcon />}
-          onClick={generateMilestones}
+          onClick={generateScenario}
           disabled={isGenerating}
           color="primary"
         >
-          {isGenerating ? '生成中...' : 'マイルストーン & エンティティプール生成'}
+          {isGenerating ? '生成中...' : 'シナリオ・マイルストーン・エンティティプール一括生成'}
         </Button>
         
         {milestones.length > 0 && (
           <Button
             variant="outlined"
             startIcon={<RegenerateIcon />}
-            onClick={generateMilestones}
+            onClick={generateScenario}
             disabled={isGenerating}
           >
             再生成

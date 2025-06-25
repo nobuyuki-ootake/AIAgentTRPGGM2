@@ -1,6 +1,9 @@
 import { 
   MilestoneGenerationRequest,
   MilestoneGenerationResponse,
+  ScenarioGenerationRequest,
+  ScenarioGenerationResponse,
+  SessionScenario,
   AIMilestone,
   EntityPool,
   ID
@@ -211,6 +214,81 @@ export const aiMilestoneGenerationAPI = {
       entityId,
       discovered: response.discovered,
       milestoneProgress: response.progressUpdate
+    });
+    
+    return response;
+  },
+
+  /**
+   * 3層統合生成：シナリオ→マイルストーン→エンティティプールの一括生成
+   * Phase 1 実装：AI Agent GM 対話による物語追体験システム
+   */
+  async generateScenario(request: ScenarioGenerationRequest): Promise<ScenarioGenerationResponse> {
+    console.log('🎭 Generating 3-layer scenario system', {
+      sessionId: request.sessionId,
+      theme: request.scenarioPreferences.theme,
+      complexity: request.scenarioPreferences.complexity,
+      targetPlayTime: request.scenarioPreferences.targetPlayTime
+    });
+    
+    const response = await apiClient.post<ScenarioGenerationResponse>(
+      '/ai-milestone-generation/generate-scenario',
+      request,
+      { timeout: 300000 } // 5分タイムアウト（3層統合生成用）
+    );
+    
+    console.log('✅ 3-layer scenario system generated successfully', {
+      scenarioTitle: response.scenario.title,
+      scenarioTheme: response.scenario.theme,
+      milestonesCount: response.milestones.length,
+      entityPoolGenerated: !!response.entityPool,
+      processingTime: response.generationMetadata.processingTime,
+      qualityScore: response.generationMetadata.qualityScore
+    });
+    
+    return response;
+  },
+
+  /**
+   * セッションシナリオ情報取得
+   */
+  async getSessionScenario(sessionId: ID): Promise<SessionScenario | null> {
+    try {
+      const response = await apiClient.get<SessionScenario | null>(
+        `/ai-milestone-generation/session/${sessionId}/scenario`
+      );
+      
+      console.log('📖 Session scenario retrieved', {
+        sessionId,
+        hasScenario: !!response,
+        title: response?.title
+      });
+      
+      return response;
+    } catch (error) {
+      console.warn('⚠️ No session scenario found or error occurred', { sessionId, error });
+      return null;
+    }
+  },
+
+  /**
+   * セッションシナリオ更新
+   */
+  async updateSessionScenario(sessionId: ID, scenario: Partial<SessionScenario>): Promise<SessionScenario> {
+    console.log('📝 Updating session scenario', {
+      sessionId,
+      updates: Object.keys(scenario)
+    });
+    
+    const response = await apiClient.patch<SessionScenario>(
+      `/ai-milestone-generation/session/${sessionId}/scenario`,
+      scenario
+    );
+    
+    console.log('✅ Session scenario updated successfully', {
+      sessionId,
+      title: response.title,
+      theme: response.theme
     });
     
     return response;

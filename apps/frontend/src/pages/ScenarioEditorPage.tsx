@@ -21,11 +21,13 @@ import {
   Groups as GroupsIcon,
   Warning as WarningIcon,
   Refresh as RefreshIcon,
+  LocationOn as LocationIcon,
 } from '@mui/icons-material';
 import { useRecoilValue, useRecoilState } from 'recoil';
 import { currentCampaignAtom, appModeAtom } from '@/store/atoms';
 import { ScenarioMilestoneEditor } from '@/components/scenario-editor/ScenarioMilestoneEditor';
 import { EntityPoolManager } from '@/components/scenario-editor/EntityPoolManager';
+import { LocationEntityPlacement } from '@/components/scenario-editor/LocationEntityPlacement';
 import { campaignAPI, aiMilestoneGenerationAPI } from '@/api';
 import { LoadingScreen } from '@/components/common/LoadingScreen';
 import { AIMilestone, EntityPool, SessionDurationConfig } from '@ai-agent-trpg/types';
@@ -71,7 +73,8 @@ const ScenarioEditorPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState(0);
   
-  // シナリオエディタ用のステート
+  // 3層統合シナリオエディタ用のステート
+  const [scenario, setScenario] = useState<SessionScenario | undefined>();
   const [milestones, setMilestones] = useState<AIMilestone[]>([]);
   const [entityPool, setEntityPool] = useState<EntityPool | undefined>();
   const [milestonesError, setMilestonesError] = useState<string | null>(null);
@@ -167,6 +170,16 @@ const ScenarioEditorPage: React.FC = () => {
     await loadMilestones();
   };
 
+  const handleScenarioUpdate = (newScenario: SessionScenario) => {
+    console.log('ScenarioEditorPage: handleScenarioUpdate called', {
+      scenarioTitle: newScenario.title,
+      theme: newScenario.theme,
+      estimatedPlayTime: newScenario.estimatedPlayTime
+    });
+    
+    setScenario(newScenario);
+  };
+
   const handleEntityPoolUpdate = (newEntityPool: EntityPool) => {
     console.log('ScenarioEditorPage: handleEntityPoolUpdate called', {
       hasNewPool: !!newEntityPool,
@@ -230,9 +243,9 @@ const ScenarioEditorPage: React.FC = () => {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
           <EditIcon color="primary" sx={{ fontSize: 32 }} />
           <Typography variant="h4" component="h1">
-            シナリオエディタ
+            シナリオエディタ（3層統合生成）
           </Typography>
-          <Chip label="GM専用" color="warning" variant="outlined" />
+          <Chip label="AI Agent GM" color="primary" variant="outlined" />
           <Chip label="開発者モード" color="info" variant="outlined" />
         </Box>
         
@@ -244,8 +257,8 @@ const ScenarioEditorPage: React.FC = () => {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <WarningIcon />
             <Typography variant="body2">
-              <strong>重要:</strong> このツールはゲームマスター専用です。
-              生成されたマイルストーンやエンティティはプレイヤーには一切表示されません。
+              <strong>3層抽象設計:</strong> シナリオ（超抽象）→ マイルストーン（抽象）→ エンティティ（具体）の
+              統合生成により、AI Agent GMとの対話による物語追体験システムを構築します。
             </Typography>
           </Box>
         </Alert>
@@ -361,6 +374,11 @@ const ScenarioEditorPage: React.FC = () => {
             label="エンティティ詳細"
             {...a11yProps(2)}
           />
+          <Tab
+            icon={<LocationIcon />}
+            label="場所・エンティティ配置"
+            {...a11yProps(3)}
+          />
         </Tabs>
       </Paper>
 
@@ -373,9 +391,11 @@ const ScenarioEditorPage: React.FC = () => {
           sessionDuration={defaultSessionDuration}
           milestones={milestones}
           entityPool={entityPool}
+          scenario={scenario}
           height={800}
           onMilestonesUpdate={handleMilestonesUpdate}
           onEntityPoolUpdate={handleEntityPoolUpdate}
+          onScenarioUpdate={handleScenarioUpdate}
           onNavigateToEntity={handleNavigateToEntity}
         />
       </TabPanel>
@@ -399,6 +419,16 @@ const ScenarioEditorPage: React.FC = () => {
           height={800}
           initialEntityType={selectedEntityType}
           initialCategory={selectedEntityCategory}
+        />
+      </TabPanel>
+
+      <TabPanel value={activeTab} index={3}>
+        <LocationEntityPlacement
+          campaignId={currentCampaign.id}
+          sessionId="scenario-edit-session"
+          entityPool={entityPool}
+          milestones={milestones}
+          height={800}
         />
       </TabPanel>
     </Container>
