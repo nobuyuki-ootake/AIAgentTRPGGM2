@@ -2588,3 +2588,442 @@ export function isPoolItem(entity: any): entity is PoolItem {
 export function isPoolQuest(entity: any): entity is PoolQuest {
   return entity && Array.isArray(entity.objectives) && typeof entity.isMilestoneTarget === 'boolean';
 }
+
+// ==========================================
+// AI基盤データ構造システム
+// ==========================================
+
+/**
+ * AI解釈可能な条件式システム
+ * AIがゲーム状態を評価して動的に判断を行うための基盤
+ */
+export interface AIConditionExpression {
+  id?: ID;
+  type: 'simple' | 'compound' | 'function' | 'contextual';
+  description?: string;
+  priority?: number; // 複数条件がある場合の優先度
+  
+  // Simple condition fields
+  field?: string; // "player.level", "location.type", etc.
+  operator?: 'equals' | 'not_equals' | 'greater_than' | 'less_than' | 'greater_equal' | 'less_equal' | 'contains' | 'not_contains' | 'in' | 'not_in';
+  value?: any;
+  
+  // Compound condition fields  
+  conditions?: AIConditionExpression[];
+  
+  // Function condition fields
+  function_name?: string;
+  parameters?: any;
+  
+  // Contextual condition fields
+  context_type?: string;
+  context_data?: any;
+}
+
+export interface AIConditionVariable {
+  name: string; // "player.level"
+  type: 'number' | 'string' | 'boolean' | 'object';
+  source: 'game_state' | 'character' | 'location' | 'session' | 'campaign';
+  description: string;
+  currentValue?: any; // 現在の値（キャッシュ用）
+}
+
+/**
+ * AI統一判断インターフェース
+ * 全エンティティタイプに対する統一的な判断システム
+ */
+export interface AIEntityProcessor {
+  entityType: 'item' | 'quest' | 'event' | 'npc' | 'enemy';
+  entityId: ID;
+  
+  // AI解釈・評価
+  conditions: AIConditionExpression[];
+  effects: AIEffectDefinition[];
+  actions: AIActionDefinition[];
+  
+  // AI学習・適応
+  learningData: AILearningData;
+  adaptiveWeights: Record<string, number>;
+  
+  // メタデータ
+  lastEvaluated?: DateTime;
+  evaluationCount: number;
+  successRate: number; // 0-1
+}
+
+export interface AIEffectDefinition {
+  id: ID;
+  name: string;
+  type: 'immediate' | 'delayed' | 'conditional' | 'continuous';
+  target: 'character' | 'party' | 'world' | 'story';
+  magnitude: number | string; // 数値または計算式
+  duration?: number; // ターン数、永続の場合は undefined
+  conditions: AIConditionExpression[];
+  description: string;
+}
+
+export interface AIActionDefinition {
+  id: ID;
+  name: string;
+  type: 'movement' | 'interaction' | 'combat' | 'dialogue' | 'skill_use';
+  availability: AIConditionExpression[];
+  cost: AICostDefinition;
+  outcomes: AIOutcomeDefinition[];
+  aiPriority: number; // AI選択時の優先度
+  playerVisibility: 'visible' | 'hidden' | 'conditional';
+}
+
+export interface AICostDefinition {
+  type: 'action_points' | 'resources' | 'time' | 'relationship' | 'risk';
+  amount: number | string; // 数値または計算式
+  description: string;
+}
+
+export interface AIOutcomeDefinition {
+  probability: number; // 0-1
+  condition?: AIConditionExpression;
+  effects: AIEffectDefinition[];
+  description: string;
+  narrativeTemplate: string; // AI生成用のテンプレート
+}
+
+/**
+ * AI学習データシステム
+ */
+export interface AILearningData {
+  successfulOutcomes: Array<{
+    context: AIGameContext;
+    action: string;
+    outcome: string;
+    playerSatisfaction: number; // 1-5
+    timestamp: DateTime;
+  }>;
+  
+  failedOutcomes: Array<{
+    context: AIGameContext;
+    action: string;
+    failure: string;
+    playerFeedback?: string;
+    timestamp: DateTime;
+  }>;
+  
+  adaptiveParameters: Record<string, {
+    initialValue: number;
+    currentValue: number;
+    adjustmentHistory: Array<{
+      oldValue: number;
+      newValue: number;
+      reason: string;
+      timestamp: DateTime;
+    }>;
+  }>;
+}
+
+/**
+ * エンティティ間関係性の定義
+ */
+export interface EntityRelationship {
+  sourceId: ID;
+  targetId: ID;
+  type: 'prerequisite' | 'blocks' | 'enables' | 'enhances' | 'conflicts' | 'complements' | 'dependency' | 'synergy' | 'mutual_exclusive' | 'reference';
+  strength: number; // 0-1, 関係の強さ
+  direction?: 'unidirectional' | 'bidirectional';
+  conditions?: AIConditionExpression[];
+  description?: string;
+  metadata?: Record<string, any>;
+}
+
+/**
+ * エンティティ関連性グラフシステム
+ */
+export interface EntityRelationshipGraph {
+  nodes: EntityNode[];
+  edges: EntityEdge[];
+  clusters: EntityCluster[];
+  
+  // 簡易実装用：関係性マップ (implementation compatibility)
+  relationships?: Record<ID, EntityRelationship[]>;
+  
+  // AI分析用メタデータ
+  analysisMetadata: {
+    lastAnalyzed: DateTime;
+    complexity: number; // 0-1, グラフの複雑さ
+    criticality: Record<ID, number>; // エンティティID -> 重要度
+    pathOptimization: PathOptimization[];
+  };
+  
+  // 簡易メタデータ (implementation compatibility)
+  metadata?: {
+    version: string;
+    lastUpdated: string;
+    totalRelationships: number;
+  };
+}
+
+export interface EntityNode {
+  entityId: ID;
+  entityType: 'item' | 'quest' | 'event' | 'npc' | 'enemy' | 'location';
+  importance: number; // 0-1, ストーリー上の重要度
+  accessibility: number; // 0-1, プレイヤーのアクセス難易度
+  dependencies: ID[]; // 依存するエンティティ
+  dependents: ID[]; // このエンティティに依存するもの
+  
+  // AI判断用メタデータ
+  aiMetadata: {
+    recommendationScore: number; // AIが推奨する度合い
+    playerPreferenceAlignment: number; // プレイヤー好みとの一致度
+    difficultyAppropriate: boolean; // 現在の難易度に適しているか
+    storyProgression: number; // 物語進行への寄与度
+  };
+}
+
+export interface EntityEdge {
+  sourceId: ID;
+  targetId: ID;
+  relationship: 'prerequisite' | 'blocks' | 'enables' | 'enhances' | 'conflicts' | 'complements';
+  strength: number; // 0-1, 関係の強さ
+  conditions: AIConditionExpression[]; // 関係が有効になる条件
+  description: string;
+  
+  // AI最適化用
+  traversalCost: number; // AIが経路を選ぶ際のコスト
+  playerLikelihood: number; // プレイヤーがこの経路を選ぶ可能性
+}
+
+export interface EntityCluster {
+  id: ID;
+  name: string;
+  description: string;
+  memberIds: ID[];
+  clusterType: 'story_arc' | 'location_group' | 'character_network' | 'quest_chain' | 'thematic_group';
+  
+  // AI管理用
+  aiGuidance: {
+    recommendedOrder: ID[]; // AIが推奨する実行順序
+    parallelizable: boolean; // 並行実行可能か
+    timeWindow?: {
+      earliest: number; // ゲーム内時間
+      latest: number;
+    };
+    prerequisites: ID[]; // クラスター全体の前提条件
+  };
+}
+
+export interface PathOptimization {
+  fromEntityId: ID;
+  toEntityId: ID;
+  optimalPath: ID[];
+  estimatedDuration: number; // 分
+  difficultyRating: number; // 0-1
+  playerEngagement: number; // 予想される面白さ
+  aiRecommendation: string;
+}
+
+/**
+ * リアルタイム状態管理システム
+ */
+export interface AIGameContext {
+  timestamp: DateTime;
+  sessionId: ID;
+  campaignId: ID;
+  
+  // 現在の状態
+  currentState: {
+    characters: Record<ID, Character>;
+    location: Location;
+    time: GameTime;
+    weather?: WeatherCondition;
+    mood: 'tense' | 'relaxed' | 'excited' | 'mysterious' | 'danger' | 'safe';
+  };
+  
+  // 最近の履歴
+  recentHistory: {
+    actions: Array<{
+      characterId: ID;
+      action: string;
+      outcome: string;
+      timestamp: DateTime;
+    }>;
+    events: TRPGEvent[];
+    conversations: Array<{
+      participants: ID[];
+      summary: string;
+      mood: 'positive' | 'negative' | 'neutral';
+      timestamp: DateTime;
+    }>;
+  };
+  
+  // プレイヤー状態分析
+  playerAnalysis: {
+    preferredActivities: string[];
+    avoidedActivities: string[];
+    skillLevel: 'beginner' | 'intermediate' | 'advanced';
+    engagementLevel: number; // 0-1
+    satisfactionLevel: number; // 0-1
+    playStyle: 'explorer' | 'achiever' | 'socializer' | 'killer'; // Bartle taxonomy
+  };
+  
+  // AI推論用コンテキスト
+  aiInferences: {
+    nextRecommendedActions: Array<{
+      entityId: ID;
+      entityType: string;
+      reasoning: string;
+      confidence: number; // 0-1
+    }>;
+    storyProgression: {
+      currentArc: string;
+      progressPercentage: number; // 0-100
+      estimatedRemainingTime: number; // 分
+    };
+    dynamicDifficulty: {
+      currentLevel: number; // 0-1
+      suggestedAdjustment: number; // -0.2 〜 +0.2
+      reasoning: string;
+    };
+  };
+}
+
+export interface GameTime {
+  day: number;
+  hour: number; // 0-23
+  minute: number; // 0-59
+  season: 'spring' | 'summer' | 'autumn' | 'winter';
+  timeOfDay: 'dawn' | 'morning' | 'noon' | 'afternoon' | 'evening' | 'night' | 'midnight';
+}
+
+export interface WeatherCondition {
+  type: 'clear' | 'cloudy' | 'rainy' | 'stormy' | 'snowy' | 'foggy';
+  intensity: number; // 0-1
+  duration: number; // 分
+  effects: string[]; // ゲームプレイへの影響
+}
+
+/**
+ * AI動的クエリシステム
+ */
+export interface AIQueryFilter {
+  // 基本フィルタ
+  entityTypes?: string[];
+  availability?: 'available' | 'locked' | 'completed' | 'all';
+  difficulty?: {
+    min: number;
+    max: number;
+  };
+  
+  // AI判断フィルタ
+  aiCriteria?: {
+    recommendationScore?: {
+      min: number; // 0-1
+      max: number;
+    };
+    playerAlignment?: {
+      min: number; // プレイヤー好みとの一致度
+    };
+    storyRelevance?: {
+      min: number; // ストーリー関連度
+    };
+    urgency?: 'low' | 'medium' | 'high' | 'critical';
+  };
+  
+  // コンテキスト依存フィルタ
+  contextFilters?: {
+    currentLocation?: ID;
+    timeWindow?: {
+      earliest: number;
+      latest: number;
+    };
+    requiredPrerequisites?: 'all' | 'any' | 'none';
+    playerPreferences?: boolean; // プレイヤー好みを考慮するか
+  };
+  
+  // ソート・制限
+  sortBy?: 'recommendation' | 'difficulty' | 'story_importance' | 'player_preference';
+  sortOrder?: 'asc' | 'desc';
+  limit?: number;
+  offset?: number;
+}
+
+export interface AIQueryResult<T> {
+  entities: T[];
+  totalCount: number;
+  metadata: {
+    query: AIQueryFilter;
+    executionTime: number; // ミリ秒
+    aiRecommendations: AIRecommendation[];
+    contextSnapshot: {
+      timestamp: DateTime;
+      gameState: Partial<AIGameContext>;
+    };
+  };
+}
+
+export interface AIRecommendation {
+  entityId: ID;
+  entityType: string;
+  confidence: number; // 0-1
+  reasoning: string;
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  suggestedTiming: 'immediate' | 'soon' | 'later' | 'conditional';
+  conditions?: AIConditionExpression[];
+}
+
+/**
+ * AIエンティティ管理API
+ */
+export interface AIEntityManagementAPI {
+  // エンティティ操作
+  evaluateConditions(entityId: ID, context: AIGameContext): Promise<boolean>;
+  calculateEffects(entityId: ID, context: AIGameContext): Promise<AIEffectDefinition[]>;
+  generateActions(entityId: ID, situation: AIGameContext): Promise<AIActionDefinition[]>;
+  
+  // 動的クエリ
+  queryEntities<T>(filter: AIQueryFilter): Promise<AIQueryResult<T>>;
+  getRecommendations(context: AIGameContext, count?: number): Promise<AIRecommendation[]>;
+  
+  // 関係性分析
+  analyzeRelationships(entityIds: ID[]): Promise<EntityRelationshipGraph>;
+  findOptimalPath(fromEntity: ID, toEntity: ID, context: AIGameContext): Promise<PathOptimization>;
+  
+  // 学習・適応
+  recordOutcome(entityId: ID, outcome: 'success' | 'failure', context: AIGameContext, feedback?: string): Promise<void>;
+  adaptToPlayer(playerId: ID, behaviorData: any): Promise<void>;
+  
+  // リアルタイム更新
+  updateGameContext(context: Partial<AIGameContext>): Promise<void>;
+  subscribeToStateChanges(callback: (context: AIGameContext) => void): Promise<() => void>;
+}
+
+/**
+ * AI統合型エンティティベース
+ * 全エンティティタイプが継承する基底インターフェース
+ */
+export interface AIIntegratedEntityBase {
+  id: ID;
+  aiProcessor: AIEntityProcessor;
+  aiContext: {
+    lastAccessed?: DateTime;
+    accessCount: number;
+    playerInteractionHistory: Array<{
+      action: string;
+      outcome: string;
+      satisfaction: number; // 1-5
+      timestamp: DateTime;
+    }>;
+  };
+}
+
+/**
+ * 型ガード関数（AI基盤システム用）
+ */
+export function isAIIntegratedEntity(entity: any): entity is AIIntegratedEntityBase {
+  return entity && entity.aiProcessor && entity.aiContext;
+}
+
+export function isAIConditionExpression(obj: any): obj is AIConditionExpression {
+  return obj && typeof obj.expression === 'string' && Array.isArray(obj.variables);
+}
+
+export function isEntityRelationshipGraph(obj: any): obj is EntityRelationshipGraph {
+  return obj && Array.isArray(obj.nodes) && Array.isArray(obj.edges);
+}

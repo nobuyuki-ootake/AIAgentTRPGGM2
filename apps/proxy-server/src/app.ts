@@ -6,6 +6,8 @@ import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 
 import { router } from './routes';
+import { mastraAgentRouter } from './routes/mastraAgent';
+import aiEntityManagementRouter from './routes/aiEntityManagement';
 import { errorHandler } from './middleware/errorHandler';
 import { notFoundHandler } from './middleware/notFoundHandler';
 import { logger } from './utils/logger';
@@ -68,8 +70,22 @@ export function createApp(): express.Application {
     legacyHeaders: false,
   });
 
+  // Mastra Agent専用のレート制限 (高品質な応答のため少し余裕を持たせる)
+  const mastraLimiter = rateLimit({
+    windowMs: process.env.NODE_ENV === 'development' ? 1 * 60 * 1000 : 10 * 60 * 1000, // 開発環境では1分、本番では10分
+    max: process.env.NODE_ENV === 'development' ? 100 : 15, // 開発環境では100、本番では15
+    message: {
+      error: 'Too many Mastra Agent requests from this IP, please try again later.',
+      retryAfter: process.env.NODE_ENV === 'development' ? '1 minute' : '10 minutes'
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
   app.use(limiter);
   app.use('/api/ai-agent', aiLimiter);
+  app.use('/api/mastra-agent', mastraLimiter);
+  app.use('/api/ai-entity', aiLimiter); // AI Entity Management uses same rate limiting as AI endpoints
 
   // Logging
   app.use(morgan('combined', {
@@ -99,6 +115,12 @@ export function createApp(): express.Application {
 
   // API routes
   app.use('/api', router);
+  
+  // Mastra Agent routes
+  app.use('/api/mastra-agent', mastraAgentRouter);
+  
+  // AI Entity Management routes
+  app.use('/api/ai-entity', aiEntityManagementRouter);
 
   // Error handling middleware (must be last)
   app.use(notFoundHandler);

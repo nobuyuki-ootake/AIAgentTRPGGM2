@@ -45,7 +45,7 @@ export interface PrerequisiteResult {
 export interface ExplorationResult {
   success: boolean;
   locationId: string;
-  characterId: string;
+  _characterId: string;
   explorationLevel: number; // 0-100 この探索での達成レベル
   totalExplorationLevel: number; // 0-100 場所の総探索レベル
   
@@ -499,11 +499,11 @@ export class LocationEntityMappingService {
    */
   async exploreLocation(
     locationId: string, 
-    characterId: string, 
+    _characterId: string, 
     sessionId: string,
     explorationIntensity: 'light' | 'thorough' | 'exhaustive' = 'thorough'
   ): Promise<ExplorationResult> {
-    logger.info(`🔍 探索アクション開始`, { locationId, characterId, explorationIntensity });
+    logger.info(`🔍 探索アクション開始`, { locationId, _characterId, explorationIntensity });
     
     try {
       // 1. 場所の未発見エンティティを取得
@@ -519,7 +519,7 @@ export class LocationEntityMappingService {
         const discoveryChance = this.calculateDiscoveryChance(entity, baseDiscoveryRate);
         if (Math.random() < discoveryChance) {
           // エンティティ発見！
-          await this.markEntityDiscovered(entity.id, characterId);
+          await this.markEntityDiscovered(entity.id, _characterId);
           
           discoveredEntities.push({
             entity,
@@ -547,7 +547,7 @@ export class LocationEntityMappingService {
       const result: ExplorationResult = {
         success: true,
         locationId,
-        characterId,
+        _characterId,
         explorationLevel,
         totalExplorationLevel,
         discoveredEntities,
@@ -571,7 +571,7 @@ export class LocationEntityMappingService {
       return result;
       
     } catch (error) {
-      logger.error(`❌ 探索エラー`, { locationId, characterId, error });
+      logger.error(`❌ 探索エラー`, { locationId, _characterId, error });
       throw new Error(`探索に失敗しました: ${error instanceof Error ? error.message : '不明なエラー'}`);
     }
   }
@@ -598,8 +598,8 @@ export class LocationEntityMappingService {
     const entities = [];
     for (const mapping of mappings) {
       // 時間条件・前提条件チェック
-      const timeCheck = await this.checkTimeConditions(mapping.id);
-      const prereqCheck = await this.checkPrerequisites(mapping.id);
+      const timeCheck = await this.checkTimeConditions(mapping.timeConditions || []);
+      const prereqCheck = await this.checkPrerequisites(mapping.prerequisiteEntities || [], sessionId);
       
       if (timeCheck.isValid && prereqCheck.isValid) {
         entities.push({
@@ -609,7 +609,7 @@ export class LocationEntityMappingService {
           category: mapping.entityCategory as any,
           description: await this.getEntityDescription(mapping.entityId, mapping.entityCategory),
           isAvailable: true,
-          timeConditions: mapping.discoveryConditions,
+          timeConditions: mapping.timeConditions || [],
           prerequisiteEntities: mapping.prerequisiteEntities
         });
       }
@@ -669,7 +669,7 @@ export class LocationEntityMappingService {
   /**
    * エンティティを発見済みとしてマーク
    */
-  private async markEntityDiscovered(entityId: string, characterId: string): Promise<void> {
+  private async markEntityDiscovered(entityId: string, _characterId: string): Promise<void> {
     const stmt = this.db.prepare(`
       UPDATE location_entity_mappings 
       SET discovered_at = ?
@@ -682,7 +682,7 @@ export class LocationEntityMappingService {
   /**
    * 発見メッセージを生成
    */
-  private async generateDiscoveryMessage(entity: EntityReference, locationId: string): Promise<string> {
+  private async generateDiscoveryMessage(entity: EntityReference, _locationId: string): Promise<string> {
     // Phase 1実装：シンプルなメッセージ
     // Phase 2でAI生成に拡張予定
     const messages = {
@@ -732,8 +732,8 @@ export class LocationEntityMappingService {
    * 場所の総探索レベルを更新
    */
   private async updateLocationExplorationLevel(
-    locationId: string,
-    sessionId: string,
+    _locationId: string,
+    _sessionId: string,
     additionalLevel: number
   ): Promise<number> {
     // Phase 1実装：単純な計算
@@ -757,7 +757,7 @@ export class LocationEntityMappingService {
    * 物語的描写を生成
    */
   private async generateNarrativeDescription(
-    locationId: string,
+    _locationId: string,
     intensity: 'light' | 'thorough' | 'exhaustive',
     discoveries: any[]
   ): Promise<string> {
@@ -779,7 +779,7 @@ export class LocationEntityMappingService {
   /**
    * 探索ヒントを生成
    */
-  private async generateExplorationHints(locationId: string, remainingHidden: number): Promise<string[]> {
+  private async generateExplorationHints(_locationId: string, remainingHidden: number): Promise<string[]> {
     // Phase 1実装：シンプルなヒント
     // Phase 2でAI生成に拡張予定
     const hints = [];

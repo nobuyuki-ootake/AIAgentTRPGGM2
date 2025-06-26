@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { createApp } from './app';
 import { logger } from './utils/logger';
 import { initializeDatabase } from './database/database';
+import { initializeMastra } from './mastra';
 import { Server as SocketIOServer } from 'socket.io';
 import { createServer } from 'http';
 import { getSessionService } from './services/sessionService';
@@ -15,6 +16,16 @@ async function startServer(): Promise<void> {
     logger.info('Initializing database...');
     await initializeDatabase();
     logger.info('Database initialized successfully');
+
+    // Mastra AI Agent System初期化
+    logger.info('Initializing Mastra AI Agent System...');
+    try {
+      await initializeMastra();
+      logger.info('Mastra AI Agent System initialized successfully');
+    } catch (mastraError) {
+      logger.warn('Mastra initialization failed, continuing without AI Agents:', mastraError);
+      logger.warn('AI Agent features will be unavailable until configuration is fixed');
+    }
 
     // Express アプリケーション作成
     const app = createApp();
@@ -66,7 +77,9 @@ async function startServer(): Promise<void> {
       logger.info(`🚀 Server running on port ${PORT} in ${NODE_ENV} mode`);
       logger.info(`📍 API endpoint: http://localhost:${PORT}/api`);
       logger.info(`🤖 AI Agent endpoint: http://localhost:${PORT}/api/ai-agent`);
+      logger.info(`🎭 Mastra Agent endpoint: http://localhost:${PORT}/api/mastra-agent`);
       logger.info(`🔌 WebSocket endpoint: ws://localhost:${PORT}`);
+      logger.info(`🏥 Health check: http://localhost:${PORT}/api/mastra-agent/health`);
     });
 
     // Graceful shutdown
