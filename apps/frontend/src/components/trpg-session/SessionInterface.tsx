@@ -54,6 +54,7 @@ import { TimeManagementPanel } from './TimeManagementPanel';
 import { timeManagementAPI } from '../../api/timeManagement';
 import { aiGameMasterAPI, SessionInitializationResult } from '../../api/aiGameMaster';
 import { useConversationalTRPG } from '../../hooks/useConversationalTRPG';
+import { useAIEntityManagement } from '../../hooks/useAIEntityManagement';
 
 interface SessionInterfaceProps {
   session: SessionState;
@@ -141,6 +142,14 @@ export const SessionInterface: React.FC<SessionInterfaceProps> = ({
     onSendMessage,
     onRollDice
   );
+
+  // AIエンティティ管理フック
+  const aiEntityManagement = useAIEntityManagement({
+    autoRefresh: session.status === 'active',
+    refreshInterval: 45000, // 45秒間隔で自動更新
+    enableCache: true,
+    debug: false // 開発環境でのデバッグログ
+  });
 
 
   // Default progress tracker when not provided
@@ -1022,6 +1031,7 @@ ${specificPrompt}
                       quests={quests}
                       milestones={milestones}
                       onEventGenerate={handleStartChatBasedEvent}
+                      aiEntityManagement={aiEntityManagement}
                     />
                     
                     <Divider sx={{ my: 2 }} />

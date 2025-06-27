@@ -3,7 +3,7 @@
  * JSON条件式の動的評価システム
  */
 
-import { AIConditionExpression } from '../../../../../packages/types/src/index';
+import { AIConditionExpression } from '@ai-agent-trpg/types';
 
 export interface GameState {
   player: {
@@ -73,7 +73,7 @@ export class ConditionEvaluator {
     context: EvaluationContext
   ): boolean {
     const { field, operator, value } = condition;
-    const fieldValue = this.getFieldValue(field, context);
+    const fieldValue = this.getFieldValue(field || '', context);
 
     switch (operator) {
       case 'equals':
@@ -291,7 +291,7 @@ export class ConditionEvaluator {
   /**
    * 確率評価
    */
-  private evaluateProbability(parameters: any, context: EvaluationContext): boolean {
+  private evaluateProbability(parameters: any, _context: EvaluationContext): boolean {
     const { chance } = parameters;
     return Math.random() < chance;
   }
@@ -299,7 +299,7 @@ export class ConditionEvaluator {
   /**
    * ダイスロール評価
    */
-  private evaluateDiceRoll(parameters: any, context: EvaluationContext): boolean {
+  private evaluateDiceRoll(parameters: any, _context: EvaluationContext): boolean {
     const { dice, sides, target, operator = 'greater_equal' } = parameters;
     let total = 0;
     

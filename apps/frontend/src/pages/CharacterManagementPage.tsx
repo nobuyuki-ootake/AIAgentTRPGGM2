@@ -18,7 +18,7 @@ import {
 import { useRecoilValue } from 'recoil';
 import { currentCampaignAtom } from '@/store/atoms';
 import { characterAPI } from '@/api';
-import { Character, isTRPGCharacter, isNPCCharacter, isEnemyCharacter } from '@ai-agent-trpg/types';
+import { Character /*, isTRPGCharacter, isNPCCharacter, isEnemyCharacter */ } from '@ai-agent-trpg/types';
 import { CharacterCard } from '@/components/trpg-session/CharacterCard';
 import { LoadingScreen } from '@/components/common/LoadingScreen';
 
@@ -64,9 +64,12 @@ const CharacterManagementPage: React.FC = () => {
     return <Navigate to={`/campaign/${id}/setup`} replace />;
   }
 
-  const pcCharacters = characters.filter(isTRPGCharacter);
-  const npcCharacters = characters.filter(isNPCCharacter);
-  const enemyCharacters = characters.filter(isEnemyCharacter);
+  // const pcCharacters = characters.filter(isTRPGCharacter);
+  const pcCharacters = characters.filter(char => char.characterType === 'PC');
+  // const npcCharacters = characters.filter(isNPCCharacter);
+  const npcCharacters = characters.filter(char => char.characterType === 'NPC');
+  // const enemyCharacters = characters.filter(isEnemyCharacter);
+  const enemyCharacters = characters.filter(char => char.characterType === 'Enemy');
 
   const tabData = [
     { label: 'すべて', icon: <GroupRounded />, characters: characters },

@@ -11,6 +11,7 @@
     "build": "turbo run build",
     "build:frontend": "turbo run build --filter=frontend",
     "build:proxy": "turbo run build --filter=proxy-server",
+    "build:typescript": "cd packages/types && pnpm build",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "test": "turbo run test",

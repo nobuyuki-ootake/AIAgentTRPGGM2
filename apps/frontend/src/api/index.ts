@@ -14,6 +14,7 @@ export { interactiveEventsAPI } from './interactiveEvents';
 export { locationEntityMappingAPI } from './locationEntityMapping';
 export { playerExperienceAPI } from './playerExperience';
 export { entityPoolAPI } from './entityPool';
+export { aiEntityManagementAPI } from './aiEntityManagement';
 
 // Re-export types for convenience
 export type {

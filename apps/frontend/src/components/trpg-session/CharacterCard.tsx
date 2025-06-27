@@ -18,7 +18,7 @@ import {
   LocalHospitalRounded,
   EditRounded,
 } from '@mui/icons-material';
-import { Character, isTRPGCharacter, isNPCCharacter, isEnemyCharacter } from '@ai-agent-trpg/types';
+import { Character /*, isTRPGCharacter, isNPCCharacter, isEnemyCharacter */ } from '@ai-agent-trpg/types';
 
 interface CharacterCardProps {
   character: Character;
@@ -45,16 +45,22 @@ export const CharacterCard: React.FC<CharacterCardProps> = ({
     : 0;
 
   const getTypeColor = () => {
-    if (isTRPGCharacter(character)) return 'primary';
-    if (isNPCCharacter(character)) return 'success';
-    if (isEnemyCharacter(character)) return 'error';
+    // if (isTRPGCharacter(character)) return 'primary';
+    if (character.characterType === 'PC') return 'primary';
+    // if (isNPCCharacter(character)) return 'success';
+    if (character.characterType === 'NPC') return 'success';
+    // if (isEnemyCharacter(character)) return 'error';
+    if (character.characterType === 'Enemy') return 'error';
     return 'default';
   };
 
   const getTypeLabel = () => {
-    if (isTRPGCharacter(character)) return 'PC';
-    if (isNPCCharacter(character)) return 'NPC';
-    if (isEnemyCharacter(character)) return 'Enemy';
+    // if (isTRPGCharacter(character)) return 'PC';
+    if (character.characterType === 'PC') return 'PC';
+    // if (isNPCCharacter(character)) return 'NPC';
+    if (character.characterType === 'NPC') return 'NPC';
+    // if (isEnemyCharacter(character)) return 'Enemy';
+    if (character.characterType === 'Enemy') return 'Enemy';
     return 'Unknown';
   };
 

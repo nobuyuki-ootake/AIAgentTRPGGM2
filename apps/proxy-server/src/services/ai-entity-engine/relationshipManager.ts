@@ -7,7 +7,7 @@ import {
   EntityRelationshipGraph, 
   EntityRelationship, 
   ID
-} from '../../../../../packages/types/src/index';
+} from '@ai-agent-trpg/types';
 
 export interface RelationshipAnalysis {
   entityId: ID;

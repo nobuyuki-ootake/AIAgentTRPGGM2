@@ -8,9 +8,8 @@ import {
   AIQueryFilter,
   AIGameContext,
   EntityRelationshipGraph,
-  AIEntityProcessor,
   ID
-} from '../../../../../packages/types/src/index';
+} from '@ai-agent-trpg/types';
 
 import { ConditionEvaluator, conditionEvaluator, GameState, EvaluationContext } from './conditionEvaluator';
 import { AIQueryProcessor, aiQueryProcessor, EntitySearchResult, AIQueryOptions } from './aiQueryProcessor';

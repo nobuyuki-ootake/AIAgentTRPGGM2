@@ -5,12 +5,14 @@
 
 import { 
   AIQueryFilter, 
-  AIEntityProcessor, 
   EntityRelationshipGraph,
   AIGameContext,
   ID 
-} from '../../../../../packages/types/src/index';
+} from '@ai-agent-trpg/types';
 import { conditionEvaluator, GameState, EvaluationContext } from './conditionEvaluator';
+
+// GameStateExtended を削除し、AIGameContext を直接使用
+// AIGameContext との型整合性のため、GameState を AIGameContext から変換する関数を使用
 
 export interface EntitySearchResult<T = any> {
   entities: T[];
@@ -51,10 +53,10 @@ export class AIQueryProcessor {
     const startTime = Date.now();
     
     try {
-      let entities = await this.getEntitiesByType(filter.entityTypes);
+      let entities = await this.getEntitiesByType(filter.entityTypes || []);
       
       // 基本フィルタリング
-      entities = await this.applyBasicFilters(entities, filter, gameContext);
+      entities = await this.applyBasicFilters(entities, filter);
       
       // 条件式評価
       entities = await this.applyConditionFilters(entities, filter, gameContext);
@@ -122,8 +124,7 @@ export class AIQueryProcessor {
    */
   private async applyBasicFilters(
     entities: any[],
-    filter: AIQueryFilter,
-    gameContext: AIGameContext
+    filter: AIQueryFilter
   ): Promise<any[]> {
     let filtered = entities;
 
@@ -148,7 +149,7 @@ export class AIQueryProcessor {
 
     // 時間制約フィルタ
     if (filter.timeConstraints) {
-      filtered = await this.applyTimeConstraints(filtered, filter.timeConstraints, gameContext);
+      filtered = await this.applyTimeConstraints(filtered, filter.timeConstraints);
     }
 
     return filtered;
@@ -201,13 +202,13 @@ export class AIQueryProcessor {
     filter: AIQueryFilter,
     gameContext: AIGameContext
   ): Promise<any[]> {
-    if (!filter.contextFactors || filter.contextFactors.length === 0) {
+    if (!filter.contextFactors || Object.keys(filter.contextFactors).length === 0) {
       return entities;
     }
 
     return entities.filter(entity => {
-      for (const factor of filter.contextFactors!) {
-        if (!this.evaluateContextFactor(entity, factor, gameContext)) {
+      for (const [factorKey] of Object.entries(filter.contextFactors!)) {
+        if (!this.evaluateContextFactor(entity, factorKey, gameContext)) {
           return false;
         }
       }
@@ -327,11 +328,8 @@ export class AIQueryProcessor {
    */
   private async applyTimeConstraints(
     entities: any[],
-    timeConstraints: any,
-    gameContext: AIGameContext
-  ): Promise<any[]> {
-    const currentTime = gameContext.currentState.time || Date.now();
-    
+    timeConstraints: any
+  ): Promise<any[]> {    
     return entities.filter(entity => {
       if (timeConstraints.before && entity.availableUntil) {
         if (new Date(entity.availableUntil).getTime() > timeConstraints.before) {
@@ -377,7 +375,8 @@ export class AIQueryProcessor {
   private isStoryAppropriate(entity: any, gameContext: AIGameContext): boolean {
     if (!entity.storyRequirements) return true;
     
-    const currentPhase = gameContext.currentState.story?.phase;
+    // AIGameContextからセッションの状態を取得
+    const currentPhase = gameContext.sessionMode || 'exploration';
     const requiredPhase = entity.storyRequirements.phase;
     
     return !requiredPhase || currentPhase === requiredPhase;
@@ -412,7 +411,8 @@ export class AIQueryProcessor {
    */
   private isDramaticTiming(entity: any, gameContext: AIGameContext): boolean {
     // 簡略化：最近のイベントとの間隔をチェック
-    const lastEventTime = gameContext.eventHistory?.[0]?.timestamp;
+    const lastEvent = gameContext.recentHistory?.events?.[0];
+    const lastEventTime = lastEvent?.actualStartTime || lastEvent?.scheduledDate;
     if (!lastEventTime) return true;
 
     const timeSinceLastEvent = Date.now() - new Date(lastEventTime).getTime();
@@ -430,11 +430,11 @@ export class AIQueryProcessor {
     const player = gameContext.currentState.player;
     if (!player) return false;
 
-    // HP/MPチェック
-    if (entity.resourceRequirements.hp && player.hp < entity.resourceRequirements.hp) {
+    // HP/MPチェック (statsオブジェクトから取得)
+    if (entity.resourceRequirements.hp && (player.stats?.hp || player.stats?.hitPoints || 100) < entity.resourceRequirements.hp) {
       return false;
     }
-    if (entity.resourceRequirements.mp && player.mp < entity.resourceRequirements.mp) {
+    if (entity.resourceRequirements.mp && (player.stats?.mp || player.stats?.magicPoints || 100) < entity.resourceRequirements.mp) {
       return false;
     }
 
@@ -447,7 +447,7 @@ export class AIQueryProcessor {
   private async getRelatedEntities(entityId: ID, gameContext: AIGameContext): Promise<any[]> {
     if (!this.relationshipGraph) return [];
 
-    const relationships = this.relationshipGraph.relationships[entityId] || [];
+    const relationships = this.relationshipGraph?.relationships?.[entityId] || [];
     const relatedEntities: any[] = [];
 
     for (const relationship of relationships) {
@@ -491,18 +491,40 @@ export class AIQueryProcessor {
         relationships: gameContext.currentState.player?.relationships || {}
       },
       world: {
-        time: gameContext.currentState.time || Date.now(),
-        weather: gameContext.currentState.weather || 'clear',
+        time: gameContext.currentState.time?.hour || 0,
+        weather: typeof gameContext.currentState.weather === 'string' 
+          ? gameContext.currentState.weather 
+          : gameContext.currentState.weather?.type || 'clear',
         events: gameContext.contextTags || [],
         flags: gameContext.currentState.flags || {}
       },
       session: {
-        turn: gameContext.sessionInfo?.turn || 1,
-        phase: gameContext.sessionInfo?.phase || 'exploration',
+        turn: gameContext.metadata?.turn || 1,
+        phase: this.mapSessionModeToPhase(gameContext.sessionMode) || 'exploration',
         location: gameContext.currentState.player?.location || '',
-        npcs_present: gameContext.sessionInfo?.npcsPresent || []
+        npcs_present: gameContext.npcsPresent || []
       }
     };
+  }
+
+  /**
+   * セッションモードをGameStateのphaseにマッピング
+   */
+  private mapSessionModeToPhase(sessionMode?: string): 'exploration' | 'combat' | 'social' | 'rest' {
+    switch (sessionMode) {
+      case 'combat':
+        return 'combat';
+      case 'social':
+      case 'conversation':
+        return 'social';
+      case 'rest':
+      case 'break':
+        return 'rest';
+      case 'exploration':
+      case 'planning':
+      default:
+        return 'exploration';
+    }
   }
 
   /**
@@ -526,7 +548,7 @@ export class AIQueryProcessor {
     const factors: string[] = [];
     if (gameContext.currentState.story) factors.push('story_context');
     if (gameContext.currentState.player) factors.push('player_context');
-    if (gameContext.sessionInfo) factors.push('session_context');
+    if (gameContext.sessionId) factors.push('session_context');
     if (gameContext.contextTags) factors.push('tag_context');
     return factors;
   }
@@ -534,7 +556,7 @@ export class AIQueryProcessor {
   /**
    * データベースからエンティティ取得（簡略化）
    */
-  private async fetchEntitiesFromDatabase(type: string): Promise<any[]> {
+  private async fetchEntitiesFromDatabase(_type: string): Promise<any[]> {
     // 実際の実装ではデータベースクエリを実行
     // ここでは簡略化してモックデータを返す
     return [];
@@ -543,7 +565,7 @@ export class AIQueryProcessor {
   /**
    * IDでエンティティ取得
    */
-  private async fetchEntityById(id: ID): Promise<any | null> {
+  private async fetchEntityById(_id: ID): Promise<any | null> {
     // 実際の実装ではデータベースクエリを実行
     return null;
   }

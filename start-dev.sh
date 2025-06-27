@@ -118,6 +118,11 @@ if [ ! -d "node_modules" ]; then
     pnpm install
 fi
 
+# TypeScript型定義ファイルのビルド
+log_info "TypeScript型定義ファイルをビルド中..."
+pnpm build:typescript
+log_success "TypeScript型定義ファイルのビルドが完了しました"
+
 if [ "$USE_DOCKER" = true ]; then
     log_info "Docker開発環境を起動中..."
     

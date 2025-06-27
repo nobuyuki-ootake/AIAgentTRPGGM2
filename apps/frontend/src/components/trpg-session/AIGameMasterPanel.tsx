@@ -34,6 +34,7 @@ import {
 } from '@mui/icons-material';
 import { ID, SessionState, Character, Quest, Milestone } from '@ai-agent-trpg/types';
 import { aiGameMasterAPI, SessionContext, GameOverview, TaskExplanation, ResultJudgment, ScenarioAdjustment } from '../../api/aiGameMaster';
+import { useAIEntityManagement } from '../../hooks/useAIEntityManagement';
 
 interface AIGameMasterPanelProps {
   sessionId: ID;
@@ -43,6 +44,7 @@ interface AIGameMasterPanelProps {
   quests: Quest[];
   milestones: Milestone[];
   onEventGenerate?: (eventType: string) => void;
+  aiEntityManagement?: ReturnType<typeof useAIEntityManagement>;
 }
 
 export const AIGameMasterPanel: React.FC<AIGameMasterPanelProps> = ({
@@ -53,6 +55,7 @@ export const AIGameMasterPanel: React.FC<AIGameMasterPanelProps> = ({
   quests,
   milestones,
   onEventGenerate,
+  aiEntityManagement,
 }) => {
   // State for AI data
   const [gameOverview, setGameOverview] = useState<GameOverview | null>(null);
@@ -621,6 +624,166 @@ export const AIGameMasterPanel: React.FC<AIGameMasterPanelProps> = ({
           </Stack>
         </AccordionDetails>
       </Accordion>
+
+      {/* エンティティ推奨システム */}
+      {aiEntityManagement && (
+        <Accordion sx={{ mb: 2 }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Box display="flex" alignItems="center" gap={1}>
+              <AIIcon fontSize="small" />
+              <Typography>AI エンティティ推奨</Typography>
+              {aiEntityManagement.isLoading && (
+                <CircularProgress size={16} sx={{ ml: 1 }} />
+              )}
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Stack spacing={2}>
+              {/* エンティティ推奨状態表示 */}
+              {aiEntityManagement.gameContext ? (
+                <Alert severity="success" sx={{ mb: 2 }}>
+                  AIエンティティシステムが有効です - リアルタイム推奨が利用可能
+                </Alert>
+              ) : (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  ゲームコンテキストの準備中...
+                </Alert>
+              )}
+
+              {/* セッション推奨エンティティ */}
+              {aiEntityManagement.sessionRecommendations.immediate && (
+                <Box>
+                  <Typography variant="subtitle2" color="primary" gutterBottom>
+                    💡 即座に使用可能なエンティティ
+                  </Typography>
+                  <Stack spacing={1} sx={{ mb: 2 }}>
+                    {aiEntityManagement.sessionRecommendations.immediate.recommendations.slice(0, 3).map((rec, index) => (
+                      <Card key={index} variant="outlined" sx={{ p: 1.5 }}>
+                        <Box display="flex" justifyContent="space-between" alignItems="flex-start">
+                          <Box flex={1}>
+                            <Typography variant="body2" fontWeight="bold">
+                              {rec.entityType.toUpperCase()}: {rec.entityId}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                              {rec.reasoning}
+                            </Typography>
+                          </Box>
+                          <Box sx={{ ml: 1, textAlign: 'center' }}>
+                            <Chip 
+                              label={`${Math.round(rec.relevanceScore * 100)}%`}
+                              size="small"
+                              color={rec.relevanceScore > 0.8 ? 'success' : rec.relevanceScore > 0.6 ? 'warning' : 'default'}
+                            />
+                            <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
+                              {rec.suggestedTiming === 'immediate' ? '今すぐ' : 
+                               rec.suggestedTiming === 'short_term' ? '近日中' : '将来'}
+                            </Typography>
+                          </Box>
+                        </Box>
+                        
+                        {/* インパクト指標 */}
+                        <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
+                          <Chip label={`ストーリー: ${Math.round(rec.expectedImpact.story * 100)}%`} size="small" variant="outlined" />
+                          <Chip label={`キャラクター: ${Math.round(rec.expectedImpact.character * 100)}%`} size="small" variant="outlined" />
+                          <Chip label={`ゲームプレイ: ${Math.round(rec.expectedImpact.gameplay * 100)}%`} size="small" variant="outlined" />
+                        </Box>
+                      </Card>
+                    ))}
+                  </Stack>
+                </Box>
+              )}
+
+              {/* 利用可能エンティティ概要 */}
+              {aiEntityManagement.availableEntities && (
+                <Box>
+                  <Typography variant="subtitle2" color="primary" gutterBottom>
+                    📋 現在利用可能なエンティティ
+                  </Typography>
+                  <Box sx={{ bgcolor: 'background.paper', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+                    <Typography variant="caption" display="block">
+                      • 総エンティティ数: {aiEntityManagement.availableEntities.entities.length}
+                    </Typography>
+                    <Typography variant="caption" display="block">
+                      • 利用可能: {aiEntityManagement.availableEntities.entities.filter(e => e.availability).length}
+                    </Typography>
+                    <Typography variant="caption" display="block">
+                      • 最高関連度: {Math.round((Math.max(...aiEntityManagement.availableEntities.entities.map(e => e.relevanceScore)) || 0) * 100)}%
+                    </Typography>
+                    <Typography variant="caption" display="block">
+                      • 最終更新: {aiEntityManagement.lastUpdated.entities?.toLocaleTimeString() || '未取得'}
+                    </Typography>
+                  </Box>
+                </Box>
+              )}
+
+              {/* エンジン統計 */}
+              {aiEntityManagement.engineStats && (
+                <Box>
+                  <Typography variant="subtitle2" color="primary" gutterBottom>
+                    ⚙️ AIエンティティエンジン統計
+                  </Typography>
+                  <Box sx={{ bgcolor: 'background.paper', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+                    <Typography variant="caption" display="block">
+                      • エンティティ総数: {aiEntityManagement.engineStats.totalEntities}
+                    </Typography>
+                    <Typography variant="caption" display="block">
+                      • 関係性数: {aiEntityManagement.engineStats.totalRelationships}
+                    </Typography>
+                    <Typography variant="caption" display="block">
+                      • キャッシュヒット率: {Math.round(aiEntityManagement.engineStats.cacheHitRate * 100)}%
+                    </Typography>
+                    <Typography variant="caption" display="block">
+                      • 処理時間: {aiEntityManagement.engineStats.lastProcessingTime}ms
+                    </Typography>
+                  </Box>
+                </Box>
+              )}
+
+              {/* 手動操作 */}
+              <Box>
+                <Typography variant="subtitle2" color="primary" gutterBottom>
+                  🔧 手動操作
+                </Typography>
+                <Stack direction="row" spacing={1}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => aiEntityManagement.refresh()}
+                    disabled={aiEntityManagement.isLoading}
+                    startIcon={<RefreshIcon />}
+                  >
+                    更新
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => aiEntityManagement.clearCache()}
+                    disabled={aiEntityManagement.isLoading}
+                  >
+                    キャッシュクリア
+                  </Button>
+                </Stack>
+              </Box>
+
+              {/* エラー表示 */}
+              {aiEntityManagement.hasErrors && (
+                <Alert severity="error">
+                  AIエンティティ管理でエラーが発生しています。
+                  <br />
+                  エンティティ: {aiEntityManagement.errors.entities}
+                  <br />
+                  推奨: {aiEntityManagement.errors.recommendations}
+                </Alert>
+              )}
+
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                💡 このシステムは現在のセッション状況を分析し、最適なエンティティ（アイテム、クエスト、イベント、NPC、敵）を
+                自動推奨します。推奨内容はリアルタイムで更新され、ストーリー進行を支援します。
+              </Typography>
+            </Stack>
+          </AccordionDetails>
+        </Accordion>
+      )}
 
       {/* 最近の結果判定 */}
       {recentJudgments.length > 0 && (
