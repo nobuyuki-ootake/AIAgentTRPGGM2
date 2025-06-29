@@ -77,39 +77,16 @@ class CharacterService {
       characterClass: characterData.characterClass || 'Fighter',
       level: characterData.level || 1,
       experience: characterData.experience || 0,
+      playerId: characterData.playerId,
       baseStats: characterData.baseStats || DEFAULT_BASE_STATS,
       derivedStats: characterData.derivedStats || DEFAULT_DERIVED_STATS,
       skills: characterData.skills || [],
       feats: characterData.feats || [],
-      equipment: characterData.equipment || {
-        weapon: null,
-        armor: null,
-        shield: null,
-        accessories: [],
-        inventory: [],
-        totalWeight: 0,
-        carryingCapacity: 100,
-      },
+      equipment: characterData.equipment || [],
       statusEffects: characterData.statusEffects || [],
-      appearance: characterData.appearance || {
-        height: '5\'8"',
-        weight: '150 lbs',
-        eyeColor: 'Brown',
-        hairColor: 'Brown',
-        skinColor: 'Medium',
-        distinguishingFeatures: '',
-      },
-      background: characterData.background || {
-        backstory: '',
-        personality: '',
-        ideals: '',
-        bonds: '',
-        flaws: '',
-        languages: ['Common'],
-        proficiencies: [],
-      },
+      appearance: characterData.appearance || 'Average height and build with brown hair and eyes',
       currentLocationId: characterData.currentLocationId,
-      locationHistory: characterData.locationHistory || [],
+      campaignId: characterData.campaignId,
       createdAt: now,
       updatedAt: now,
     };
@@ -118,9 +95,12 @@ class CharacterService {
 
     switch (characterData.characterType) {
       case 'PC':
-        character = {
+        const pcCharacter: TRPGCharacter = {
           ...baseCharacter,
           characterType: 'PC' as const,
+          playerId: baseCharacter.playerId,
+          race: baseCharacter.race || 'Human',
+          background: typeof characterData.background === 'string' ? characterData.background : 'Adventurer',
           growth: {
             levelUpHistory: [],
             nextLevelExp: 1000,
@@ -135,6 +115,7 @@ class CharacterService {
           playerNotes: '',
           gmNotes: '',
         };
+        character = pcCharacter;
         break;
 
       case 'NPC':
@@ -177,16 +158,6 @@ class CharacterService {
                 thank_you: ['ありがとう'],
               },
               relationships: {},
-            },
-            storyRole: {
-              questInvolvement: [],
-              plotHooks: [],
-              secrets: [],
-              information: [],
-            },
-            memory: {
-              interactions: [],
-              relationshipChanges: [],
             },
           },
         };
@@ -384,6 +355,14 @@ class CharacterService {
     // PCの場合、成長履歴を更新
     if (character.characterType === 'PC') {
       const pcCharacter = character as TRPGCharacter;
+      if (!pcCharacter.growth) {
+        pcCharacter.growth = {
+          levelUpHistory: [],
+          nextLevelExp: 1000,
+          unspentSkillPoints: 0,
+          unspentFeatPoints: 0,
+        };
+      }
       pcCharacter.growth.levelUpHistory.push({
         level: newLevel,
         date: new Date().toISOString(),
@@ -430,9 +409,9 @@ class CharacterService {
       appearance: JSON.parse(row.appearance),
       background: JSON.parse(row.background),
       currentLocationId: row.current_location_id,
-      locationHistory: JSON.parse(row.location_history || '[]'),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
+      campaignId: row.campaign_id,
     };
 
     const characterData = JSON.parse(row.character_data);
@@ -442,6 +421,7 @@ class CharacterService {
         return {
           ...baseCharacter,
           characterType: 'PC',
+          campaignId: row.campaign_id,
           ...characterData,
         } as TRPGCharacter;
 
@@ -449,6 +429,7 @@ class CharacterService {
         return {
           ...baseCharacter,
           characterType: 'NPC',
+          campaignId: row.campaign_id,
           npcData: characterData,
         } as NPCCharacter;
 
@@ -456,6 +437,7 @@ class CharacterService {
         return {
           ...baseCharacter,
           characterType: 'Enemy',
+          campaignId: row.campaign_id,
           enemyData: characterData,
         } as EnemyCharacter;
 

@@ -1,5 +1,5 @@
 import { Database } from 'better-sqlite3';
-import { ID, SessionState, Character, Quest, Milestone, SessionDurationConfig } from '@ai-agent-trpg/types';
+import { ID, SessionStatus, Character, Quest, Milestone, SessionDurationConfig, TRPGSession } from '@ai-agent-trpg/types';
 import { getDatabase } from '../database/database';
 import { getAIService } from './aiService';
 import { getSessionService } from './sessionService';
@@ -157,7 +157,7 @@ export interface ScenarioAdjustment {
 }
 
 export interface SessionContext {
-  currentSession: SessionState;
+  currentSession: TRPGSession;
   characters: Character[];
   activeQuests: Quest[];
   completedMilestones: Milestone[];
@@ -1666,7 +1666,7 @@ JSONのみを出力してください。`;
         generatedAt: new Date().toISOString(),
         aiProvider: aiSettings.provider,
         context: {
-          currentSession: {} as SessionState,
+          currentSession: {} as TRPGSession,
           characters,
           activeQuests: [],
           completedMilestones: [],

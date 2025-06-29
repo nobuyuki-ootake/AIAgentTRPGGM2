@@ -1,14 +1,58 @@
 import { v4 as uuidv4 } from 'uuid';
-import { SessionState, TRPGCharacter } from '@ai-agent-trpg/types';
+import { SessionStatus, ChatMessage, DiceRoll, TRPGCharacter, TRPGSession, ID, DateTime } from '@ai-agent-trpg/types';
+
+// 内部で使用するセッション型（データベース用）
+interface SessionState {
+  id: ID;
+  campaignId: ID;
+  sessionNumber: number;
+  status: SessionStatus;
+  mode: string;
+  participants: ID[];
+  gamemaster: ID;
+  startTime?: DateTime;
+  endTime?: DateTime;
+  breaks: any[];
+  currentEvent?: any;
+  eventQueue: any[];
+  completedEvents: ID[];
+  combat?: any;
+  chatLog: ChatMessage[];
+  diceRolls: DiceRoll[];
+  notes: string;
+  createdAt: DateTime;
+  updatedAt: DateTime;
+}
+
+// SessionStateをTRPGSessionに変換する関数
+function convertToTRPGSession(sessionState: SessionState): TRPGSession {
+  return {
+    id: sessionState.id,
+    campaignId: sessionState.campaignId,
+    name: `Session ${sessionState.sessionNumber}`,
+    description: sessionState.notes || '',
+    status: sessionState.status,
+    mode: sessionState.mode as any,
+    scheduledStartTime: sessionState.startTime || sessionState.createdAt,
+    actualStartTime: sessionState.startTime,
+    actualEndTime: sessionState.endTime,
+    estimatedDuration: 120, // デフォルト2時間
+    players: sessionState.participants || [],
+    characterIds: [], // TODO: 実際のキャラクターIDを取得
+    gameMasterId: sessionState.gamemaster,
+    notes: sessionState.notes,
+    sessionNumber: sessionState.sessionNumber,
+    isRecordingEnabled: false,
+    currentEventId: sessionState.currentEvent?.id,
+    completedEvents: sessionState.completedEvents,
+    sessionLog: []
+  };
+}
 import { getDatabase, withTransaction } from '../database/database';
 import { DatabaseError, ValidationError } from '../middleware/errorHandler';
 import { logger } from '../utils/logger';
 import { getCharacterService } from './characterService';
 import { Server as SocketIOServer } from 'socket.io';
-
-// Use types from SessionState.chatLog and SessionState.diceRolls
-type ChatMessage = SessionState['chatLog'][0];
-type DiceRoll = SessionState['diceRolls'][0];
 
 class SessionService {
   private io: SocketIOServer | null = null;
@@ -21,6 +65,49 @@ class SessionService {
     logger.info('SessionService initialized with Socket.IO server');
   }
 
+  // Public API - TRPGSessionを返す
+  async getSessionsByCampaignPublic(campaignId: string): Promise<TRPGSession[]> {
+    const sessions = await this.getSessionsByCampaign(campaignId);
+    return sessions.map(convertToTRPGSession);
+  }
+
+  async getSessionByIdPublic(id: string): Promise<TRPGSession | null> {
+    const session = await this.getSessionById(id);
+    return session ? convertToTRPGSession(session) : null;
+  }
+
+  async createSessionPublic(sessionData: Partial<SessionState>): Promise<TRPGSession> {
+    const session = await this.createSession(sessionData);
+    return convertToTRPGSession(session);
+  }
+
+  async updateSessionStatusPublic(id: string, status: string): Promise<TRPGSession | null> {
+    const session = await this.updateSessionStatus(id, status);
+    return session ? convertToTRPGSession(session) : null;
+  }
+
+  async startCombatPublic(sessionId: string, participants: Array<{ characterId: string; initiative: number }>): Promise<TRPGSession | null> {
+    const session = await this.startCombat(sessionId, participants);
+    return session ? convertToTRPGSession(session) : null;
+  }
+
+  async endCombatPublic(sessionId: string): Promise<TRPGSession | null> {
+    const session = await this.endCombat(sessionId);
+    return session ? convertToTRPGSession(session) : null;
+  }
+
+  // Public wrapper methods for TRPGSession
+  async addChatMessage(id: string, messageData: any): Promise<TRPGSession | null> {
+    const session = await this.addChatMessageInternal(id, messageData);
+    return session ? convertToTRPGSession(session) : null;
+  }
+
+  async addDiceRoll(id: string, diceData: any): Promise<TRPGSession | null> {
+    const session = await this.addDiceRollInternal(id, diceData);
+    return session ? convertToTRPGSession(session) : null;
+  }
+
+  // 内部API - SessionStateを返す
   async getSessionsByCampaign(campaignId: string): Promise<SessionState[]> {
     const db = getDatabase();
     
@@ -84,11 +171,7 @@ class SessionService {
       combat: sessionData.combat,
       chatLog: [],
       diceRolls: [],
-      notes: {
-        gm: '',
-        players: {},
-        shared: '',
-      },
+      notes: '',
       createdAt: now,
       updatedAt: now,
     };
@@ -181,7 +264,7 @@ class SessionService {
     }
   }
 
-  async addChatMessage(sessionId: string, messageData: Partial<ChatMessage>): Promise<SessionState | null> {
+  async addChatMessageInternal(sessionId: string, messageData: Partial<ChatMessage>): Promise<SessionState | null> {
     if (!messageData.speaker || !messageData.message) {
       throw new ValidationError('Speaker and message are required');
     }
@@ -210,7 +293,7 @@ class SessionService {
     });
   }
 
-  async addDiceRoll(sessionId: string, diceData: Partial<DiceRoll>): Promise<SessionState | null> {
+  async addDiceRollInternal(sessionId: string, diceData: Partial<DiceRoll>): Promise<SessionState | null> {
     if (!diceData.roller || !diceData.dice) {
       throw new ValidationError('Roller and dice are required');
     }

@@ -1,6 +1,6 @@
-import Database from 'better-sqlite3';
-import path from 'path';
-import fs from 'fs';
+import * as Database from 'better-sqlite3';
+import * as path from 'path';
+import * as fs from 'fs';
 import { logger } from '../utils/logger';
 import { DatabaseError } from '../middleware/errorHandler';
 
@@ -18,7 +18,7 @@ export async function initializeDatabase(): Promise<void> {
     }
 
     // データベース接続
-    db = new Database(DB_PATH);
+    db = new (Database as any)(DB_PATH);
     logger.info(`Connected to database: ${DB_PATH}`);
 
     // WALモードを有効化（Litestreamとの互換性）

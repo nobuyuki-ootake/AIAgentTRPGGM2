@@ -223,7 +223,7 @@ class QuestService {
       }
 
       // 前提条件をチェック
-      if (quest.prerequisites.length > 0) {
+      if (quest.prerequisites && quest.prerequisites.length > 0) {
         const prereqsMet = quest.prerequisites.every(prereqId => 
           completedQuestIds.includes(prereqId)
         );
@@ -255,10 +255,10 @@ class QuestService {
     // 実際の報酬処理はキャラクターサービスと連携して実装
     // ここでは報酬情報のみ返す
     return {
-      experience: quest.rewards.experience,
-      currency: quest.rewards.currency,
-      items: quest.rewards.items,
-      reputation: quest.rewards.reputation,
+      experience: quest.rewards?.experience || 0,
+      currency: quest.rewards?.currency || 0,
+      items: quest.rewards?.items || [],
+      reputation: quest.rewards?.reputation || {},
     };
   }
 

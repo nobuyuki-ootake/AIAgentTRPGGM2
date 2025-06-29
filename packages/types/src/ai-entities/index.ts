@@ -5,6 +5,47 @@
 import { ID, DateTime } from '../base';
 
 // ==========================================
+// AIプロバイダー関連型定義
+// ==========================================
+
+export type AIProviderType = 'openai' | 'anthropic' | 'google' | 'custom';
+
+export interface AIProvider {
+  id: string;
+  name: string;
+  type: AIProviderType;
+  model: string;
+  maxTokens: number;
+  temperature: number;
+  available: boolean;
+  endpoint?: string; // customプロバイダー用
+}
+
+export interface AIRequest {
+  id?: ID;
+  provider: AIProviderType;
+  model: string;
+  messages?: AIMessage[];
+  prompt?: string; // 互換性のため
+  response?: string; // 互換性のため
+  temperature?: number;
+  maxTokens?: number;
+  systemPrompt?: string;
+  context?: Record<string, any>;
+  metadata?: Record<string, any>;
+  tokensUsed?: number; // 互換性のため
+  processingTime?: number; // 互換性のため
+  category?: string; // 互換性のため
+  timestamp?: DateTime; // 互換性のため
+}
+
+export interface AIMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+  timestamp?: DateTime;
+}
+
+// ==========================================
 // AI条件式システム
 // ==========================================
 
@@ -146,6 +187,7 @@ export interface EntityRelationship {
   id: ID;
   sourceEntityId: ID;
   targetEntityId: ID;
+  targetId?: ID; // 互換性のため
   relationType: 'dependency' | 'conflict' | 'synergy' | 'sequence' | 'alternative' | 'prerequisite';
   strength: number; // 0-1
   bidirectional: boolean;
@@ -255,4 +297,171 @@ export interface AIIntegratedEntityBase {
       timestamp: DateTime;
     }>;
   };
+}
+
+// ==========================================
+// 追加の型定義（エラー修正用）
+// ==========================================
+
+export interface GameTheme {
+  id: ID;
+  name: string;
+  description: string;
+  tags: string[];
+  atmosphere: string;
+  commonElements: string[];
+}
+
+export interface AIDecisionContext {
+  characterId: ID;
+  currentLocation: string;
+  availableActions: string[];
+  recentEvents: string[];
+  partyMembers: ID[];
+  timeOfDay: string;
+  urgency: number;
+}
+
+export interface MilestoneGenerationRequest {
+  campaignId: ID;
+  theme: string;
+  difficulty: number;
+  previousMilestones: string[];
+  playerPreferences: string[];
+}
+
+export interface MilestoneGenerationResponse {
+  milestones: AIMilestone[];
+  narrative: string;
+  estimatedDuration: number;
+}
+
+export interface ScenarioGenerationRequest {
+  campaignId: ID;
+  milestoneIds: ID[];
+  theme: string;
+  playerCount: number;
+}
+
+export interface ScenarioGenerationResponse {
+  scenario: SessionScenario;
+  entities: EntityPool[];
+  timeline: string[];
+}
+
+export interface SessionScenario {
+  id: ID;
+  name: string;
+  description: string;
+  theme: string;
+  estimatedDuration: number;
+  milestones: AIMilestone[];
+  startingConditions: Record<string, any>;
+}
+
+export interface AIMilestone {
+  id: ID;
+  name: string;
+  description: string;
+  type: 'story' | 'combat' | 'exploration' | 'social';
+  conditions: AIConditionExpression[];
+  rewards: Record<string, any>;
+  difficulty: number;
+  estimatedTime: number;
+}
+
+export interface EntityPool {
+  id: ID;
+  name: string;
+  description: string;
+  entities: any[];
+  conditions: AIConditionExpression[];
+  priority: number;
+}
+
+export interface EntityPoolCollection {
+  id: ID;
+  campaignId: ID;
+  pools: EntityPool[];
+  metadata: Record<string, any>;
+}
+
+export interface ConversationStartRequest {
+  characterId: ID;
+  npcId: ID;
+  context: string;
+  location: string;
+}
+
+export interface InteractiveEventSession {
+  id: ID;
+  sessionId: ID;
+  eventType: string;
+  status: string;
+  playerChoices: any[];
+  aiResponses: any[];
+  currentStep: string;
+}
+
+export interface AITaskDefinition {
+  id: ID;
+  name: string;
+  description: string;
+  difficulty: number;
+  requiredSkills: string[];
+  timeLimit?: number;
+}
+
+export interface TaskEvaluation {
+  taskId: ID;
+  playerId: ID;
+  success: boolean;
+  score: number;
+  feedback: string;
+  improvements: string[];
+}
+
+export interface DynamicDifficultySettings {
+  baseLevel: number;
+  adaptationRate: number;
+  minLevel: number;
+  maxLevel: number;
+  playerSkillMetrics: Record<string, number>;
+}
+
+export interface EventResult {
+  success: boolean;
+  score: number;
+  description: string;
+  consequences: string[];
+  nextSteps: string[];
+}
+
+export interface RetryOption {
+  id: ID;
+  description: string;
+  cost: string;
+  difficultyModifier: number;
+}
+
+export interface EventChoice {
+  id: ID;
+  text: string;
+  requirements: string[];
+  consequences: EventResult;
+}
+
+export interface LocationEntityMapping {
+  locationId: ID;
+  entityId: ID;
+  entityType: string;
+  conditions: AIConditionExpression[];
+  spawnProbability: number;
+}
+
+export interface ThemeAdaptation {
+  themeId: ID;
+  adaptations: Record<string, any>;
+  playerFeedback: string[];
+  effectivenessScore: number;
 }

@@ -20,7 +20,7 @@ export * from './ai-entities';
 // 互換性のための型エイリアス
 export type { Character, TRPGCharacter, NPCCharacter, EnemyCharacter } from './character';
 export type { TRPGCampaign, Quest, Location } from './location';
-export type { TRPGSession, TRPGEvent, Timeline } from './session';
+export type { TRPGSession, TRPGEvent, Timeline, SessionState, ChatMessage, DiceRoll } from './session';
 export type { AIGameContext, AIConditionExpression } from './ai-entities';
 
 // 明示的定数エクスポート（Vite開発環境対応）

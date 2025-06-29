@@ -163,6 +163,142 @@ export const SESSION_DURATION_PRESETS: Record<SessionDurationType, SessionDurati
 };
 
 // ==========================================
+// 時間管理型定義
+// ==========================================
+
+export interface DayPeriod {
+  id: string;
+  name: string;
+  description: string;
+  order: number;
+  icon?: string; // 互換性のため
+  actionsAllowed?: number; // 互換性のため
+  isRestPeriod?: boolean; // 互換性のため
+}
+
+export interface GameDay {
+  id: ID;
+  sessionId?: ID; // optional for compatibility
+  campaignId?: ID; // 互換性のため
+  dayNumber: number;
+  currentPeriod: string;
+  currentDayPeriod?: string | number; // 互換性のため
+  completedPeriods: string[];
+  events: DayEvent[];
+  isComplete: boolean;
+  actionsRemaining?: number;
+  completedAt?: DateTime;
+  createdAt: DateTime;
+  updatedAt?: DateTime;
+}
+
+export interface DayEvent {
+  id: ID;
+  dayId?: ID; // 互換性のため
+  period?: string;
+  dayPeriod?: string | number; // 互換性のため
+  description: string;
+  completed?: boolean; // 互換性のため
+  timestamp: DateTime;
+  type?: string;
+  characterId?: ID;
+  metadata?: Record<string, any>;
+}
+
+export interface TurnState {
+  id?: ID; // 互換性のため
+  sessionId: ID;
+  campaignId?: ID; // 互換性のため
+  currentDay: number;
+  maxDays?: number; // 互換性のため
+  currentPeriod: string;
+  currentPhase?: string; // 互換性のため
+  activeCharacterId?: ID; // 互換性のため
+  turnOrder?: any[]; // 互換性のため
+  phaseStartTime?: DateTime; // 互換性のため
+  totalDays: number;
+  actionsPerDay: number;
+  dayPeriods: DayPeriod[];
+  settings?: TurnSettings; // 互換性のため
+  createdAt: DateTime;
+  updatedAt: DateTime;
+}
+
+export interface TurnSettings {
+  actionsPerDay: number;
+  dayPeriods: DayPeriod[];
+  totalDays: number;
+  maxActionsPerDay?: number; // 互換性のため
+  maxDays?: number; // 互換性のため
+  autoProgressDay?: boolean;
+  restRequired?: boolean;
+  simultaneousTurns?: boolean;
+}
+
+// ==========================================
+// セッション状態管理（データベース用）
+// ==========================================
+
+export interface SessionState {
+  id: ID;
+  campaignId: ID;
+  sessionNumber: number;
+  status: SessionStatus;
+  mode: SessionMode;
+  participants: string[]; // 参加者ID配列
+  gamemaster: string;
+  startTime?: DateTime;
+  endTime?: DateTime;
+  breaks: Array<{ start: DateTime; end: DateTime }>;
+  currentEvent?: string;
+  eventQueue: string[];
+  completedEvents: string[];
+  combat?: {
+    active: boolean;
+    currentTurn: number;
+    turnOrder: Array<{
+      characterId: string;
+      initiative: number;
+      hasActed: boolean;
+    }>;
+    round: number;
+    conditions: any[];
+  };
+  chatLog: ChatMessage[];
+  diceRolls: DiceRoll[];
+  notes: {
+    gm: string;
+    players: Record<string, string>;
+    shared: string;
+  };
+  createdAt: DateTime;
+  updatedAt: DateTime;
+}
+
+export interface ChatMessage {
+  id: ID;
+  timestamp: DateTime;
+  speaker: string;
+  characterId?: ID;
+  message: string;
+  type: 'ic' | 'ooc' | 'system' | 'private';
+  recipients?: string[];
+}
+
+export interface DiceRoll {
+  id: ID;
+  timestamp: DateTime;
+  roller: string;
+  characterId?: ID;
+  dice: string;
+  results: number[];
+  total: number;
+  purpose: string;
+  target?: number;
+  success?: boolean;
+}
+
+// ==========================================
 // タイムライン
 // ==========================================
 

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { SessionState, APIResponse, SessionDurationConfig } from '@ai-agent-trpg/types';
+import { APIResponse, SessionDurationConfig, TRPGSession } from '@ai-agent-trpg/types';
 import { getSessionService } from '../services/sessionService';
 import { getTimeManagementService } from '../services/timeManagementService';
 import { asyncHandler, ValidationError, NotFoundError } from '../middleware/errorHandler';
@@ -14,9 +14,9 @@ sessionRouter.get('/', asyncHandler(async (req, res) => {
     throw new ValidationError('Campaign ID is required');
   }
 
-  const sessions = await getSessionService().getSessionsByCampaign(campaignId);
+  const sessions = await getSessionService().getSessionsByCampaignPublic(campaignId);
 
-  const response: APIResponse<SessionState[]> = {
+  const response: APIResponse<TRPGSession[]> = {
     success: true,
     data: sessions,
     timestamp: new Date().toISOString(),
@@ -29,13 +29,13 @@ sessionRouter.get('/', asyncHandler(async (req, res) => {
 sessionRouter.get('/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  const session = await getSessionService().getSessionById(id);
+  const session = await getSessionService().getSessionByIdPublic(id);
 
   if (!session) {
     throw new NotFoundError('Session', id);
   }
 
-  const response: APIResponse<SessionState> = {
+  const response: APIResponse<TRPGSession> = {
     success: true,
     data: session,
     timestamp: new Date().toISOString(),
@@ -52,9 +52,9 @@ sessionRouter.post('/', asyncHandler(async (req, res) => {
     throw new ValidationError('Campaign ID is required');
   }
 
-  const session = await getSessionService().createSession(sessionData);
+  const session = await getSessionService().createSessionPublic(sessionData);
 
-  const response: APIResponse<SessionState> = {
+  const response: APIResponse<TRPGSession> = {
     success: true,
     data: session,
     timestamp: new Date().toISOString(),
@@ -72,7 +72,7 @@ sessionRouter.patch('/:id/status', asyncHandler(async (req, res) => {
     throw new ValidationError('Status is required');
   }
 
-  const session = await getSessionService().updateSessionStatus(id, status);
+  const session = await getSessionService().updateSessionStatusPublic(id, status);
 
   if (!session) {
     throw new NotFoundError('Session', id);
@@ -93,7 +93,7 @@ sessionRouter.patch('/:id/status', asyncHandler(async (req, res) => {
     }
   }
 
-  const response: APIResponse<SessionState> = {
+  const response: APIResponse<TRPGSession> = {
     success: true,
     data: session,
     timestamp: new Date().toISOString(),
@@ -117,7 +117,7 @@ sessionRouter.post('/:id/chat', asyncHandler(async (req, res) => {
     throw new NotFoundError('Session', id);
   }
 
-  const response: APIResponse<SessionState> = {
+  const response: APIResponse<TRPGSession> = {
     success: true,
     data: session,
     timestamp: new Date().toISOString(),
@@ -143,7 +143,7 @@ sessionRouter.post('/:id/dice-roll', asyncHandler(async (req, res) => {
 
   // Note: Companion reaction system temporarily disabled
 
-  const response: APIResponse<SessionState> = {
+  const response: APIResponse<TRPGSession> = {
     success: true,
     data: session,
     timestamp: new Date().toISOString(),
@@ -161,13 +161,13 @@ sessionRouter.post('/:id/combat/start', asyncHandler(async (req, res) => {
     throw new ValidationError('Participants array is required');
   }
 
-  const session = await getSessionService().startCombat(id, participants);
+  const session = await getSessionService().startCombatPublic(id, participants);
 
   if (!session) {
     throw new NotFoundError('Session', id);
   }
 
-  const response: APIResponse<SessionState> = {
+  const response: APIResponse<TRPGSession> = {
     success: true,
     data: session,
     timestamp: new Date().toISOString(),
@@ -180,13 +180,13 @@ sessionRouter.post('/:id/combat/start', asyncHandler(async (req, res) => {
 sessionRouter.post('/:id/combat/end', asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  const session = await getSessionService().endCombat(id);
+  const session = await getSessionService().endCombatPublic(id);
 
   if (!session) {
     throw new NotFoundError('Session', id);
   }
 
-  const response: APIResponse<SessionState> = {
+  const response: APIResponse<TRPGSession> = {
     success: true,
     data: session,
     timestamp: new Date().toISOString(),
@@ -206,7 +206,7 @@ sessionRouter.post('/:id/time-management/action', asyncHandler(async (req, res) 
     throw new ValidationError('Character ID and description are required');
   }
 
-  const session = await getSessionService().getSessionById(id);
+  const session = await getSessionService().getSessionByIdPublic(id);
   if (!session) {
     throw new NotFoundError('Session', id);
   }
@@ -231,7 +231,7 @@ sessionRouter.post('/:id/time-management/action', asyncHandler(async (req, res) 
 sessionRouter.post('/:id/time-management/advance', asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  const session = await getSessionService().getSessionById(id);
+  const session = await getSessionService().getSessionByIdPublic(id);
   if (!session) {
     throw new NotFoundError('Session', id);
   }
@@ -251,7 +251,7 @@ sessionRouter.post('/:id/time-management/advance', asyncHandler(async (req, res)
 sessionRouter.post('/:id/time-management/rest', asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  const session = await getSessionService().getSessionById(id);
+  const session = await getSessionService().getSessionByIdPublic(id);
   if (!session) {
     throw new NotFoundError('Session', id);
   }
@@ -271,7 +271,7 @@ sessionRouter.post('/:id/time-management/rest', asyncHandler(async (req, res) =>
 sessionRouter.get('/:id/time-management/turn-state', asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  const session = await getSessionService().getSessionById(id);
+  const session = await getSessionService().getSessionByIdPublic(id);
   if (!session) {
     throw new NotFoundError('Session', id);
   }
@@ -291,7 +291,7 @@ sessionRouter.get('/:id/time-management/turn-state', asyncHandler(async (req, re
 sessionRouter.get('/:id/time-management/current-day', asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  const session = await getSessionService().getSessionById(id);
+  const session = await getSessionService().getSessionByIdPublic(id);
   if (!session) {
     throw new NotFoundError('Session', id);
   }

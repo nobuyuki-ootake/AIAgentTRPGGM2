@@ -16,9 +16,15 @@ export interface Character {
   description: string;
   characterType: CharacterType;
   
+  // 基本情報
+  age?: number;
+  race?: string;
+  characterClass?: string;
+  background?: string;
+  playerId?: ID; // PC用のプレイヤーID
+  
   // ビジュアル
   appearance: string;
-  imageUrl?: string;
   
   // ゲーム統計
   baseStats: BaseStats;
@@ -32,22 +38,30 @@ export interface Character {
   equipment: Equipment[];
   statusEffects: StatusEffect[];
   
+  // 位置情報
+  currentLocationId?: ID;
+  
+  // AI制御データ（キャラクタータイプ別）
+  npcData?: {
+    importance: string;
+    disposition: string;
+    occupation: string;
+    location: string;
+    aiPersonality: any;
+  };
+  enemyData?: {
+    category: string;
+    challengeRating: number;
+    encounterLevel: number;
+    combat: any;
+    encounter: any;
+    loot: any;
+  };
+  
   // メタデータ
   createdAt: DateTime;
   updatedAt: DateTime;
   campaignId: ID;
-  
-  // プレイ記録
-  sessionHistory: ID[]; // 参加したセッションのID
-  noteHistory: CharacterNote[];
-}
-
-export interface CharacterNote {
-  id: ID;
-  timestamp: DateTime;
-  content: string;
-  type: 'general' | 'combat' | 'roleplay' | 'progression';
-  authorId: ID; // 記録者（GM or プレイヤー）
 }
 
 // ==========================================
@@ -56,23 +70,42 @@ export interface CharacterNote {
 
 export interface TRPGCharacter extends Character {
   characterType: 'PC';
-  playerId: ID;
+  playerId?: ID;
   
   // キャラクター作成情報
   race: string;
-  class: string;
+  class?: string; // characterClassとの互換性
   background: string;
-  alignment: string;
+  alignment?: string;
   
   // プレイヤー固有情報
-  personalityTraits: string[];
-  ideals: string[];
-  bonds: string[];
-  flaws: string[];
+  personalityTraits?: string[];
+  ideals?: string[];
+  bonds?: string[];
+  flaws?: string[];
+  
+  // 成長システム
+  growth?: {
+    levelUpHistory: any[];
+    nextLevelExp: number;
+    unspentSkillPoints: number;
+    unspentFeatPoints: number;
+  };
+  
+  // パーティ情報
+  party?: {
+    role: string;
+    position: string;
+    leadership: boolean;
+  };
+  
+  // ノート機能
+  playerNotes?: string;
+  gmNotes?: string;
   
   // 進行状況
-  questIds: ID[]; // 参加中・完了したクエスト
-  relationshipIds: ID[]; // 他キャラクターとの関係
+  questIds?: ID[]; // 参加中・完了したクエスト
+  relationshipIds?: ID[]; // 他キャラクターとの関係
 }
 
 // ==========================================
@@ -84,20 +117,29 @@ export interface NPCCharacter extends Character {
   
   // NPC固有設定
   faction?: string;
-  location: string; // 通常いる場所
-  occupation: string;
+  location?: string; // 通常いる場所
+  occupation?: string;
   
   // 役割と行動
-  role: 'questGiver' | 'merchant' | 'ally' | 'neutral' | 'informant' | 'guard';
-  disposition: 'friendly' | 'neutral' | 'hostile' | 'unknown';
+  role?: 'questGiver' | 'merchant' | 'ally' | 'neutral' | 'informant' | 'guard';
+  disposition?: 'friendly' | 'neutral' | 'hostile' | 'unknown';
   
   // 対話システム
-  dialoguePatterns: DialoguePattern[];
-  questIds: ID[]; // 提供するクエスト
+  dialoguePatterns?: DialoguePattern[];
+  questIds?: ID[]; // 提供するクエスト
   
   // AI行動設定
-  behaviorTags: string[];
-  scheduleEntries: NPCScheduleEntry[];
+  behaviorTags?: string[];
+  scheduleEntries?: NPCScheduleEntry[];
+  
+  // AI制御データ
+  npcData?: {
+    importance: string;
+    disposition: string;
+    occupation: string;
+    location: string;
+    aiPersonality: any;
+  };
 }
 
 export interface DialoguePattern {
@@ -122,22 +164,32 @@ export interface EnemyCharacter extends Character {
   characterType: 'Enemy';
   
   // 戦闘設定
-  challengeRating: number;
-  armorClass: number;
-  hitDice: string; // "3d8+6" など
+  challengeRating?: number;
+  armorClass?: number;
+  hitDice?: string; // "3d8+6" など
   
   // 特殊能力
-  specialAbilities: SpecialAbility[];
+  specialAbilities?: SpecialAbility[];
   legendaryActions?: LegendaryAction[];
   
   // 戦術AI
-  combatTactics: string[];
-  combatRole: 'tank' | 'damage' | 'support' | 'controller' | 'striker';
+  combatTactics?: string[];
+  combatRole?: 'tank' | 'damage' | 'support' | 'controller' | 'striker';
   
   // 遭遇設定
-  environment: string[]; // 出現する環境
-  groupSize: { min: number; max: number };
-  treasureIds: ID[]; // ドロップする宝物
+  environment?: string[]; // 出現する環境
+  groupSize?: { min: number; max: number };
+  treasureIds?: ID[]; // ドロップする宝物
+  
+  // AI戦闘制御データ
+  enemyData?: {
+    category: string;
+    challengeRating: number;
+    encounterLevel: number;
+    combat: any;
+    encounter: any;
+    loot: any;
+  };
 }
 
 export interface SpecialAbility {
