@@ -267,8 +267,8 @@ export class AIEntityEngine {
       entityTypes: [entityType],
       aiCriteria: {
         recommendationScore: { min: 0.5, max: 1.0 },
-        playerAlignment: { min: 0.3 },
-        urgency: 'medium'
+        playerAlignment: { min: 0.3 }
+        // urgency は型定義に存在しないため削除
       }
     };
 
@@ -320,32 +320,31 @@ export class AIEntityEngine {
    * ゲームコンテキストをGameStateに変換
    */
   private convertToGameState(gameContext: AIGameContext): GameState {
-    // Get the first character as the "player" for backward compatibility
-    const characters = Object.values(gameContext.currentState.characters);
-    const playerCharacter = characters[0]; // Assume first character is the player
+    // Use player directly from currentState
+    const playerCharacter = gameContext.currentState.player;
     
     return {
       player: {
         id: playerCharacter?.id || '',
         name: playerCharacter?.name || '',
         level: playerCharacter?.level || 1,
-        location: gameContext.currentState.location?.id || '',
-        stats: playerCharacter?.baseStats || {},
-        items: playerCharacter?.equipment?.inventory?.map(item => item.id) || [],
-        status: playerCharacter?.statusEffects?.map(effect => effect.name) || [],
+        location: playerCharacter?.location || '',
+        stats: playerCharacter?.stats || {},
+        items: playerCharacter?.items || [],
+        status: playerCharacter?.status || [],
         relationships: {} // TODO: Implement relationship extraction
       },
       world: {
-        time: typeof gameContext.currentState.time === 'object' ? Date.now() : gameContext.currentState.time,
+        time: gameContext.currentState.time ? Date.now() : Date.now(), // TODO: proper time conversion
         weather: typeof gameContext.currentState.weather === 'string' ? gameContext.currentState.weather : 'clear',
-        events: gameContext.recentHistory?.events?.map(event => event.id) || [],
-        flags: {} // TODO: Extract flags from context
+        events: gameContext.recentHistory?.events?.map(event => event.type) || [],
+        flags: gameContext.currentState.flags || {}
       },
       session: {
         turn: 1, // TODO: Extract turn from context
         phase: 'exploration',
-        location: gameContext.currentState.location?.id || '',
-        npcs_present: Object.keys(gameContext.currentState.characters).slice(1) // Assume non-first characters are NPCs
+        location: playerCharacter?.location || '',
+        npcs_present: gameContext.npcsPresent || [] // Use npcsPresent from context
       }
     };
   }

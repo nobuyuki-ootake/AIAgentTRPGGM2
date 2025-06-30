@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import { AIProvider } from '@ai-agent-trpg/types';
+import { AIProvider, TriggerChainRequest, TriggerChainResponse } from '@ai-agent-trpg/types';
 
 export interface TestKeyRequest {
   provider: string;
@@ -193,6 +193,11 @@ class AIAgentAPI {
   // AI使用統計（開発・デバッグ用）
   async getStats(): Promise<any> {
     return apiClient.get<any>('/ai-agent/stats');
+  }
+
+  // イベント駆動AIチェーン - Phase 0の中核システム
+  async triggerChain(request: TriggerChainRequest): Promise<TriggerChainResponse> {
+    return apiClient.post<TriggerChainResponse>('/ai-agent/trigger-chain', request);
   }
 }
 

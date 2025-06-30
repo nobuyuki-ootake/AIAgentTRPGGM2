@@ -8,6 +8,8 @@ import rateLimit from 'express-rate-limit';
 import { router } from './routes';
 import { mastraAgentRouter } from './routes/mastraAgent';
 import aiEntityManagementRouter from './routes/aiEntityManagement';
+import { gmTacticsControlRouter } from './routes/gmTacticsControl';
+import { characterAISettingsRouter } from './routes/characterAISettings';
 import { errorHandler } from './middleware/errorHandler';
 import { notFoundHandler } from './middleware/notFoundHandler';
 import { logger } from './utils/logger';
@@ -121,6 +123,12 @@ export function createApp(): express.Application {
   
   // AI Entity Management routes
   app.use('/api/ai-entity', aiEntityManagementRouter);
+  
+  // GM Tactics Control routes
+  app.use('/api/gm-tactics', gmTacticsControlRouter);
+  
+  // Character AI Settings routes
+  app.use('/api/character-ai', characterAISettingsRouter);
 
   // Error handling middleware (must be last)
   app.use(notFoundHandler);

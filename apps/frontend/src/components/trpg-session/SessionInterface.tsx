@@ -35,7 +35,7 @@ import {
   AccessTime as TimeIcon,
   RefreshRounded,
 } from '@mui/icons-material';
-import { SessionState, Character, Quest, Milestone, ProgressTracker, LevelUpEvent, CampaignCompletion, ID, SessionDurationConfig } from '@ai-agent-trpg/types';
+import { SessionState, Character, Quest, Milestone, ProgressTracker, LevelUpEvent, CampaignCompletion, ID, SessionDurationConfig, PartyLocation, MovementProposal } from '@ai-agent-trpg/types';
 import { CharacterCard } from './CharacterCard';
 import { ChatPanel } from './ChatPanel';
 import { DiceRollUI } from './DiceRollUI';
@@ -53,6 +53,7 @@ import { SessionDurationDialog } from './SessionDurationDialog';
 import { TimeManagementPanel } from './TimeManagementPanel';
 import { timeManagementAPI } from '../../api/timeManagement';
 import { aiGameMasterAPI, SessionInitializationResult } from '../../api/aiGameMaster';
+import { aiAgentAPI } from '../../api/aiAgent';
 import { useConversationalTRPG } from '../../hooks/useConversationalTRPG';
 import { useAIEntityManagement } from '../../hooks/useAIEntityManagement';
 
@@ -125,6 +126,17 @@ export const SessionInterface: React.FC<SessionInterfaceProps> = ({
   const [turnState, setTurnState] = useState<any>(null);
   const [currentDay, setCurrentDay] = useState<any>(null);
   const [, setTimeManagementLoading] = useState(false);
+
+  // パーティ位置管理状態
+  const [partyLocation, setPartyLocation] = useState<PartyLocation>({
+    sessionId: session.id,
+    currentLocationId: session.partyLocation?.currentLocationId || 'starting_location',
+    memberIds: characters.map(c => c.id),
+    lastMoveTime: new Date().toISOString(),
+    movementHistory: []
+  });
+  const [currentMovementProposal, setCurrentMovementProposal] = useState<MovementProposal | null>(null);
+  const [isAIControlActive, setIsAIControlActive] = useState(false);
 
   // 会話ベースのTRPGフック
   const {
@@ -280,6 +292,7 @@ export const SessionInterface: React.FC<SessionInterfaceProps> = ({
     onSendMessage(`場所で「${actionType}」を実行しました`, 'ic');
   };
 
+  // Phase 0: シームレスAI GM制御システム
   const handleStartSessionClick = () => {
     setDurationDialogOpen(true);
   };
@@ -294,7 +307,11 @@ export const SessionInterface: React.FC<SessionInterfaceProps> = ({
       // 1. セッションを開始
       onStartSession(config);
       
-      // 2. AI自動生成を実行
+      // 2. パーティ位置を初期化
+      const initialLocation = partyLocation.currentLocationId;
+      console.log(`📍 パーティ初期位置: ${initialLocation}`);
+      
+      // 3. AI自動生成を実行（従来システム）
       console.log('🎯 セッション自動初期化開始...');
       const result = await aiGameMasterAPI.initializeSessionWithDefaults(
         session.id,
@@ -305,14 +322,54 @@ export const SessionInterface: React.FC<SessionInterfaceProps> = ({
       );
       
       setInitializationResult(result);
-      setInitializationError(null);
       console.log('✅ セッション自動初期化完了:', result);
       
-      // 3. 成功メッセージを表示
+      // 4. AI GM制御を自動開始
+      setIsAIControlActive(true);
+      console.log('🤖 AI GM制御システム開始...');
+      
+      // 5. 初回AIチェーンを実行
+      const initialMessage = `セッションが開始されました。冒険を始めましょう！`;
+      const chainResponse = await aiAgentAPI.triggerChain({
+        sessionId: session.id,
+        playerMessage: initialMessage,
+        currentLocationId: initialLocation,
+        participants: characters.map(c => c.id),
+        triggerType: 'session_start',
+        context: {
+          sessionConfig: config,
+          partySize: characters.length,
+          timeOfDay: 'morning',
+          weather: 'clear',
+          dangerLevel: 20
+        }
+      });
+      
+      console.log('🎭 AI GM初回応答:', chainResponse);
+      
+      // 6. 成功メッセージを表示
       onSendMessage(
         `🎮 セッションの初期化が完了しました！${result.milestones.length}個のマイルストーンと豊富なエンティティプールが生成されました。`,
         'ooc'
       );
+      
+      // 7. AI GMからの初回メッセージを表示
+      onSendMessage(chainResponse.gmResponse.message, 'ic');
+      
+      // 8. 利用可能なエンティティ情報を表示
+      if (chainResponse.contextAnalysis.availableEntities.length > 0) {
+        const entitySummary = chainResponse.contextAnalysis.availableEntities
+          .slice(0, 3)
+          .map(e => e.name)
+          .join('、');
+        onSendMessage(
+          `🏰 現在の場所で利用可能: ${entitySummary}など`,
+          'ooc'
+        );
+      }
+      
+      setInitializationError(null);
+      console.log('✅ シームレスAI GM制御システム開始完了');
       
     } catch (error) {
       console.error('❌ セッション初期化エラー:', error);
@@ -324,6 +381,9 @@ export const SessionInterface: React.FC<SessionInterfaceProps> = ({
         `❌ セッション初期化に失敗しました: ${errorMessage}`,
         'ooc'
       );
+      
+      // AI制御も無効化
+      setIsAIControlActive(false);
     } finally {
       setIsInitializing(false);
     }
@@ -648,6 +708,23 @@ ${specificPrompt}
                 size="small"
                 variant="outlined"
               />
+              {/* パーティ位置表示 */}
+              <Chip
+                icon={<LocationIcon />}
+                label={`パーティ位置: ${partyLocation.currentLocationId}`}
+                size="small"
+                variant="outlined"
+                color="primary"
+              />
+              {/* AI GM制御状態表示 */}
+              {isAIControlActive && (
+                <Chip
+                  icon={<AssistantRounded />}
+                  label="AI GM制御中"
+                  size="small"
+                  color="secondary"
+                />
+              )}
               <Typography variant="caption" color="text.secondary">
                 GM: {session.gamemaster}
               </Typography>
@@ -660,8 +737,9 @@ ${specificPrompt}
                 variant="contained"
                 startIcon={<PlayArrowRounded />}
                 onClick={handleStartSessionClick}
+                disabled={isInitializing}
               >
-                セッション開始
+                {isInitializing ? 'ゲーム開始中...' : 'ゲーム開始 (AI GM制御)'}
               </Button>
             )}
             {session.status === 'active' && (

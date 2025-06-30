@@ -239,6 +239,45 @@ export interface TurnSettings {
 // セッション状態管理（データベース用）
 // ==========================================
 
+// ==========================================
+// パーティ位置管理
+// ==========================================
+
+export interface PartyLocation {
+  sessionId: string;
+  currentLocationId: string;
+  memberIds: string[];
+  lastMoveTime: DateTime;
+  moveInitiator?: string; // 移動提案者
+  movementHistory: Array<{
+    fromLocationId: string;
+    toLocationId: string;
+    timestamp: DateTime;
+    initiator: string;
+    reason?: string;
+  }>;
+}
+
+export interface MovementProposal {
+  id: string;
+  proposerId: string;
+  destinationId: string;
+  destinationName: string;
+  reason: string;
+  estimatedTime: number;
+  dangerLevel: 'safe' | 'moderate' | 'dangerous';
+  requiredConsensus: boolean; // 危険な場所は合意必須
+  votes: Array<{
+    characterId: string;
+    decision: 'agree' | 'disagree' | 'abstain';
+    comment?: string;
+    timestamp: DateTime;
+  }>;
+  status: 'pending' | 'approved' | 'rejected' | 'expired';
+  createdAt: DateTime;
+  expiresAt: DateTime;
+}
+
 export interface SessionState {
   id: ID;
   campaignId: ID;
@@ -253,6 +292,19 @@ export interface SessionState {
   currentEvent?: string;
   eventQueue: string[];
   completedEvents: string[];
+  
+  // パーティ位置管理
+  partyLocation: PartyLocation;
+  currentMovementProposal?: MovementProposal;
+  
+  // 例外的分離行動
+  separatedMembers?: Array<{
+    characterId: string;
+    temporaryLocationId: string;
+    reunionPlan: string;
+    separationTime: DateTime;
+  }>;
+  
   combat?: {
     active: boolean;
     currentTurn: number;

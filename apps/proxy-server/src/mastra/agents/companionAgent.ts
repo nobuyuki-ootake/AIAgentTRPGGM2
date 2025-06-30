@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { Memory } from '@mastra/memory';
 import { LibSQLStore } from '@mastra/libsql';
 import { logger } from '../../utils/logger';
+import { CharacterAISettings } from '@ai-agent-trpg/types';
 
 /**
  * Companion Agent - マルチプレイTRPG対応コンパニオンシステム
@@ -318,6 +319,69 @@ export const companionAgent = new Agent({
   instructions: `
 あなたはTRPGのパーティメンバーとして行動するコンパニオンAIです。プレイヤーと対等な立場で冒険を共にし、真のマルチプレイ体験を提供してください。
 
+## 🎭 キャラクター設定システム
+
+現在のキャラクター設定: {{actionPriority}} / {{personality}} / {{communicationStyle}}
+
+### 行動優先制御
+- 行動優先: {{actionPriority}}
+
+#### Attack Focus (攻撃優先)
+- 敵への攻撃を積極的に選択
+- 戦闘で主導権を取る行動
+- 発話例: "こいつは僕がやる！"
+
+#### Healing Focus (回復優先)  
+- 仲間の回復・サポートを重視
+- 危険回避の提案が多い
+- 発話例: "みんな、無理しないで"
+
+#### Support Focus (補助行動優先)
+- 情報収集、調査、罠解除を重視
+- 戦術的優位性を追求
+- 発話例: "ちょっと待って、ここを調べてみよう"
+
+#### Balanced (バランス型)
+- 状況に応じて柔軟に判断
+- チーム全体のバランスを考慮
+- 発話例: "今の状況では、これが最適だと思います"
+
+### 性格による発話制御
+- 性格: {{personality}}
+
+#### Aggressive (積極的)
+- 自信満々で行動的
+- リスクを恐れない発言
+- 発話例: "やってやろうじゃないか！"
+
+#### Cautious (慎重)
+- 心配性で安全を重視
+- リスクを慎重に評価
+- 発話例: "もう少し慎重に考えませんか？"
+
+#### Calm (冷静)
+- 論理的で感情的にならない
+- 状況を客観視する発言
+- 発話例: "状況を整理しましょう"
+
+### コミュニケーションスタイル制御
+- スタイル: {{communicationStyle}}
+
+#### Direct (直接的)
+- はっきりとした表現
+- 遠回しせずストレート
+- 発話例: "それは危険だ。やめよう"
+
+#### Polite (丁寧)
+- 敬語や丁寧語を多用
+- 相手への配慮を重視
+- 発話例: "申し訳ございませんが、それは危険かもしれません"
+
+#### Casual (カジュアル)
+- 親しみやすい口調
+- 砕けた表現を使用
+- 発話例: "おいおい、それヤバくない？"
+
 ## 🎭 基本方針
 
 ### マルチプレイ体験の重視
@@ -590,5 +654,180 @@ export async function checkCompanionAgentHealth(): Promise<{
       status: 'unhealthy',
       details: `Companion Agent error: ${error instanceof Error ? error.message : 'Unknown error'}`
     };
+  }
+}
+
+/**
+ * キャラクター性格設定を動的に注入するCompanion Decision生成
+ */
+export async function makeCompanionDecisionWithPersonality(input: {
+  playerAction: string;
+  playerLocation: string;
+  sessionContext: {
+    timeOfDay: string;
+    weather: string;
+    dangerLevel: number;
+    partyMorale: number;
+  };
+  companionCharacter: CompanionCharacter;
+  personalitySettings?: CharacterAISettings;
+}): Promise<{
+  action: string;
+  actionType: 'cooperation' | 'complement' | 'independent';
+  reasoning: string;
+  expectedEffect: string;
+  companionMessage: string;
+  appliedPersonality: CharacterAISettings;
+}> {
+  try {
+    logger.info(`🤝 Companion making decision with personality for: ${input.playerAction}`);
+    
+    // デフォルト性格設定
+    const defaultPersonality: CharacterAISettings = {
+      actionPriority: 'balanced',
+      personality: 'calm',
+      communicationStyle: 'polite'
+    };
+    
+    const personality = input.personalitySettings || defaultPersonality;
+    
+    logger.info(`💭 Applied personality: ${personality.actionPriority}/${personality.personality}/${personality.communicationStyle}`);
+    
+    // 性格設定を含むプロンプト作成
+    const personalityInstructions = `
+現在のキャラクター性格設定:
+- 行動優先: ${personality.actionPriority}
+- 性格: ${personality.personality}
+- コミュニケーション: ${personality.communicationStyle}
+
+この設定に基づいて、キャラクターの行動選択と発話スタイルを制御してください。
+`;
+
+    // 性格設定を注入したinstructionsを使用してAgent作成
+    const personalizedCompanionAgent = new Agent({
+      name: "TRPG Companion Agent",
+      instructions: companionAgent.instructions.replace(
+        '{{actionPriority}}', personality.actionPriority
+      ).replace(
+        '{{personality}}', personality.personality
+      ).replace(
+        '{{communicationStyle}}', personality.communicationStyle
+      ),
+      model: google("gemini-2.0-flash-lite", {
+        safetySettings: [
+          {
+            category: "HARM_CATEGORY_HARASSMENT",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE"
+          }
+        ]
+      }),
+      tools: companionAgentTools,
+      memory: new Memory({
+        storage: new LibSQLStore({
+          url: "file:./mastra-trpg.db"
+        })
+      })
+    });
+
+    // プレイヤー行動分析（簡略版ロジック）
+    const playerAction = input.playerAction as any;
+    const { sessionContext } = input;
+    
+    let recommendedAction: "cooperation" | "complement" | "independent" = "cooperation";
+    let actionChoice = playerAction;
+    let reasoning = "";
+    let cooperationBonus = 0;
+    
+    // 性格に基づく行動傾向調整
+    switch (personality.actionPriority) {
+      case "attack_focus":
+        if (playerAction === "combat") {
+          recommendedAction = "cooperation";
+          cooperationBonus += 20;
+          reasoning += " 攻撃優先設定により、戦闘での協力を選択。";
+        }
+        break;
+      case "healing_focus":
+        if (sessionContext.dangerLevel > 50) {
+          recommendedAction = "complement";
+          reasoning += " 回復優先設定により、安全確保を重視。";
+        }
+        break;
+      case "support_focus":
+        if (playerAction === "exploration") {
+          recommendedAction = "complement";
+          reasoning += " 補助行動優先により、別角度からの支援を選択。";
+        }
+        break;
+      case "balanced":
+        recommendedAction = "cooperation";
+        reasoning += " バランス型設定により、協調行動を基本とする。";
+        break;
+    }
+
+    // 性格による判断修正
+    switch (personality.personality) {
+      case "aggressive":
+        if (recommendedAction === "cooperation") {
+          cooperationBonus += 15;
+        }
+        reasoning += " 積極的性格により、前向きな行動を選択。";
+        break;
+      case "cautious":
+        if (sessionContext.dangerLevel > 60) {
+          recommendedAction = "complement";
+          reasoning += " 慎重な性格により、リスク分散を重視。";
+        }
+        break;
+      case "calm":
+        reasoning += " 冷静な性格により、論理的判断を実施。";
+        break;
+    }
+
+    // コンパニオンエージェントによる最終決定
+    const response = await personalizedCompanionAgent.generate([
+      {
+        role: "user",
+        content: `
+${personalityInstructions}
+
+プレイヤー行動: "${input.playerAction}"
+場所: ${input.playerLocation}
+時間帯: ${input.sessionContext.timeOfDay}
+天候: ${input.sessionContext.weather}
+危険度: ${input.sessionContext.dangerLevel}
+パーティ士気: ${input.sessionContext.partyMorale}
+
+コンパニオンキャラクター:
+- クラス: ${input.companionCharacter.class}
+- 協力性: ${input.companionCharacter.personality.cooperation}
+- 慎重さ: ${input.companionCharacter.personality.caution}
+- 探索意欲: ${input.companionCharacter.personality.exploration}
+- リーダーシップ: ${input.companionCharacter.personality.leadership}
+
+性格設定に基づく行動分析:
+- 推奨行動タイプ: ${recommendedAction}
+- 行動理由: ${reasoning}
+- 協力ボーナス: ${cooperationBonus}
+
+上記の性格設定と情報を基に、このコンパニオンが取るべき行動と、設定されたコミュニケーションスタイルに基づいたプレイヤーへのメッセージを決定してください。
+        `
+      }
+    ]);
+    
+    logger.info(`✅ Companion decision with personality generated successfully`);
+    
+    return {
+      action: actionChoice,
+      actionType: recommendedAction,
+      reasoning: reasoning,
+      expectedEffect: `協力ボーナス: +${cooperationBonus}%, 性格設定適用済み`,
+      companionMessage: response.text,
+      appliedPersonality: personality
+    };
+    
+  } catch (error) {
+    logger.error('❌ Failed to make companion decision with personality:', error);
+    throw error;
   }
 }

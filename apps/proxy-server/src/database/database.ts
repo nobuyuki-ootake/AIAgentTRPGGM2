@@ -22,10 +22,12 @@ export async function initializeDatabase(): Promise<void> {
     logger.info(`Connected to database: ${DB_PATH}`);
 
     // WALモードを有効化（Litestreamとの互換性）
-    db.exec('PRAGMA journal_mode = WAL;');
-    db.exec('PRAGMA synchronous = NORMAL;');
-    db.exec('PRAGMA temp_store = memory;');
-    db.exec('PRAGMA mmap_size = 268435456;'); // 256MB
+    if (db) {
+      db.exec('PRAGMA journal_mode = WAL;');
+      db.exec('PRAGMA synchronous = NORMAL;');
+      db.exec('PRAGMA temp_store = memory;');
+      db.exec('PRAGMA mmap_size = 268435456;'); // 256MB
+    }
 
     // データベーススキーマの作成
     await createTables();
@@ -458,6 +460,17 @@ async function createTables(): Promise<void> {
       expires_at TEXT, -- 一時的配置の場合
       FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
       FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE
+    )`,
+
+    // AI戦術設定テーブル - AI Agent可視化・制御システム
+    `CREATE TABLE IF NOT EXISTS ai_tactics_settings (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      agent_type TEXT NOT NULL, -- 'gm' | 'character'
+      settings TEXT NOT NULL,   -- JSON format settings
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE CASCADE
     )`
   ];
 
@@ -504,6 +517,9 @@ async function createTables(): Promise<void> {
     'CREATE INDEX IF NOT EXISTS idx_location_entity_mappings_campaign ON location_entity_mappings(campaign_id)',
     'CREATE INDEX IF NOT EXISTS idx_location_entity_mappings_location ON location_entity_mappings(location_id)',
     'CREATE INDEX IF NOT EXISTS idx_location_entity_mappings_entity ON location_entity_mappings(entity_type, entity_id)',
+    // AI戦術設定テーブルのインデックス - AI Agent可視化・制御システム
+    'CREATE INDEX IF NOT EXISTS idx_ai_tactics_settings_session ON ai_tactics_settings(session_id)',
+    'CREATE INDEX IF NOT EXISTS idx_ai_tactics_settings_agent ON ai_tactics_settings(agent_type)',
     // 'CREATE INDEX IF NOT EXISTS idx_characters_location ON characters(current_location_id)',
     // 'CREATE INDEX IF NOT EXISTS idx_events_location ON events(location_id)',
     // 'CREATE INDEX IF NOT EXISTS idx_location_movements_character ON location_movements(character_id)',

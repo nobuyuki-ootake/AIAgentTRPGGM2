@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { Memory } from '@mastra/memory';
 import { LibSQLStore } from '@mastra/libsql';
 import { logger } from '../../utils/logger';
+import { EnemyTacticsLevel } from '@ai-agent-trpg/types';
 
 /**
  * Game Master Agent - TRPG物語体験の核心
@@ -142,6 +143,50 @@ export const gameMasterAgent = new Agent({
   instructions: `
 あなたは熟練のTRPGゲームマスターです。「物語を楽しむTRPG」として、プレイヤーが深い没入感と充実した物語体験を得られるよう支援してください。
 
+## 🎭 エネミー戦術制御システム
+
+現在の戦術設定: {{tacticsLevel}} / {{primaryFocus}} / {{teamwork}}
+
+### Basic Tactics (基本戦術)
+- 単純で直接的な攻撃行動
+- 個別行動中心、連携は最小限
+- 「ゴブリンは最も近い敵を攻撃する」
+- プレイヤーが有利に感じられる難易度
+
+### Strategic Tactics (戦術的思考)
+- 弱点を狙った効果的な攻撃
+- 状況を読んだ行動選択
+- 「ゴブリンは回復役のクレリックを優先的に狙う」
+- バランスの取れた挑戦的な戦闘
+
+### Cunning Tactics (狡猾戦術)
+- 罠、妨害、心理戦を駆使
+- 高度なチーム連携
+- 「ゴブリンAが気を引き、ゴブリンBが後方から奇襲」
+- 高度な戦術を要求する難易度
+
+## 🎯 行動方針制御
+
+### Damage Focus (ダメージ重視)
+- 敵の撃破を最優先
+- 高火力攻撃を選択
+- 「とにかく倒せ！」の精神
+
+### Control Focus (制御重視) 
+- 敵の行動制限を重視
+- 状態異常や妨害を多用
+- 「動きを封じてから攻撃」戦術
+
+### Survival Focus (生存重視)
+- 自軍の生存を最優先
+- 防御と回復を重視
+- 「生き延びることが勝利」戦術
+
+### チーム連携制御
+- Teamwork: {{teamwork}}
+- 有効時：エネミー間の協調行動
+- 無効時：個別判断による単独行動
+
 ## 🎭 基本方針
 
 ### 物語体験の最優先
@@ -220,7 +265,123 @@ export const gameMasterAgent = new Agent({
 });
 
 /**
- * Game Master Agentのレスポンス生成
+ * 戦術設定を動的に注入するGM Response生成
+ */
+export async function generateGMResponseWithTactics(input: {
+  playerMessage: string;
+  sessionId: string;
+  locationId?: string;
+  currentContext?: Record<string, any>;
+  tactics?: EnemyTacticsLevel;
+}): Promise<{
+  response: string;
+  suggestions?: string[];
+  systemInfo?: Record<string, any>;
+}> {
+  try {
+    logger.info(`🎭 GM generating response with tactics for: "${input.playerMessage}"`);
+    
+    // デフォルト戦術設定
+    const defaultTactics: EnemyTacticsLevel = {
+      tacticsLevel: 'strategic',
+      primaryFocus: 'damage',
+      teamwork: true
+    };
+    
+    const tactics = input.tactics || defaultTactics;
+    
+    logger.info(`🧠 Applied tactics: ${tactics.tacticsLevel}/${tactics.primaryFocus}/teamwork:${tactics.teamwork}`);
+    
+    // 戦術設定を含むプロンプト作成
+    const tacticsInstructions = `
+現在のエネミー戦術設定:
+- 戦術レベル: ${tactics.tacticsLevel}
+- 行動方針: ${tactics.primaryFocus}  
+- チーム連携: ${tactics.teamwork ? '有効' : '無効'}
+
+この設定に基づいて、エネミーの行動と戦闘シーンを制御してください。
+`;
+
+    // プレイヤー意図の分析（一時的にモック実装）
+    const intentAnalysis = {
+      intent: "exploration" as const,
+      confidence: 0.8,
+      suggestedResponse: "プレイヤーの探索行動をサポートし、興味深い発見の可能性を示唆",
+      requiredActions: ["check_exploration_status", "provide_exploration_guidance"]
+    };
+    
+    logger.info(`🧠 Player intent detected: ${intentAnalysis.intent} (confidence: ${intentAnalysis.confidence})`);
+    
+    // 戦術設定を注入したinstructionsを使用してAgent作成
+    const tacticalGameMasterAgent = new Agent({
+      name: "TRPG Game Master",
+      instructions: gameMasterAgent.instructions.replace(
+        '{{tacticsLevel}}', tactics.tacticsLevel
+      ).replace(
+        '{{primaryFocus}}', tactics.primaryFocus  
+      ).replace(
+        '{{teamwork}}', tactics.teamwork ? '有効' : '無効'
+      ),
+      model: google("gemini-2.0-flash-lite", {
+        safetySettings: [
+          {
+            category: "HARM_CATEGORY_HARASSMENT",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE"
+          }
+        ]
+      }),
+      tools: gameMasterTools,
+      memory: new Memory({
+        storage: new LibSQLStore({
+          url: "file:./mastra-trpg.db"
+        })
+      })
+    });
+    
+    // Game Master Agentによる応答生成
+    const response = await tacticalGameMasterAgent.generate([
+      {
+        role: "user",
+        content: `
+${tacticsInstructions}
+
+プレイヤーメッセージ: "${input.playerMessage}"
+
+分析結果:
+- 意図: ${intentAnalysis.intent}
+- 確信度: ${intentAnalysis.confidence}
+- 推奨応答方針: ${intentAnalysis.suggestedResponse}
+
+現在の状況:
+- セッションID: ${input.sessionId}
+- 場所ID: ${input.locationId || "未指定"}
+
+上記の戦術設定と情報を踏まえ、プレイヤーに魅力的で没入感の高いTRPG体験を提供する応答を生成してください。
+        `
+      }
+    ]);
+    
+    logger.info(`✅ GM response with tactics generated successfully`);
+    
+    return {
+      response: response.text,
+      suggestions: intentAnalysis.requiredActions,
+      systemInfo: {
+        intent: intentAnalysis.intent,
+        confidence: intentAnalysis.confidence,
+        appliedTactics: tactics,
+        processingTime: Date.now()
+      }
+    };
+    
+  } catch (error) {
+    logger.error('❌ Failed to generate GM response with tactics:', error);
+    throw error;
+  }
+}
+
+/**
+ * Game Master Agentのレスポンス生成（互換性のため既存関数を維持）
  */
 export async function generateGMResponse(input: {
   playerMessage: string;
