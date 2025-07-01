@@ -20,6 +20,18 @@ export * from './ai-entities';
 // AI戦術設定システム
 export * from './ai-tactics';
 
+// パーティ統一移動システム
+export * from './party-movement';
+
+// AI Agent監視・ログシステム
+export * from './ai-agent-monitoring';
+
+// 探索アクション・エンティティ発見システム
+export * from './exploration-actions';
+
+// マイルストーン進捗更新システム
+export * from './milestone-progress';
+
 // 互換性のための型エイリアス
 export type { Character, TRPGCharacter, NPCCharacter, EnemyCharacter } from './character';
 export type { TRPGCampaign, Quest, Location } from './location';
@@ -44,6 +56,25 @@ export type {
   TriggerChainRequest,
   TriggerChainResponse
 } from './ai-tactics';
+export type {
+  PartyMovementProposal,
+  MovementVote,
+  VotingSummary,
+  PartyMovementState,
+  CreateMovementProposalRequest,
+  CreateMovementProposalResponse,
+  CastMovementVoteRequest,
+  CastMovementVoteResponse,
+  ExecutePartyMovementRequest,
+  ExecutePartyMovementResponse,
+  ConsensusSettings,
+  PartyMovementSystem,
+  MovementProposalStatus,
+  VoteChoice,
+  GetPartyMovementStateResponse,
+  UpdateConsensusSettingsRequest,
+  UpdateConsensusSettingsResponse
+} from './party-movement';
 
 // 明示的定数エクスポート（Vite開発環境対応）
 export { 

@@ -471,6 +471,48 @@ async function createTables(): Promise<void> {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE CASCADE
+    )`,
+
+    // パーティ移動提案テーブル - パーティ統一移動システム
+    `CREATE TABLE IF NOT EXISTS party_movement_proposals (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      proposer_id TEXT NOT NULL,
+      target_location_id TEXT NOT NULL,
+      movement_method TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      estimated_time INTEGER NOT NULL,
+      estimated_cost TEXT NOT NULL, -- JSON
+      status TEXT NOT NULL, -- 'pending', 'voting', 'approved', 'rejected', 'executing', 'completed', 'failed'
+      created_at TEXT NOT NULL,
+      voting_deadline TEXT,
+      urgency TEXT NOT NULL, -- 'low', 'medium', 'high'
+      difficulty TEXT NOT NULL, -- 'easy', 'normal', 'hard', 'dangerous'
+      tags TEXT NOT NULL, -- JSON array
+      FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE CASCADE,
+      FOREIGN KEY (proposer_id) REFERENCES characters (id) ON DELETE CASCADE,
+      FOREIGN KEY (target_location_id) REFERENCES locations (id) ON DELETE CASCADE
+    )`,
+
+    // パーティ移動投票テーブル - パーティ統一移動システム
+    `CREATE TABLE IF NOT EXISTS party_movement_votes (
+      id TEXT PRIMARY KEY,
+      proposal_id TEXT NOT NULL,
+      voter_id TEXT NOT NULL,
+      choice TEXT NOT NULL, -- 'approve', 'reject', 'abstain'
+      reason TEXT,
+      timestamp TEXT NOT NULL,
+      FOREIGN KEY (proposal_id) REFERENCES party_movement_proposals (id) ON DELETE CASCADE,
+      FOREIGN KEY (voter_id) REFERENCES characters (id) ON DELETE CASCADE,
+      UNIQUE(proposal_id, voter_id)
+    )`,
+
+    // パーティ合意設定テーブル - パーティ統一移動システム
+    `CREATE TABLE IF NOT EXISTS party_consensus_settings (
+      session_id TEXT PRIMARY KEY,
+      settings TEXT NOT NULL, -- JSON
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE CASCADE
     )`
   ];
 
@@ -520,6 +562,12 @@ async function createTables(): Promise<void> {
     // AI戦術設定テーブルのインデックス - AI Agent可視化・制御システム
     'CREATE INDEX IF NOT EXISTS idx_ai_tactics_settings_session ON ai_tactics_settings(session_id)',
     'CREATE INDEX IF NOT EXISTS idx_ai_tactics_settings_agent ON ai_tactics_settings(agent_type)',
+    // パーティ移動システムのインデックス - パーティ統一移動システム
+    'CREATE INDEX IF NOT EXISTS idx_party_movement_proposals_session ON party_movement_proposals(session_id)',
+    'CREATE INDEX IF NOT EXISTS idx_party_movement_proposals_status ON party_movement_proposals(status)',
+    'CREATE INDEX IF NOT EXISTS idx_party_movement_proposals_proposer ON party_movement_proposals(proposer_id)',
+    'CREATE INDEX IF NOT EXISTS idx_party_movement_votes_proposal ON party_movement_votes(proposal_id)',
+    'CREATE INDEX IF NOT EXISTS idx_party_movement_votes_voter ON party_movement_votes(voter_id)',
     // 'CREATE INDEX IF NOT EXISTS idx_characters_location ON characters(current_location_id)',
     // 'CREATE INDEX IF NOT EXISTS idx_events_location ON events(location_id)',
     // 'CREATE INDEX IF NOT EXISTS idx_location_movements_character ON location_movements(character_id)',

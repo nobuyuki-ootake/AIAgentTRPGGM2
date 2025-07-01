@@ -10,6 +10,11 @@ import { mastraAgentRouter } from './routes/mastraAgent';
 import aiEntityManagementRouter from './routes/aiEntityManagement';
 import { gmTacticsControlRouter } from './routes/gmTacticsControl';
 import { characterAISettingsRouter } from './routes/characterAISettings';
+import partyMovementRouter from './routes/partyMovement';
+import aiAgentMonitoringRouter from './routes/aiAgentMonitoring';
+import explorationActionsRouter from './routes/explorationActions';
+import mixedVotingRouter from './routes/mixedVoting';
+import locationEntitiesRouter from './routes/locationEntities';
 import { errorHandler } from './middleware/errorHandler';
 import { notFoundHandler } from './middleware/notFoundHandler';
 import { logger } from './utils/logger';
@@ -126,6 +131,21 @@ export function createApp(): express.Application {
   
   // GM Tactics Control routes
   app.use('/api/gm-tactics', gmTacticsControlRouter);
+  
+  // Party Movement routes
+  app.use('/api/party-movement', partyMovementRouter);
+  
+  // AI Agent Monitoring routes
+  app.use('/api/ai-monitoring', aiAgentMonitoringRouter);
+  
+  // Exploration Actions routes
+  app.use('/api/exploration', explorationActionsRouter);
+  
+  // Mixed Voting routes
+  app.use('/api/mixed-voting', mixedVotingRouter);
+  
+  // Location Entities routes
+  app.use('/api/location-entities', locationEntitiesRouter);
   
   // Character AI Settings routes
   app.use('/api/character-ai', characterAISettingsRouter);

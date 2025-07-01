@@ -23,6 +23,8 @@ import {
   Collapse,
   IconButton,
   Tooltip,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import {
   Settings as SettingsIcon,
@@ -35,6 +37,8 @@ import {
   ExpandLess as ExpandLessIcon,
   CheckCircle as CheckCircleIcon,
   Warning as WarningIcon,
+  SmartToy as SmartToyIcon,
+  Assessment as AssessmentIcon,
 } from '@mui/icons-material';
 import {
   TacticsLevel,
@@ -46,6 +50,7 @@ import {
   ID,
 } from '@ai-agent-trpg/types';
 import { apiClient } from '../../api/client';
+import { AIAgentMonitoringDashboard } from '../ai-monitoring/AIAgentMonitoringDashboard';
 
 interface GMAgentControlPanelProps {
   sessionId: ID;
@@ -82,6 +87,7 @@ export const GMAgentControlPanel: React.FC<GMAgentControlPanelProps> = ({
   const [recentDecisions, setRecentDecisions] = useState<AIDecisionLog[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [tabValue, setTabValue] = useState(0);
   const [showDecisions, setShowDecisions] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
@@ -183,17 +189,21 @@ export const GMAgentControlPanel: React.FC<GMAgentControlPanelProps> = ({
     survival: 'Survival - 生存重視',
   };
 
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    setTabValue(newValue);
+  };
+
   return (
     <Card data-testid="gm-agent-control-panel">
       <CardContent>
         {/* ヘッダー */}
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
           <Box display="flex" alignItems="center" gap={2}>
-            <PsychologyIcon color="primary" />
+            <SmartToyIcon color="primary" />
             <Typography variant="h6">
-              GM Agent 戦術制御
+              AI Agent制御センター
             </Typography>
-            {hasUnsavedChanges && (
+            {hasUnsavedChanges && tabValue === 0 && (
               <Chip
                 label="未保存"
                 color="warning"
@@ -204,7 +214,7 @@ export const GMAgentControlPanel: React.FC<GMAgentControlPanelProps> = ({
           </Box>
           
           <Box display="flex" gap={1}>
-            {hasUnsavedChanges && (
+            {hasUnsavedChanges && tabValue === 0 && (
               <>
                 <Button
                   size="small"
@@ -227,19 +237,38 @@ export const GMAgentControlPanel: React.FC<GMAgentControlPanelProps> = ({
           </Box>
         </Box>
 
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
+        {/* タブナビゲーション */}
+        <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+          <Tabs value={tabValue} onChange={handleTabChange}>
+            <Tab 
+              icon={<PsychologyIcon />} 
+              label="戦術制御" 
+              data-testid="tactics-control-tab"
+            />
+            <Tab 
+              icon={<AssessmentIcon />} 
+              label="監視ダッシュボード" 
+              data-testid="monitoring-dashboard-tab"
+            />
+          </Tabs>
+        </Box>
 
-        {loading && (
-          <Box display="flex" justifyContent="center" p={2}>
-            <CircularProgress size={24} />
-          </Box>
-        )}
+        {/* タブコンテンツ */}
+        {tabValue === 0 && (
+          <>
+            {error && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {error}
+              </Alert>
+            )}
 
-        <Stack spacing={3}>
+            {loading && (
+              <Box display="flex" justifyContent="center" p={2}>
+                <CircularProgress size={24} />
+              </Box>
+            )}
+
+            <Stack spacing={3}>
           {/* 戦術レベル設定 */}
           <FormControl fullWidth disabled={disabled || loading}>
             <InputLabel>戦術レベル</InputLabel>
@@ -375,7 +404,18 @@ export const GMAgentControlPanel: React.FC<GMAgentControlPanelProps> = ({
               </Box>
             </>
           )}
-        </Stack>
+            </Stack>
+          </>
+        )}
+
+        {/* AI Agent監視ダッシュボードタブ */}
+        {tabValue === 1 && (
+          <AIAgentMonitoringDashboard
+            sessionId={sessionId}
+            open={true}
+            onClose={() => {}} // タブ内なのでクローズ処理は不要
+          />
+        )}
       </CardContent>
     </Card>
   );

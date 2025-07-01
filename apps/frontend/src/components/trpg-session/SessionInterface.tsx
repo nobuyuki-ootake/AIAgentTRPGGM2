@@ -34,8 +34,9 @@ import {
   Flag as MilestoneIcon,
   AccessTime as TimeIcon,
   RefreshRounded,
+  Search as SearchIcon,
 } from '@mui/icons-material';
-import { SessionState, Character, Quest, Milestone, ProgressTracker, LevelUpEvent, CampaignCompletion, ID, SessionDurationConfig, PartyLocation, MovementProposal } from '@ai-agent-trpg/types';
+import { SessionState, Character, Quest, Milestone, ProgressTracker, LevelUpEvent, CampaignCompletion, ID, SessionDurationConfig, PartyLocation } from '@ai-agent-trpg/types';
 import { CharacterCard } from './CharacterCard';
 import { ChatPanel } from './ChatPanel';
 import { DiceRollUI } from './DiceRollUI';
@@ -48,6 +49,9 @@ import { MilestonePanel } from './MilestonePanel';
 import LocationDisplay from '../locations/LocationDisplay';
 import CharacterMovement from '../locations/CharacterMovement';
 import ConversationPanel from '../conversations/ConversationPanel';
+import { ExplorationActionPanel } from '../exploration/ExplorationActionPanel';
+import { LocationEntityDisplay } from '../locations/LocationEntityDisplay';
+import { PartyMovementDialog } from '../party-movement/PartyMovementDialog';
 import { useLocations, useLocation } from '../../hooks/useLocations';
 import { SessionDurationDialog } from './SessionDurationDialog';
 import { TimeManagementPanel } from './TimeManagementPanel';
@@ -56,6 +60,7 @@ import { aiGameMasterAPI, SessionInitializationResult } from '../../api/aiGameMa
 import { aiAgentAPI } from '../../api/aiAgent';
 import { useConversationalTRPG } from '../../hooks/useConversationalTRPG';
 import { useAIEntityManagement } from '../../hooks/useAIEntityManagement';
+import usePartyMovement from '../../hooks/usePartyMovement';
 
 interface SessionInterfaceProps {
   session: SessionState;
@@ -115,6 +120,7 @@ export const SessionInterface: React.FC<SessionInterfaceProps> = ({
   const [characterToMove, setCharacterToMove] = useState<Character | null>(null);
   const [currentLocationId, setCurrentLocationId] = useState<string | null>(null);
   const [durationDialogOpen, setDurationDialogOpen] = useState(false);
+  const [partyMovementDialogOpen, setPartyMovementDialogOpen] = useState(false);
   
   // セッション初期化状態
   const [isInitializing, setIsInitializing] = useState(false);
@@ -135,8 +141,14 @@ export const SessionInterface: React.FC<SessionInterfaceProps> = ({
     lastMoveTime: new Date().toISOString(),
     movementHistory: []
   });
-  const [currentMovementProposal, setCurrentMovementProposal] = useState<MovementProposal | null>(null);
   const [isAIControlActive, setIsAIControlActive] = useState(false);
+
+  // パーティ移動システム
+  const partyMovement = usePartyMovement({
+    sessionId: session.id,
+    autoRefresh: session.status === 'active',
+    refreshInterval: 10000 // 10秒間隔で自動更新
+  });
 
   // 会話ベースのTRPGフック
   const {
@@ -290,6 +302,22 @@ export const SessionInterface: React.FC<SessionInterfaceProps> = ({
   const handleLocationAction = (actionType: string) => {
     // Handle location-specific actions
     onSendMessage(`場所で「${actionType}」を実行しました`, 'ic');
+  };
+
+  // パーティ移動完了時のハンドラー
+  const handlePartyLocationChange = (newLocationId: string) => {
+    // パーティ位置を更新
+    setPartyLocation(prev => ({
+      ...prev,
+      currentLocationId: newLocationId,
+      lastMoveTime: new Date().toISOString()
+    }));
+    
+    // 現在の場所表示も更新
+    setCurrentLocationId(newLocationId);
+    
+    // チャットに移動完了メッセージを送信
+    onSendMessage(`🚶 パーティが ${newLocationId} に移動しました！`, 'ooc');
   };
 
   // Phase 0: シームレスAI GM制御システム
@@ -969,6 +997,7 @@ ${specificPrompt}
                 <Tab icon={<SecurityRounded />} label="戦闘" />
                 <Tab icon={<TimeIcon />} label="時間管理" />
                 <Tab icon={<LocationIcon />} label="場所" />
+                <Tab icon={<SearchIcon />} label="探索" />
                 <Tab icon={<QuestIcon />} label="クエスト" />
                 <Tab icon={<MilestoneIcon />} label="マイルストーン" />
                 {!isPlayerMode && <Tab icon={<AssistantRounded />} label="AI" />}
@@ -1025,6 +1054,42 @@ ${specificPrompt}
                       </Alert>
                     )}
 
+                    {/* パーティ移動システム */}
+                    <Box sx={{ mb: 3 }}>
+                      <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                        🚶 パーティ移動
+                      </Typography>
+                      
+                      {/* シンプルな移動ボタン */}
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        onClick={() => setPartyMovementDialogOpen(true)}
+                        disabled={session.status !== 'active'}
+                        data-testid="party-movement-button"
+                        sx={{ mb: 1 }}
+                      >
+                        パーティ移動を提案
+                      </Button>
+                      
+                      {/* 進行中の提案がある場合の簡易表示 */}
+                      {partyMovement.activeProposal && (
+                        <Alert severity="info" sx={{ mt: 1 }}>
+                          <Typography variant="body2">
+                            移動提案中: {locations.find(loc => loc.id === partyMovement.activeProposal?.targetLocationId)?.name || '不明な場所'}
+                          </Typography>
+                          {partyMovement.votingSummary && (
+                            <Typography variant="caption" color="text.secondary">
+                              投票状況: {partyMovement.votingSummary.currentApprovals}/{partyMovement.votingSummary.requiredApprovals}
+                              {partyMovement.votingSummary.consensusReached && ' ✅ 合意成立'}
+                            </Typography>
+                          )}
+                        </Alert>
+                      )}
+                    </Box>
+
+                    <Divider sx={{ mb: 2 }} />
+
                     {/* 場所選択 */}
                     <Box sx={{ mb: 2 }}>
                       <Typography variant="subtitle2" gutterBottom>
@@ -1045,7 +1110,7 @@ ${specificPrompt}
                       </Select>
                     </Box>
 
-                    {/* キャラクター移動ボタン */}
+                    {/* 個別キャラクター移動ボタン */}
                     <Box sx={{ mb: 2 }}>
                       <Typography variant="subtitle2" gutterBottom>
                         キャラクター移動
@@ -1066,6 +1131,43 @@ ${specificPrompt}
                       </Stack>
                     </Box>
 
+                    {/* 場所エンティティ表示 */}
+                    {currentLocationId && (
+                      <Box sx={{ mb: 3 }}>
+                        <LocationEntityDisplay
+                          sessionId={session.id}
+                          locationId={currentLocationId}
+                          locationName={currentLocation?.name || '現在の場所'}
+                          onEntitySelect={(entity) => {
+                            console.log('🎯 Selected entity:', entity);
+                            // TODO: エンティティ選択時の処理（詳細表示や探索アクションとの連携）
+                          }}
+                          onEntityAction={(entityId, actionType) => {
+                            console.log('⚡ Entity action:', entityId, actionType);
+                            // TODO: エンティティアクション実行（探索システムとの統合）
+                          }}
+                          onLocationChanged={(oldLocationId, newLocationId) => {
+                            console.log('📍 Location changed in entity display:', {
+                              from: oldLocationId,
+                              to: newLocationId,
+                              locationName: currentLocation?.name
+                            });
+                            
+                            // チャットにメッセージを投稿
+                            onSendMessage(
+                              `📍 場所が変更されました: ${currentLocation?.name || newLocationId}`,
+                              'ooc'
+                            );
+                          }}
+                          autoRefresh={session.status === 'active'}
+                          refreshInterval={20000}
+                          compact={false}
+                          disabled={session.status !== 'active'}
+                          showLocationChangeIndicator={true}
+                        />
+                      </Box>
+                    )}
+
                     {/* キャラクター間会話 */}
                     {currentLocationId && charactersInLocation.length > 1 && (
                       <Box sx={{ mt: 3 }}>
@@ -1078,7 +1180,30 @@ ${specificPrompt}
                     )}
                   </Box>
                 )}
+                
+                {/* 探索タブ */}
                 {((isPlayerMode && activeTab === 3) || (!isPlayerMode && activeTab === 4)) && (
+                  <Box p={2} sx={{ height: '100%', overflow: 'auto' }}>
+                    <Typography variant="h6" gutterBottom>
+                      探索アクション
+                    </Typography>
+                    
+                    <ExplorationActionPanel
+                      sessionId={session.id}
+                      currentLocationId={partyLocation.currentLocationId}
+                      currentCharacterId={pcCharacters[0]?.id || ''} // 最初のPCを使用
+                      currentCharacterName={pcCharacters[0]?.name || ''}
+                      onChatMessage={(message) => {
+                        // チャットメッセージをChatPanelに転送
+                        // TODO: ChatPanelとの統合実装
+                        console.log('Exploration chat message:', message);
+                      }}
+                      disabled={session.status !== 'active'}
+                    />
+                  </Box>
+                )}
+                
+                {((isPlayerMode && activeTab === 4) || (!isPlayerMode && activeTab === 5)) && (
                   <QuestPanel
                     campaignId={session.campaignId}
                     sessionId={session.id}
@@ -1087,7 +1212,7 @@ ${specificPrompt}
                     onCreateQuest={onCreateQuest || (() => {})}
                   />
                 )}
-                {((isPlayerMode && activeTab === 4) || (!isPlayerMode && activeTab === 5)) && (
+                {((isPlayerMode && activeTab === 5) || (!isPlayerMode && activeTab === 6)) && (
                   <MilestonePanel
                     campaignId={session.campaignId}
                     milestones={milestones}
@@ -1098,7 +1223,7 @@ ${specificPrompt}
                     onCreateMilestone={onCreateMilestone || (() => {})}
                   />
                 )}
-                {!isPlayerMode && activeTab === 6 && (
+                {!isPlayerMode && activeTab === 7 && (
                   <Box sx={{ height: '100%', overflow: 'auto' }}>
                     {/* AIゲームマスター強化システム */}
                     <AIGameMasterPanel
@@ -1214,6 +1339,25 @@ ${specificPrompt}
           onMovementComplete={handleMovementComplete}
         />
       )}
+
+      {/* パーティ移動ダイアログ */}
+      <PartyMovementDialog
+        open={partyMovementDialogOpen}
+        onClose={() => setPartyMovementDialogOpen(false)}
+        sessionId={session.id}
+        currentLocationId={partyLocation.currentLocationId}
+        currentLocationName={currentLocation?.name || partyLocation.currentLocationId}
+        availableLocations={locations.map(loc => ({
+          id: loc.id,
+          name: loc.name,
+          distance: 1, // 簡略化：全ての場所を距離1とする
+          dangerLevel: loc.type === 'dungeon' ? 'dangerous' : 
+                     loc.type === 'wilderness' ? 'moderate' : 'safe'
+        }))}
+        currentCharacterId={playerCharacter?.id || pcCharacters[0]?.id}
+        onLocationChange={handlePartyLocationChange}
+        onChatMessage={handleSendMessage}
+      />
 
       {/* セッション時間設定ダイアログ */}
       <SessionDurationDialog
