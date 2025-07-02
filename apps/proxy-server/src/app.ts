@@ -15,6 +15,7 @@ import aiAgentMonitoringRouter from './routes/aiAgentMonitoring';
 import explorationActionsRouter from './routes/explorationActions';
 import mixedVotingRouter from './routes/mixedVoting';
 import locationEntitiesRouter from './routes/locationEntities';
+import milestoneManagementRouter from './routes/milestoneManagement';
 import { errorHandler } from './middleware/errorHandler';
 import { notFoundHandler } from './middleware/notFoundHandler';
 import { logger } from './utils/logger';
@@ -149,6 +150,9 @@ export function createApp(): express.Application {
   
   // Character AI Settings routes
   app.use('/api/character-ai', characterAISettingsRouter);
+  
+  // Milestone Management routes
+  app.use('/api/milestone-management', milestoneManagementRouter);
 
   // Error handling middleware (must be last)
   app.use(notFoundHandler);

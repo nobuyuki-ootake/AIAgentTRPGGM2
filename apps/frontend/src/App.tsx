@@ -9,6 +9,7 @@ import { AppTheme } from '@/components/theme/AppTheme';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { LoadingScreen } from '@/components/common/LoadingScreen';
 import { NotificationProvider } from '@/components/common/NotificationProvider';
+import { GMNotificationProvider } from '@/components/gm/GMNotificationProvider';
 import { AppLayout } from '@/components/layout/AppLayout';
 
 // ページコンポーネント（Lazy Loading）
@@ -30,8 +31,9 @@ function App() {
           <AppTheme>
             <CssBaseline />
             <NotificationProvider>
-              <Router>
-                <AppLayout>
+              <GMNotificationProvider>
+                <Router>
+                  <AppLayout>
                   <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
                     <Suspense fallback={<LoadingScreen />}>
                       <Routes>
@@ -61,8 +63,9 @@ function App() {
                       </Routes>
                     </Suspense>
                   </Box>
-                </AppLayout>
-              </Router>
+                  </AppLayout>
+                </Router>
+              </GMNotificationProvider>
             </NotificationProvider>
           </AppTheme>
         </LocalizationProvider>

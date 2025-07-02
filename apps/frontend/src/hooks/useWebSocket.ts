@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { ID } from '@ai-agent-trpg/types';
+import { ID, GMNotificationEvent } from '@ai-agent-trpg/types';
 
 interface ChatMessage {
   id: ID;
@@ -23,6 +23,35 @@ interface WebSocketEvents {
     actionData: unknown;
     timestamp: string;
   };
+  'gm-notification': GMNotificationEvent;
+  'gm-story-progression': {
+    type: 'gm_story_progression';
+    timestamp: string;
+    data: {
+      messageId: string;
+      title: string;
+      message: string;
+      priority: string;
+      sender: string;
+      sessionId: string;
+      isAIGenerated: boolean;
+    };
+  };
+  'narrative-feedback': {
+    type: 'narrative_feedback';
+    timestamp: string;
+    data: {
+      milestoneName: string;
+      mainNarrative: {
+        title: string;
+        content: string;
+        tone: 'dramatic' | 'triumphant' | 'mysterious' | 'contemplative' | 'tense';
+      };
+      narrativeWeight: 'minor' | 'significant' | 'major' | 'pivotal';
+      tone: string;
+      isDetailedFeedback: boolean;
+    };
+  };
 }
 
 interface UseWebSocketReturn {
@@ -32,6 +61,9 @@ interface UseWebSocketReturn {
   leaveSession: (sessionId: ID) => void;
   onCompanionMessage: (callback: (data: WebSocketEvents['companion-message']) => void) => void;
   onPlayerAction: (callback: (data: WebSocketEvents['player-action']) => void) => void;
+  onGMNotification: (callback: (data: WebSocketEvents['gm-notification']) => void) => void;
+  onGMStoryProgression: (callback: (data: WebSocketEvents['gm-story-progression']) => void) => void;
+  onNarrativeFeedback: (callback: (data: WebSocketEvents['narrative-feedback']) => void) => void;
   disconnect: () => void;
 }
 
@@ -163,6 +195,45 @@ export function useWebSocket(): UseWebSocketReturn {
     });
   };
 
+  // GM通知受信
+  const onGMNotification = (callback: (data: WebSocketEvents['gm-notification']) => void) => {
+    if (!socketRef.current) {
+      logger.warn('Cannot register GM notification listener: WebSocket not connected');
+      return;
+    }
+
+    socketRef.current.on('gm-notification', (data) => {
+      logger.info('Received GM notification:', data.notification.title);
+      callback(data);
+    });
+  };
+
+  // GMストーリー進行受信
+  const onGMStoryProgression = (callback: (data: WebSocketEvents['gm-story-progression']) => void) => {
+    if (!socketRef.current) {
+      logger.warn('Cannot register GM story progression listener: WebSocket not connected');
+      return;
+    }
+
+    socketRef.current.on('gm-story-progression', (data) => {
+      logger.info('Received GM story progression:', data.data.title);
+      callback(data);
+    });
+  };
+
+  // ナラティブフィードバック受信
+  const onNarrativeFeedback = (callback: (data: WebSocketEvents['narrative-feedback']) => void) => {
+    if (!socketRef.current) {
+      logger.warn('Cannot register narrative feedback listener: WebSocket not connected');
+      return;
+    }
+
+    socketRef.current.on('narrative-feedback', (data) => {
+      logger.info('Received narrative feedback:', data.data.mainNarrative.title);
+      callback(data);
+    });
+  };
+
   // 手動切断
   const disconnect = () => {
     if (socketRef.current) {
@@ -184,6 +255,9 @@ export function useWebSocket(): UseWebSocketReturn {
     leaveSession,
     onCompanionMessage,
     onPlayerAction,
+    onGMNotification,
+    onGMStoryProgression,
+    onNarrativeFeedback,
     disconnect,
   };
 }

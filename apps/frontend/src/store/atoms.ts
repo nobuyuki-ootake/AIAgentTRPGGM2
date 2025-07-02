@@ -1,5 +1,5 @@
 import { atom } from 'recoil';
-import { TRPGCampaign, Character, SessionState } from '@ai-agent-trpg/types';
+import { TRPGCampaign, Character, SessionState, GMNotification } from '@ai-agent-trpg/types';
 
 // ==========================================
 // キャンペーン関連の状態
@@ -248,4 +248,100 @@ export const formDirtyAtom = atom<boolean>({
 export const unsavedChangesAtom = atom<boolean>({
   key: 'unsavedChanges',
   default: false,
+});
+
+// ==========================================
+// Phase 4-1: GM通知システム関連の状態
+// ==========================================
+
+export const gmNotificationsAtom = atom<GMNotification[]>({
+  key: 'gmNotifications',
+  default: [],
+});
+
+export const gmNotificationUnreadCountAtom = atom<number>({
+  key: 'gmNotificationUnreadCount',
+  default: 0,
+});
+
+export const gmNotificationSettingsAtom = atom<{
+  enableSound: boolean;
+  enableDesktop: boolean;
+  autoMarkAsRead: boolean;
+  priorityFilter: ('high' | 'medium' | 'low')[];
+}>({
+  key: 'gmNotificationSettings',
+  default: {
+    enableSound: true,
+    enableDesktop: true,
+    autoMarkAsRead: false,
+    priorityFilter: ['high', 'medium', 'low'],
+  },
+});
+
+export const gmNotificationLoadingAtom = atom<boolean>({
+  key: 'gmNotificationLoading',
+  default: false,
+});
+
+export const gmNotificationErrorAtom = atom<string | null>({
+  key: 'gmNotificationError',
+  default: null,
+});
+
+// ==========================================
+// Phase 4-4.2: ナラティブフィードバック関連の状態
+// ==========================================
+
+export interface NarrativeFeedback {
+  id: string;
+  sessionId: string;
+  milestoneName: string;
+  mainNarrative: {
+    title: string;
+    content: string;
+    tone: 'dramatic' | 'triumphant' | 'mysterious' | 'contemplative' | 'tense';
+    length: 'brief' | 'standard' | 'detailed';
+  };
+  narrativeWeight: 'minor' | 'significant' | 'major' | 'pivotal';
+  timestamp: string;
+  isDetailedFeedback: boolean;
+  isRead: boolean;
+}
+
+export const narrativeFeedbacksAtom = atom<NarrativeFeedback[]>({
+  key: 'narrativeFeedbacks',
+  default: [],
+});
+
+export const narrativeFeedbackUnreadCountAtom = atom<number>({
+  key: 'narrativeFeedbackUnreadCount',
+  default: 0,
+});
+
+export const narrativeFeedbackSettingsAtom = atom<{
+  enableDetailedDisplay: boolean;
+  enableChatIntegration: boolean;
+  enableSoundForMajor: boolean;
+  weightFilter: ('minor' | 'significant' | 'major' | 'pivotal')[];
+  tonePreference: ('dramatic' | 'triumphant' | 'mysterious' | 'contemplative' | 'tense')[];
+}>({
+  key: 'narrativeFeedbackSettings',
+  default: {
+    enableDetailedDisplay: true,
+    enableChatIntegration: true,
+    enableSoundForMajor: true,
+    weightFilter: ['minor', 'significant', 'major', 'pivotal'],
+    tonePreference: ['dramatic', 'triumphant', 'mysterious', 'contemplative', 'tense'],
+  },
+});
+
+export const narrativeFeedbackLoadingAtom = atom<boolean>({
+  key: 'narrativeFeedbackLoading',
+  default: false,
+});
+
+export const narrativeFeedbackErrorAtom = atom<string | null>({
+  key: 'narrativeFeedbackError',
+  default: null,
 });

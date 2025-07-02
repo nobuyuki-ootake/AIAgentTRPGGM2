@@ -72,6 +72,27 @@ async function startServer(): Promise<void> {
     getSessionService().setSocketIO(io);
     logger.info('SessionService configured with Socket.IO instance');
 
+    // Phase 4-1: MilestoneCompletionServiceにアプリインスタンスを設定
+    const { milestoneCompletionService } = await import('./services/milestoneCompletionService');
+    milestoneCompletionService.setApp(app);
+    logger.info('MilestoneCompletionService configured with Express app instance');
+
+    // Phase 4-2: MilestoneManagementServiceにアプリインスタンスを設定
+    const { MilestoneManagementService } = await import('./services/milestoneManagementService');
+    const milestoneManagementService = MilestoneManagementService.getInstance();
+    milestoneManagementService.setApp(app);
+    logger.info('MilestoneManagementService configured with Express app instance');
+
+    // Phase 4-2.3: StoryProgressionServiceにアプリインスタンスを設定
+    const { storyProgressionService } = await import('./services/storyProgressionService');
+    storyProgressionService.setApp(app);
+    logger.info('StoryProgressionService configured with Express app instance');
+
+    // Phase 4-4.1: NarrativeFeedbackServiceにアプリインスタンスを設定
+    const { narrativeFeedbackService } = await import('./services/narrativeFeedbackService');
+    narrativeFeedbackService.setApp(app);
+    logger.info('NarrativeFeedbackService configured with Express app instance');
+
     // サーバー起動
     server.listen(PORT, () => {
       logger.info(`🚀 Server running on port ${PORT} in ${NODE_ENV} mode`);

@@ -31,9 +31,17 @@ import {
   PlayArrow as StartIcon,
   Description as TaskIcon,
   Event as EventIcon,
+  Flag as MilestoneIcon,
+  CheckCircle as CompleteIcon,
+  RadioButtonUnchecked as IncompleteIcon,
+  Announcement as AnnouncementIcon,
+  Forward as ProgressIcon,
 } from '@mui/icons-material';
-import { ID, SessionState, Character, Quest, Milestone } from '@ai-agent-trpg/types';
+import { ID, SessionState, Character, Quest, Milestone, GMNotification } from '@ai-agent-trpg/types';
+import { useRecoilValue, useRecoilState } from 'recoil';
+import { gmNotificationsAtom, gmNotificationUnreadCountAtom } from '../../store/atoms';
 import { aiGameMasterAPI, SessionContext, GameOverview, TaskExplanation, ResultJudgment, ScenarioAdjustment } from '../../api/aiGameMaster';
+import { milestoneManagementAPI } from '../../api/milestoneManagement';
 import { useAIEntityManagement } from '../../hooks/useAIEntityManagement';
 
 interface AIGameMasterPanelProps {
@@ -74,6 +82,23 @@ export const AIGameMasterPanel: React.FC<AIGameMasterPanelProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [selectedProvider, setSelectedProvider] = useState('google'); // Geminiをデフォルトに
   
+  // GM Notifications
+  const gmNotifications = useRecoilValue(gmNotificationsAtom);
+  const [unreadCount, setUnreadCount] = useRecoilState(gmNotificationUnreadCountAtom);
+
+  // Milestone management state
+  const [milestoneProgress, setMilestoneProgress] = useState<Record<ID, {
+    currentProgress: number;
+    maxProgress: number;
+    progressPercentage: number;
+    completedEntities: string[];
+    remainingEntities: string[];
+    lastUpdated: string;
+  }>>({});
+  const [milestoneLoading, setMilestoneLoading] = useState<Record<ID, boolean>>({});
+  const [gmAnnouncementText, setGmAnnouncementText] = useState('');
+  const [announcementTitle, setAnnouncementTitle] = useState('');
+
   // Task creation state
   const [taskTitle, setTaskTitle] = useState('');
   const [taskDescription, setTaskDescription] = useState('');
@@ -223,6 +248,100 @@ export const AIGameMasterPanel: React.FC<AIGameMasterPanelProps> = ({
     const { color } = aiGameMasterAPI.getOutcomeDescription(outcome);
     return color;
   };
+
+  // マイルストーン進捗を取得
+  const loadMilestoneProgress = async (milestoneId: ID) => {
+    try {
+      setMilestoneLoading(prev => ({ ...prev, [milestoneId]: true }));
+      const progress = await milestoneManagementAPI.getMilestoneProgress(sessionId, milestoneId);
+      setMilestoneProgress(prev => ({ ...prev, [milestoneId]: progress }));
+    } catch (err) {
+      console.error('Failed to load milestone progress:', err);
+    } finally {
+      setMilestoneLoading(prev => ({ ...prev, [milestoneId]: false }));
+    }
+  };
+
+  // マイルストーン手動完了
+  const completeMilestoneManually = async (milestoneId: ID, narrativeMessage?: string) => {
+    try {
+      setMilestoneLoading(prev => ({ ...prev, [milestoneId]: true }));
+      const result = await milestoneManagementAPI.completeMilestoneManually(sessionId, milestoneId, {
+        narrativeMessage,
+        gmNote: `手動完了 - GM操作による`,
+      });
+      
+      if (result.success) {
+        // 進捗状況を更新
+        await loadMilestoneProgress(milestoneId);
+        setError(null);
+        // 成功メッセージ
+        console.log('Milestone completed:', result.narrativeMessage);
+      }
+    } catch (err) {
+      console.error('Failed to complete milestone manually:', err);
+      setError('マイルストーン完了に失敗しました');
+    } finally {
+      setMilestoneLoading(prev => ({ ...prev, [milestoneId]: false }));
+    }
+  };
+
+  // GMアナウンス投稿
+  const postGMNarrativeAnnouncement = async () => {
+    if (!announcementTitle.trim() || !gmAnnouncementText.trim()) {
+      setError('タイトルとメッセージを入力してください');
+      return;
+    }
+
+    try {
+      const result = await milestoneManagementAPI.postGMNarrativeAnnouncement(sessionId, {
+        title: announcementTitle,
+        message: gmAnnouncementText,
+        type: 'custom',
+        priority: 'medium',
+      });
+
+      if (result.success) {
+        setAnnouncementTitle('');
+        setGmAnnouncementText('');
+        setError(null);
+        console.log('GM announcement posted:', result.messageId);
+      }
+    } catch (err) {
+      console.error('Failed to post GM announcement:', err);
+      setError('GMアナウンスの投稿に失敗しました');
+    }
+  };
+
+  // シナリオ進行トリガー
+  const triggerScenarioProgression = async (progressionType: 'milestone_based' | 'manual', customMessage?: string) => {
+    try {
+      setAdjustmentLoading(true);
+      const result = await milestoneManagementAPI.triggerScenarioProgression(sessionId, {
+        progressionType,
+        customMessage,
+      });
+
+      if (result.success) {
+        console.log('Scenario progression triggered:', result.narrativeAnnouncement);
+        setError(null);
+      }
+    } catch (err) {
+      console.error('Failed to trigger scenario progression:', err);
+      setError('シナリオ進行の実行に失敗しました');
+    } finally {
+      setAdjustmentLoading(false);
+    }
+  };
+
+  // マイルストーン進捗の初期ロード
+  useEffect(() => {
+    milestones.forEach(milestone => {
+      if (milestone.status !== 'completed') {
+        loadMilestoneProgress(milestone.id);
+      }
+    });
+  }, [sessionId, milestones]);
 
   if (loading) {
     return (
@@ -625,6 +744,216 @@ export const AIGameMasterPanel: React.FC<AIGameMasterPanelProps> = ({
         </AccordionDetails>
       </Accordion>
 
+      {/* マイルストーン管理 */}
+      <Accordion sx={{ mb: 2 }}>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <Box display="flex" alignItems="center" gap={1}>
+            <MilestoneIcon fontSize="small" />
+            <Typography>マイルストーン管理（GM用）</Typography>
+          </Box>
+        </AccordionSummary>
+        <AccordionDetails>
+          <Stack spacing={2}>
+            <Alert severity="info">
+              GM用の手動制御機能です。マイルストーンの進捗確認・手動完了・物語アナウンス投稿が可能です。
+            </Alert>
+
+            {/* マイルストーン一覧 */}
+            <Box>
+              <Typography variant="subtitle2" color="primary" gutterBottom>
+                📋 マイルストーン進捗状況
+              </Typography>
+              <Stack spacing={1}>
+                {milestones.map((milestone) => {
+                  const progress = milestoneProgress[milestone.id];
+                  const isLoading = milestoneLoading[milestone.id] || false;
+                  const isCompleted = milestone.status === 'completed';
+
+                  return (
+                    <Card key={milestone.id} variant="outlined">
+                      <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                        <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={1}>
+                          <Box flex={1}>
+                            <Box display="flex" alignItems="center" gap={1} mb={0.5}>
+                              {isCompleted ? (
+                                <CompleteIcon color="success" fontSize="small" />
+                              ) : (
+                                <IncompleteIcon color="disabled" fontSize="small" />
+                              )}
+                              <Typography variant="subtitle2" fontWeight="bold">
+                                {milestone.title}
+                              </Typography>
+                            </Box>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                              {milestone.description}
+                            </Typography>
+
+                            {/* 進捗バー（完了していない場合のみ） */}
+                            {!isCompleted && progress && (
+                              <Box sx={{ mb: 1 }}>
+                                <Box display="flex" justifyContent="space-between" alignItems="center" mb={0.5}>
+                                  <Typography variant="caption" color="text.secondary">
+                                    進捗: {progress.currentProgress} / {progress.maxProgress}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {Math.round(progress.progressPercentage)}%
+                                  </Typography>
+                                </Box>
+                                <Box sx={{ bgcolor: 'grey.200', borderRadius: 1, height: 6 }}>
+                                  <Box
+                                    sx={{
+                                      bgcolor: progress.progressPercentage >= 100 ? 'success.main' : 'primary.main',
+                                      borderRadius: 1,
+                                      height: '100%',
+                                      width: `${Math.min(progress.progressPercentage, 100)}%`,
+                                      transition: 'width 0.3s ease',
+                                    }}
+                                  />
+                                </Box>
+                              </Box>
+                            )}
+
+                            {/* エンティティ詳細 */}
+                            {progress && (
+                              <Box sx={{ mt: 1 }}>
+                                {progress.completedEntities.length > 0 && (
+                                  <Typography variant="caption" color="success.main" display="block">
+                                    ✓ 完了: {progress.completedEntities.join(', ')}
+                                  </Typography>
+                                )}
+                                {progress.remainingEntities.length > 0 && (
+                                  <Typography variant="caption" color="text.secondary" display="block">
+                                    ⏳ 残り: {progress.remainingEntities.join(', ')}
+                                  </Typography>
+                                )}
+                              </Box>
+                            )}
+                          </Box>
+
+                          {/* アクションボタン */}
+                          <Box sx={{ ml: 1, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                            <Chip 
+                              label={isCompleted ? '完了' : '進行中'} 
+                              size="small" 
+                              color={isCompleted ? 'success' : 'default'}
+                            />
+                            {!isCompleted && (
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={() => completeMilestoneManually(milestone.id)}
+                                disabled={isLoading}
+                                startIcon={isLoading ? <CircularProgress size={12} /> : <CompleteIcon />}
+                                sx={{ fontSize: '0.7rem', px: 1, py: 0.25 }}
+                              >
+                                手動完了
+                              </Button>
+                            )}
+                            <Button
+                              size="small"
+                              variant="text"
+                              onClick={() => loadMilestoneProgress(milestone.id)}
+                              disabled={isLoading}
+                              startIcon={<RefreshIcon />}
+                              sx={{ fontSize: '0.7rem', px: 1, py: 0.25 }}
+                            >
+                              更新
+                            </Button>
+                          </Box>
+                        </Box>
+
+                        {progress && (
+                          <Typography variant="caption" color="text.secondary">
+                            最終更新: {new Date(progress.lastUpdated).toLocaleTimeString()}
+                          </Typography>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+
+                {milestones.length === 0 && (
+                  <Typography variant="body2" color="text.secondary" textAlign="center" sx={{ py: 2 }}>
+                    マイルストーンが設定されていません
+                  </Typography>
+                )}
+              </Stack>
+            </Box>
+
+            {/* GMアナウンス投稿 */}
+            <Box>
+              <Typography variant="subtitle2" color="primary" gutterBottom>
+                📢 GM物語アナウンス
+              </Typography>
+              <Stack spacing={1.5}>
+                <TextField
+                  size="small"
+                  label="アナウンスタイトル"
+                  value={announcementTitle}
+                  onChange={(e) => setAnnouncementTitle(e.target.value)}
+                  placeholder="例：新たな発見"
+                  fullWidth
+                />
+                <TextField
+                  size="small"
+                  label="アナウンス内容"
+                  value={gmAnnouncementText}
+                  onChange={(e) => setGmAnnouncementText(e.target.value)}
+                  placeholder="例：古代の扉が静かに開かれ、未知の通路が姿を現しました..."
+                  multiline
+                  rows={3}
+                  fullWidth
+                />
+                <Button
+                  variant="contained"
+                  startIcon={<AnnouncementIcon />}
+                  onClick={postGMNarrativeAnnouncement}
+                  disabled={!announcementTitle.trim() || !gmAnnouncementText.trim()}
+                  fullWidth
+                >
+                  GMアナウンスを投稿
+                </Button>
+              </Stack>
+            </Box>
+
+            {/* シナリオ進行トリガー */}
+            <Box>
+              <Typography variant="subtitle2" color="primary" gutterBottom>
+                🎬 シナリオ進行制御
+              </Typography>
+              <Stack spacing={1}>
+                <Typography variant="body2" color="text.secondary">
+                  GM用のシナリオ進行制御機能です。新エンティティの解放や物語の進行を手動で実行できます。
+                </Typography>
+                <Stack direction="row" spacing={1}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => triggerScenarioProgression('milestone_based')}
+                    disabled={adjustmentLoading}
+                    startIcon={<ProgressIcon />}
+                  >
+                    マイルストーン基準進行
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => triggerScenarioProgression('manual', '手動による物語進行')}
+                    disabled={adjustmentLoading}
+                    startIcon={<StartIcon />}
+                  >
+                    手動進行実行
+                  </Button>
+                </Stack>
+                <Typography variant="caption" color="text.secondary">
+                  💡 これらの機能は新NPCの登場、新エリアの解放、新クエストの追加などを自動的に実行します。
+                </Typography>
+              </Stack>
+            </Box>
+          </Stack>
+        </AccordionDetails>
+      </Accordion>
+
       {/* エンティティ推奨システム */}
       {aiEntityManagement && (
         <Accordion sx={{ mb: 2 }}>
@@ -780,6 +1109,70 @@ export const AIGameMasterPanel: React.FC<AIGameMasterPanelProps> = ({
                 💡 このシステムは現在のセッション状況を分析し、最適なエンティティ（アイテム、クエスト、イベント、NPC、敵）を
                 自動推奨します。推奨内容はリアルタイムで更新され、ストーリー進行を支援します。
               </Typography>
+            </Stack>
+          </AccordionDetails>
+        </Accordion>
+      )}
+
+      {/* GM通知 */}
+      {gmNotifications.length > 0 && (
+        <Accordion sx={{ mb: 2 }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Box display="flex" alignItems="center" gap={1}>
+              <AIIcon fontSize="small" />
+              <Typography>GM通知</Typography>
+              {unreadCount > 0 && (
+                <Chip 
+                  label={unreadCount} 
+                  size="small" 
+                  color="error" 
+                  sx={{ minWidth: '24px', height: '20px' }}
+                />
+              )}
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Stack spacing={1}>
+              {gmNotifications.slice(0, 5).map((notification) => (
+                <Card 
+                  key={notification.id} 
+                  variant="outlined"
+                  sx={{ 
+                    borderLeft: notification.priority === 'high' ? '4px solid #f44336' : 
+                               notification.priority === 'medium' ? '4px solid #ff9800' : '4px solid #2196f3'
+                  }}
+                >
+                  <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                    <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={1}>
+                      <Typography variant="subtitle2" fontWeight="bold">
+                        {notification.title}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {new Date(notification.timestamp).toLocaleTimeString()}
+                      </Typography>
+                    </Box>
+                    <Typography variant="body2" sx={{ mb: 1 }}>
+                      {notification.message}
+                    </Typography>
+                    <Box display="flex" justifyContent="space-between" alignItems="center">
+                      <Chip 
+                        label={notification.priority} 
+                        size="small" 
+                        color={notification.priority === 'high' ? 'error' : 
+                               notification.priority === 'medium' ? 'warning' : 'info'}
+                      />
+                      <Typography variant="caption" color="text.secondary">
+                        {notification.type}
+                      </Typography>
+                    </Box>
+                  </CardContent>
+                </Card>
+              ))}
+              {gmNotifications.length > 5 && (
+                <Typography variant="caption" color="text.secondary" textAlign="center">
+                  他 {gmNotifications.length - 5} 件の通知
+                </Typography>
+              )}
             </Stack>
           </AccordionDetails>
         </Accordion>

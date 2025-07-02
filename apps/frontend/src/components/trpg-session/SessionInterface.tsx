@@ -61,6 +61,8 @@ import { aiAgentAPI } from '../../api/aiAgent';
 import { useConversationalTRPG } from '../../hooks/useConversationalTRPG';
 import { useAIEntityManagement } from '../../hooks/useAIEntityManagement';
 import usePartyMovement from '../../hooks/usePartyMovement';
+import { useNarrativeFeedbackChatIntegration } from '../../hooks/useNarrativeFeedbackChatIntegration';
+import { NarrativeFeedbackDisplay } from '../narrative/NarrativeFeedbackDisplay';
 
 interface SessionInterfaceProps {
   session: SessionState;
@@ -173,6 +175,13 @@ export const SessionInterface: React.FC<SessionInterfaceProps> = ({
     refreshInterval: 45000, // 45秒間隔で自動更新
     enableCache: true,
     debug: false // 開発環境でのデバッグログ
+  });
+
+  // 🆕 Phase 4-4.2: ナラティブフィードバックチャット統合
+  const narrativeFeedbackChatIntegration = useNarrativeFeedbackChatIntegration({
+    sessionId: session.id,
+    onSendMessage: handleSendMessage,
+    enabled: session.status === 'active',
   });
 
 
@@ -1236,6 +1245,26 @@ ${specificPrompt}
                       onEventGenerate={handleStartChatBasedEvent}
                       aiEntityManagement={aiEntityManagement}
                     />
+                    
+                    <Divider sx={{ my: 2 }} />
+                    
+                    {/* 🆕 Phase 4-4.2: ナラティブフィードバック表示 */}
+                    <Box p={2}>
+                      <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        📜 物語フィードバック
+                        {narrativeFeedbackChatIntegration.isIntegrationEnabled && (
+                          <Chip label="チャット統合有効" size="small" color="success" />
+                        )}
+                      </Typography>
+                      
+                      <Box sx={{ mb: 3, maxHeight: 400, overflow: 'auto' }}>
+                        <NarrativeFeedbackDisplay 
+                          sessionId={session.id}
+                          compact={false}
+                          maxItems={5}
+                        />
+                      </Box>
+                    </Box>
                     
                     <Divider sx={{ my: 2 }} />
                     

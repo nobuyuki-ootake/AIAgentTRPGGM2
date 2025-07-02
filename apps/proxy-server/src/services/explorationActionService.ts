@@ -1,5 +1,5 @@
 // ==========================================
-// 探索アクション・エンティティ発見サービス
+// 探索アクション・エンティティ発見サービス（リファクタリング版）
 // ==========================================
 
 import { v4 as uuidv4 } from 'uuid';
@@ -28,6 +28,8 @@ import {
   DiceRoll
 } from '@repo/types';
 import { aiAgentMonitoringService } from './aiAgentMonitoringService';
+import { milestoneProgressService } from './milestoneProgressService';
+import { entityUnlockService } from './entityUnlockService';
 
 export class ExplorationActionService {
 
@@ -502,6 +504,23 @@ export class ExplorationActionService {
 
       // エンティティとの相互作用を記録
       await this.recordEntityInteraction(execution.targetEntityId, execution.characterId);
+
+      // 🆕 マイルストーン進捗チェック（Phase 2-1統合）
+      if (success) {
+        await milestoneProgressService.checkMilestoneProgressOnEntityCompletion(
+          execution.sessionId,
+          execution.targetEntityId,
+          execution.characterId
+        );
+      }
+
+      // 🔓 エンティティ解放条件チェック（Phase 3-3 統合）
+      await entityUnlockService.checkUnlockConditionsOnEntityInteraction(
+        execution.sessionId,
+        execution.targetEntityId,
+        execution.characterId,
+        success
+      );
 
       // AI監視ログに記録
       await this.logExplorationActionToMonitoring(execution, success);

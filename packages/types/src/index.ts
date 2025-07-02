@@ -32,6 +32,9 @@ export * from './exploration-actions';
 // マイルストーン進捗更新システム
 export * from './milestone-progress';
 
+// GM通知システム
+export * from './gm-notifications';
+
 // 互換性のための型エイリアス
 export type { Character, TRPGCharacter, NPCCharacter, EnemyCharacter } from './character';
 export type { TRPGCampaign, Quest, Location } from './location';
