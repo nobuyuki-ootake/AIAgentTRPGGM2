@@ -52,14 +52,14 @@ partyMovementRouter.get('/state/:sessionId', asyncHandler(async (req, res) => {
       movementSystem
     };
 
-    res.json(response);
+    return res.json(response);
   } catch (error) {
     logger.error('Failed to get party movement state:', error);
     const response: GetPartyMovementStateResponse = {
       success: false,
       error: 'パーティ移動状態の取得に失敗しました'
     };
-    res.status(500).json(response);
+    return res.status(500).json(response);
   }
 }));
 
@@ -303,7 +303,7 @@ partyMovementRouter.get('/history/:sessionId', asyncHandler(async (req, res) => 
     
     const history = movementState.recentMovements.slice(offset, offset + limitNum);
 
-    res.json({
+    return res.json({
       success: true,
       history,
       pagination: {
@@ -315,7 +315,7 @@ partyMovementRouter.get('/history/:sessionId', asyncHandler(async (req, res) => 
     });
   } catch (error) {
     logger.error('Failed to get movement history:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: '移動履歴の取得に失敗しました'
     });
@@ -326,7 +326,7 @@ partyMovementRouter.get('/history/:sessionId', asyncHandler(async (req, res) => 
 // ヘルスチェック
 // ==========================================
 
-partyMovementRouter.get('/health', asyncHandler(async (req, res) => {
+partyMovementRouter.get('/health', asyncHandler(async (_req, res) => {
   res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),

@@ -1,7 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { 
   EntityPool, 
-  EntityPoolCollection,
+  CoreEntities,
+  BonusEntities,
   APIResponse
 } from '@ai-agent-trpg/types';
 import { getDatabaseManagerService } from '../services/DatabaseManagerService';
@@ -68,19 +69,19 @@ router.put('/:sessionId/entity', async (req: Request, res: Response): Promise<vo
     }
 
     // エンティティプールの構造を確認・更新
-    const entityCollection = currentPool!.entities as EntityPoolCollection;
+    const entityCollection = currentPool!.entities;
     let targetEntities: any[] = [];
     
     if (entityCategory === 'core') {
       if (!entityCollection.coreEntities) {
         throw new ValidationError('Core entities not found in entity pool');
       }
-      targetEntities = entityCollection.coreEntities[entityType as keyof typeof entityCollection.coreEntities] || [];
+      targetEntities = entityCollection.coreEntities[entityType as keyof CoreEntities] || [];
     } else {
       if (!entityCollection.bonusEntities) {
         throw new ValidationError('Bonus entities not found in entity pool');
       }
-      targetEntities = entityCollection.bonusEntities[entityType as keyof typeof entityCollection.bonusEntities] || [];
+      targetEntities = entityCollection.bonusEntities[entityType as keyof BonusEntities] || [];
     }
 
     // エンティティを検索・更新
@@ -180,7 +181,7 @@ router.post('/:sessionId/entity', async (req: Request, res: Response): Promise<v
       };
     }
 
-    const entityCollection = currentPool!.entities as EntityPoolCollection;
+    const entityCollection = currentPool!.entities;
     
     // 新しいエンティティを準備
     const newEntity = {
@@ -202,7 +203,7 @@ router.post('/:sessionId/entity', async (req: Request, res: Response): Promise<v
         };
       }
       
-      const targetArray = entityCollection.coreEntities[entityType as keyof typeof entityCollection.coreEntities];
+      const targetArray = entityCollection.coreEntities[entityType as keyof CoreEntities];
       if (Array.isArray(targetArray)) {
         targetArray.push(newEntity);
       }
@@ -215,7 +216,7 @@ router.post('/:sessionId/entity', async (req: Request, res: Response): Promise<v
         };
       }
       
-      const targetArray = entityCollection.bonusEntities[entityType as keyof typeof entityCollection.bonusEntities];
+      const targetArray = entityCollection.bonusEntities[entityType as keyof BonusEntities];
       if (Array.isArray(targetArray)) {
         targetArray.push(newEntity);
       }
@@ -273,19 +274,19 @@ router.delete('/:sessionId/entity', async (req: Request, res: Response): Promise
       throw new ValidationError('Entity pool not found for this session');
     }
 
-    const entityCollection = currentPool!.entities as EntityPoolCollection;
+    const entityCollection = currentPool!.entities;
     let targetEntities: any[] = [];
     
     if (entityCategory === 'core') {
       if (!entityCollection.coreEntities) {
         throw new ValidationError('Core entities not found in entity pool');
       }
-      targetEntities = entityCollection.coreEntities[entityType as keyof typeof entityCollection.coreEntities] || [];
+      targetEntities = entityCollection.coreEntities[entityType as keyof CoreEntities] || [];
     } else {
       if (!entityCollection.bonusEntities) {
         throw new ValidationError('Bonus entities not found in entity pool');
       }
-      targetEntities = entityCollection.bonusEntities[entityType as keyof typeof entityCollection.bonusEntities] || [];
+      targetEntities = entityCollection.bonusEntities[entityType as keyof BonusEntities] || [];
     }
 
     // エンティティを検索・削除
@@ -348,7 +349,7 @@ router.delete('/:sessionId/entities/bulk', async (req: Request, res: Response): 
       throw new ValidationError('Entity pool not found for this session');
     }
 
-    const entityCollection = currentPool!.entities as EntityPoolCollection;
+    const entityCollection = currentPool!.entities;
     const deletedEntities: any[] = [];
 
     // 各エンティティを削除
@@ -357,11 +358,11 @@ router.delete('/:sessionId/entities/bulk', async (req: Request, res: Response): 
       
       if (entityCategory === 'core') {
         if (entityCollection.coreEntities) {
-          targetEntities = entityCollection.coreEntities[entityType as keyof typeof entityCollection.coreEntities] || [];
+          targetEntities = entityCollection.coreEntities[entityType as keyof CoreEntities] || [];
         }
       } else {
         if (entityCollection.bonusEntities) {
-          targetEntities = entityCollection.bonusEntities[entityType as keyof typeof entityCollection.bonusEntities] || [];
+          targetEntities = entityCollection.bonusEntities[entityType as keyof BonusEntities] || [];
         }
       }
 

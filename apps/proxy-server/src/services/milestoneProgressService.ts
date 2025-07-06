@@ -3,30 +3,35 @@
 // Phase 2-1, 2-2: マイルストーン検索・進捗チェック機能
 // ==========================================
 
-import { v4 as uuidv4 } from 'uuid';
 import { database } from '../database/database';
 import { logger } from '../utils/logger';
 import {
   UnifiedMilestone,
-  EntityRelationships,
   EntityRelationshipRule,
   getMilestoneBaseInfo,
-  isAIPoolMilestone,
-  ID
-} from '@repo/types';
+  isAIPoolMilestone
+} from '@ai-agent-trpg/types';
 import { entityUnlockService } from './entityUnlockService';
 import { storyProgressionService } from './storyProgressionService';
 import { narrativeFeedbackService } from './narrativeFeedbackService';
 
 export class MilestoneProgressService {
+  private initialized = false;
 
   constructor() {
-    this.initializeDatabase();
+    // Lazy initialization - database will be initialized on first use
   }
 
   // ==========================================
   // データベース初期化
   // ==========================================
+
+  private ensureInitialized() {
+    if (!this.initialized) {
+      this.initializeDatabase();
+      this.initialized = true;
+    }
+  }
 
   private initializeDatabase() {
     try {
@@ -78,6 +83,7 @@ export class MilestoneProgressService {
    * エンティティIDから関連マイルストーンを取得（公開API）
    */
   async getMilestonesByEntityId(sessionId: string, entityId: string): Promise<UnifiedMilestone[]> {
+    this.ensureInitialized();
     return await this.findMilestonesByEntityId(sessionId, entityId);
   }
 
@@ -95,6 +101,7 @@ export class MilestoneProgressService {
    * セッションの全マイルストーンを取得（公開API）
    */
   async getSessionMilestonesList(sessionId: string): Promise<UnifiedMilestone[]> {
+    this.ensureInitialized();
     return await this.getSessionMilestones(sessionId);
   }
 
@@ -102,6 +109,7 @@ export class MilestoneProgressService {
    * マイルストーン-エンティティ関係性マップを取得（公開API）
    */
   async getMilestoneEntityRelationshipMap(sessionId: string): Promise<Map<string, string[]>> {
+    this.ensureInitialized();
     return await this.buildMilestoneEntityRelationshipMap(sessionId);
   }
 
@@ -120,6 +128,7 @@ export class MilestoneProgressService {
     }>;
     isCompleted: boolean;
   } | null> {
+    this.ensureInitialized();
     try {
       const milestones = await this.getSessionMilestones(sessionId);
       const milestone = milestones.find(m => getMilestoneBaseInfo(m).id === milestoneId);
@@ -190,6 +199,7 @@ export class MilestoneProgressService {
     entityId: string,
     characterId: string
   ): Promise<void> {
+    this.ensureInitialized();
     try {
       // エンティティIDから関連マイルストーンのみを効率的に検索
       const relatedMilestones = await this.findMilestonesByEntityId(sessionId, entityId);
@@ -461,7 +471,7 @@ export class MilestoneProgressService {
   private async calculateSequentialProgress(
     entityIds: string[], 
     completedEntities: string[], 
-    sessionId: string
+    _sessionId: string
   ): Promise<number> {
     try {
       let consecutiveCompleted = 0;
@@ -469,7 +479,11 @@ export class MilestoneProgressService {
       
       // Phase 3-1: 順序関係の詳細解析
       const sequentialMetrics = {
-        gapAnalysis: [],
+        gapAnalysis: [] as Array<{
+          position: number;
+          entityId: string;
+          isBlocker: boolean;
+        }>,
         completionDensity: 0,
         orderConsistency: 1.0
       };
@@ -687,7 +701,7 @@ export class MilestoneProgressService {
    */
   private async groupEntitiesByImportance(
     entityIds: string[], 
-    sessionId: string
+    _sessionId: string
   ): Promise<Map<string, string[]>> {
     const groups = new Map<string, string[]>();
     groups.set('high', []);
@@ -817,7 +831,7 @@ export class MilestoneProgressService {
    */
   private async checkLegacyMilestoneCompletion(
     milestone: UnifiedMilestone,
-    sessionId: string
+    _sessionId: string
   ): Promise<boolean> {
     try {
       // AIPoolMilestone型の場合の完了チェック

@@ -342,7 +342,7 @@ export class MilestoneService {
     const categoryProgress: Record<string, any> = {};
     const categoriesSet = new Set(milestones.map(m => m.category));
     const categories: string[] = [];
-    categoriesSet.forEach(cat => categories.push(cat));
+    categoriesSet.forEach(cat => cat && categories.push(cat));
     
     categories.forEach(category => {
       const categoryMilestones = milestones.filter(m => m.category === category);

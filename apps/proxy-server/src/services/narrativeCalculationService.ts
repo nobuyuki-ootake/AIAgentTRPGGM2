@@ -6,11 +6,8 @@
 import { database } from '../database/database';
 import { logger } from '../utils/logger';
 import {
-  UnifiedMilestone,
-  EntityRelationshipRule,
-  getMilestoneBaseInfo,
-  ID
-} from '@repo/types';
+  EntityRelationshipRule
+} from '@ai-agent-trpg/types';
 
 // ==========================================
 // 物語的進捗計算用データ型
@@ -316,7 +313,6 @@ export class NarrativeCalculationService {
       
       // 最高品質エンティティの特定
       let bestStoryValue = 0;
-      let bestEntityId = null;
       let totalStoryValue = 0;
       
       const entityValues = [];
@@ -337,7 +333,6 @@ export class NarrativeCalculationService {
           
           if (storyValue > bestStoryValue) {
             bestStoryValue = storyValue;
-            bestEntityId = entityId;
             anyAnalysis.bestQualityEntity = entityId;
           }
         }
@@ -431,10 +426,10 @@ export class NarrativeCalculationService {
    * 物語的組み合わせの評価
    */
   private async evaluateNarrativeCombination(
-    rule: EntityRelationshipRule,
+    _rule: EntityRelationshipRule,
     completedEntities: string[],
     entityDetails: Map<string, EntityCompletionDetail>,
-    sessionId: string
+    _sessionId: string
   ): Promise<number> {
     try {
       if (completedEntities.length < 2) {
@@ -456,7 +451,7 @@ export class NarrativeCalculationService {
             // 完了タイミングの近さ
             const timingProximity = this.calculateTimingProximity(detail1, detail2);
             // 物語的関連性
-            const narrativeRelation = await this.calculateNarrativeRelation(entity1, entity2, sessionId);
+            const narrativeRelation = await this.calculateNarrativeRelation(entity1, entity2, _sessionId);
             
             combinationScore += (timingProximity * 0.4) + (narrativeRelation * 0.6);
           }
@@ -668,7 +663,7 @@ export class NarrativeCalculationService {
     }
   }
 
-  private async calculateNarrativeRelation(entity1: string, entity2: string, sessionId: string): Promise<number> {
+  private async calculateNarrativeRelation(_entity1: string, _entity2: string, _sessionId: string): Promise<number> {
     // 簡易実装
     return 0.3;
   }
@@ -687,31 +682,31 @@ export class NarrativeCalculationService {
     };
   }
 
-  private calculateMeaningAlignment(ruleMeaning: string, narrativeState: NarrativeState): number {
+  private calculateMeaningAlignment(_ruleMeaning: string, _narrativeState: NarrativeState): number {
     // 簡易実装: キーワードベースのマッチング
     return 0.5;
   }
 
-  private async calculateCompletedEntitiesImportance(completedEntities: string[], sessionId: string): Promise<number> {
+  private async calculateCompletedEntitiesImportance(_completedEntities: string[], _sessionId: string): Promise<number> {
     // 簡易実装
     return 0.6;
   }
 
   private async calculateProgressionAppropriateness(
-    rule: EntityRelationshipRule,
-    completedEntities: string[],
-    sessionId: string
+    _rule: EntityRelationshipRule,
+    _completedEntities: string[],
+    _sessionId: string
   ): Promise<number> {
     // 簡易実装
     return 0.5;
   }
 
-  private async calculateNarrativeImportance(entityId: string, sessionId: string): Promise<number> {
+  private async calculateNarrativeImportance(_entityId: string, _sessionId: string): Promise<number> {
     // 簡易実装
     return 0.5;
   }
 
-  private async calculateContextualRelevance(entityId: string, sessionId: string): Promise<number> {
+  private async calculateContextualRelevance(_entityId: string, _sessionId: string): Promise<number> {
     // 簡易実装
     return 0.5;
   }
@@ -728,7 +723,7 @@ export class NarrativeCalculationService {
     return Math.exp(-Math.pow(elapsedHours - peak, 2) / (2 * Math.pow(spread, 2)));
   }
 
-  private async calculateTimingVariance(entityId: string, completedAt: string, sessionId: string): Promise<number> {
+  private async calculateTimingVariance(_entityId: string, _completedAt: string, _sessionId: string): Promise<number> {
     // 簡易実装
     return 0.7;
   }

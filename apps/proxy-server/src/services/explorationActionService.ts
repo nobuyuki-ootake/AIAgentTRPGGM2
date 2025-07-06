@@ -8,11 +8,11 @@ import { logger } from '../utils/logger';
 import {
   EntityExplorationAction,
   ExplorationActionExecution,
-  ExplorationFlowState,
+  // ExplorationFlowState,
   ExplorationActionType,
-  ExplorationState,
+  // ExplorationState,
   SkillCheckType,
-  ExplorationResult,
+  // ExplorationResult,
   StartExplorationActionRequest,
   StartExplorationActionResponse,
   ProvideUserInputRequest,
@@ -21,25 +21,33 @@ import {
   ExecuteSkillCheckResponse,
   GetLocationEntitiesRequest,
   GetLocationEntitiesResponse,
-  GetExplorationFlowStateRequest,
-  GetExplorationFlowStateResponse,
-  EntityGenerationRequest,
-  EntityGenerationResponse,
+  // GetExplorationFlowStateRequest,
+  // GetExplorationFlowStateResponse,
+  // EntityGenerationRequest,
+  // EntityGenerationResponse,
   DiceRoll
-} from '@repo/types';
+} from '@ai-agent-trpg/types';
 import { aiAgentMonitoringService } from './aiAgentMonitoringService';
 import { milestoneProgressService } from './milestoneProgressService';
 import { entityUnlockService } from './entityUnlockService';
 
 export class ExplorationActionService {
+  private initialized = false;
 
   constructor() {
-    this.initializeDatabase();
+    // Lazy initialization - database will be initialized on first use
   }
 
   // ==========================================
   // データベース初期化
   // ==========================================
+
+  private ensureInitialized() {
+    if (!this.initialized) {
+      this.initializeDatabase();
+      this.initialized = true;
+    }
+  }
 
   private initializeDatabase() {
     try {
@@ -130,6 +138,7 @@ export class ExplorationActionService {
    * 場所のエンティティ一覧を取得
    */
   async getLocationEntities(request: GetLocationEntitiesRequest): Promise<GetLocationEntitiesResponse> {
+    this.ensureInitialized();
     try {
       let query = `
         SELECT * FROM entity_exploration_actions 
@@ -236,6 +245,7 @@ export class ExplorationActionService {
    * 探索アクション開始
    */
   async startExplorationAction(request: StartExplorationActionRequest): Promise<StartExplorationActionResponse> {
+    this.ensureInitialized();
     try {
       // エンティティ情報を取得
       const entityRow = database.prepare(`
@@ -345,12 +355,14 @@ export class ExplorationActionService {
    * ユーザー入力を提供
    */
   async provideUserInput(request: ProvideUserInputRequest): Promise<ProvideUserInputResponse> {
+    this.ensureInitialized();
     try {
       // 実行オブジェクトを取得
       const execution = await this.getExplorationExecution(request.executionId);
       if (!execution) {
         return {
           success: false,
+          judgmentTriggered: false,
           error: '探索アクション実行が見つかりません'
         };
       }
@@ -358,6 +370,7 @@ export class ExplorationActionService {
       if (execution.characterId !== request.characterId) {
         return {
           success: false,
+          judgmentTriggered: false,
           error: '権限がありません'
         };
       }
@@ -365,6 +378,7 @@ export class ExplorationActionService {
       if (execution.state !== 'waiting_input') {
         return {
           success: false,
+          judgmentTriggered: false,
           error: 'ユーザー入力を受け付けていません'
         };
       }
@@ -444,6 +458,7 @@ export class ExplorationActionService {
    * スキルチェック実行
    */
   async executeSkillCheck(request: ExecuteSkillCheckRequest): Promise<ExecuteSkillCheckResponse> {
+    this.ensureInitialized();
     try {
       const execution = await this.getExplorationExecution(request.executionId);
       if (!execution) {
@@ -454,24 +469,27 @@ export class ExplorationActionService {
       }
 
       // ダイスロール実行
+      const rollResult = Math.floor(Math.random() * 20) + 1;
+      const modifier = 0; // TODO: キャラクターのスキル修正値を取得
+      const targetNumber = request.targetNumber || 15;
+      const totalResult = rollResult + modifier;
+      const success = totalResult >= targetNumber;
+      
       const diceRoll: DiceRoll = {
         id: uuidv4(),
-        rollerId: request.characterId,
-        rollerName: execution.characterName,
-        diceType: 'd20',
-        diceCount: 1,
-        modifier: 0, // TODO: キャラクターのスキル修正値を取得
-        result: Math.floor(Math.random() * 20) + 1,
         timestamp: new Date().toISOString(),
-        purpose: `${request.skillType}判定`
+        roller: execution.characterName,
+        characterId: request.characterId,
+        dice: 'd20',
+        results: [rollResult],
+        total: totalResult,
+        purpose: `${request.skillType}判定`,
+        target: targetNumber,
+        success: success
       };
 
-      const totalResult = diceRoll.result + diceRoll.modifier;
-      const targetNumber = request.targetNumber || 15;
-      const success = totalResult >= targetNumber;
-
       // 結果をシステムメッセージとしてチャットに投稿
-      const resultMessage = `🎲 ${request.skillType}判定: ${diceRoll.result}${diceRoll.modifier > 0 ? `+${diceRoll.modifier}` : ''} = ${totalResult} (目標値: ${targetNumber}) → ${success ? '成功' : '失敗'}`;
+      const resultMessage = `🎲 ${request.skillType}判定: ${rollResult}${modifier > 0 ? `+${modifier}` : ''} = ${totalResult} (目標値: ${targetNumber}) → ${success ? '成功' : '失敗'}`;
       
       const resultMessageId = await this.postSystemMessageToChat(
         execution.sessionId,
@@ -593,11 +611,15 @@ export class ExplorationActionService {
         dangerous: '⚠️ 非常に危険です！慎重に計画を立ててください。'
       };
 
-      const description = `${execution.characterName}が${entity.entityName}（${entityDescriptions[entity.entityType]}）に${actionDescriptions[execution.actionType]}...
+      const entityDesc = entityDescriptions[entity.entityType as keyof typeof entityDescriptions] || '要素';
+      const actionDesc = actionDescriptions[execution.actionType as keyof typeof actionDescriptions] || 'アクションを実行';
+      const riskWarning = riskWarnings[availableAction.riskLevel as keyof typeof riskWarnings] || '';
+      
+      const description = `${execution.characterName}が${entity.entityName}（${entityDesc}）に${actionDesc}...
 
 ${availableAction.description}
 
-${riskWarnings[availableAction.riskLevel]}
+${riskWarning}
 
 どのようにアプローチしますか？具体的な方法を説明してください。`;
 
@@ -695,11 +717,11 @@ ${riskWarnings[availableAction.riskLevel]}
   }
 
   private async postAIMessageToChat(
-    sessionId: string,
+    _sessionId: string,
     characterName: string,
     content: string,
     messageType: string,
-    executionId: string
+    _executionId: string
   ): Promise<string> {
     // TODO: 実際のチャットシステムとの統合
     // 現在は仮実装
@@ -709,9 +731,9 @@ ${riskWarnings[availableAction.riskLevel]}
   }
 
   private async postSystemMessageToChat(
-    sessionId: string,
+    _sessionId: string,
     content: string,
-    executionId: string
+    _executionId: string
   ): Promise<string> {
     // TODO: 実際のチャットシステムとの統合
     const messageId = uuidv4();
@@ -729,7 +751,7 @@ ${riskWarnings[availableAction.riskLevel]}
     stmt.run(characterId, new Date().toISOString(), entityId);
   }
 
-  private async recordEntityInteraction(entityId: string, characterId: string): Promise<void> {
+  private async recordEntityInteraction(entityId: string, _characterId: string): Promise<void> {
     const stmt = database.prepare(`
       UPDATE entity_exploration_actions 
       SET is_interacted = 1, times_interacted = times_interacted + 1, 

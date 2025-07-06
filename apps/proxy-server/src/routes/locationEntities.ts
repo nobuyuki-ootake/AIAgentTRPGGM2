@@ -2,22 +2,23 @@
 // 場所別エンティティ管理API
 // ==========================================
 
-import express from 'express';
+import { Router } from 'express';
 import { locationEntityService } from '../services/locationEntityService';
 import { logger } from '../utils/logger';
+import { asyncHandler } from '../middleware/errorHandler';
 import {
   GetLocationEntitiesDisplayRequest,
   UpdateEntityStatusRequest,
   RefreshLocationEntitiesRequest
-} from '@repo/types';
+} from '@ai-agent-trpg/types';
 
-const router = express.Router();
+const router = Router();
 
 // ==========================================
 // 場所別エンティティ表示データ取得
 // ==========================================
 
-router.get('/display/:sessionId/:locationId', async (req, res) => {
+router.get('/display/:sessionId/:locationId', asyncHandler(async (req, res) => {
   try {
     const sessionId = req.params.sessionId;
     const locationId = req.params.locationId;
@@ -47,11 +48,11 @@ router.get('/display/:sessionId/:locationId', async (req, res) => {
     }
 
     const response = await locationEntityService.getLocationEntitiesDisplay(request);
-    res.json(response);
+    return res.json(response);
 
   } catch (error) {
     logger.error('Failed to get location entities display:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       locationEntities: [],
       locationStats: {
@@ -64,13 +65,13 @@ router.get('/display/:sessionId/:locationId', async (req, res) => {
       error: '場所エンティティの取得に失敗しました'
     });
   }
-});
+}));
 
 // ==========================================
 // エンティティ状態更新
 // ==========================================
 
-router.put('/status', async (req, res) => {
+router.put('/status', asyncHandler(async (req, res) => {
   try {
     const request: UpdateEntityStatusRequest = {
       sessionId: req.body.sessionId,
@@ -97,22 +98,22 @@ router.put('/status', async (req, res) => {
     }
 
     const response = await locationEntityService.updateEntityStatus(request);
-    res.json(response);
+    return res.json(response);
 
   } catch (error) {
     logger.error('Failed to update entity status:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'エンティティ状態の更新に失敗しました'
     });
   }
-});
+}));
 
 // ==========================================
 // 場所エンティティ更新・再生成
 // ==========================================
 
-router.post('/refresh', async (req, res) => {
+router.post('/refresh', asyncHandler(async (req, res) => {
   try {
     const request: RefreshLocationEntitiesRequest = {
       sessionId: req.body.sessionId,
@@ -131,24 +132,24 @@ router.post('/refresh', async (req, res) => {
     }
 
     const response = await locationEntityService.refreshLocationEntities(request);
-    res.json(response);
+    return res.json(response);
 
   } catch (error) {
     logger.error('Failed to refresh location entities:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       refreshedEntities: [],
       newEntitiesGenerated: 0,
       error: '場所エンティティの更新に失敗しました'
     });
   }
-});
+}));
 
 // ==========================================
 // エンティティ詳細取得
 // ==========================================
 
-router.get('/detail/:sessionId/:entityId', async (req, res) => {
+router.get('/detail/:sessionId/:entityId', asyncHandler(async (req, res) => {
   try {
     const sessionId = req.params.sessionId;
     const entityId = req.params.entityId;
@@ -178,25 +179,25 @@ router.get('/detail/:sessionId/:entityId', async (req, res) => {
       ]
     };
 
-    res.json({
+    return res.json({
       success: true,
       entityDetail: mockDetail
     });
 
   } catch (error) {
     logger.error('Failed to get entity detail:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'エンティティ詳細の取得に失敗しました'
     });
   }
-});
+}));
 
 // ==========================================
 // 場所統計情報取得
 // ==========================================
 
-router.get('/stats/:sessionId/:locationId', async (req, res) => {
+router.get('/stats/:sessionId/:locationId', asyncHandler(async (req, res) => {
   try {
     const sessionId = req.params.sessionId;
     const locationId = req.params.locationId;
@@ -215,13 +216,13 @@ router.get('/stats/:sessionId/:locationId', async (req, res) => {
     });
 
     if (displayResponse.success) {
-      res.json({
+      return res.json({
         success: true,
         stats: displayResponse.locationStats,
         lastUpdated: displayResponse.lastUpdated
       });
     } else {
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         error: displayResponse.error || '統計情報の取得に失敗しました'
       });
@@ -229,20 +230,20 @@ router.get('/stats/:sessionId/:locationId', async (req, res) => {
 
   } catch (error) {
     logger.error('Failed to get location stats:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: '場所統計の取得に失敗しました'
     });
   }
-});
+}));
 
 // ==========================================
 // ヘルスチェック
 // ==========================================
 
-router.get('/health', async (req, res) => {
+router.get('/health', asyncHandler(async (_req, res) => {
   try {
-    res.json({
+    return res.json({
       success: true,
       service: 'location-entities',
       status: 'healthy',
@@ -257,7 +258,7 @@ router.get('/health', async (req, res) => {
     });
   } catch (error) {
     logger.error('Location entities health check failed:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       service: 'location-entities',
       status: 'error',
@@ -265,6 +266,6 @@ router.get('/health', async (req, res) => {
       error: error instanceof Error ? error.message : '不明なエラー'
     });
   }
-});
+}));
 
 export default router;

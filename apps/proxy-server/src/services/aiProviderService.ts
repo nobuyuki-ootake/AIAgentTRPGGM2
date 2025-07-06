@@ -8,9 +8,7 @@ import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import axios from 'axios';
-import { v4 as uuidv4 } from 'uuid';
-
-import { AIProvider, AIRequest, AIProviderType } from '@repo/types';
+import { AIRequest, AIProviderType } from '@ai-agent-trpg/types';
 import { logger } from '../utils/logger';
 import { AIServiceError, ValidationError } from '../middleware/errorHandler';
 import { getDatabase } from '../database/database';

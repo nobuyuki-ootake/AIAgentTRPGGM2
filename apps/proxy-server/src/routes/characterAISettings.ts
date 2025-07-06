@@ -6,7 +6,6 @@ import { v4 as uuidv4 } from 'uuid';
 import { 
   CharacterAISettings,
   CharacterAISettingsResponse, 
-  UpdateCharacterAIRequest,
   ActionAnalysis
 } from '@ai-agent-trpg/types';
 
@@ -396,9 +395,9 @@ router.post('/reset/:characterId', async (req: Request, res: Response): Promise<
 function generateMockDialogue(
   characterName: string,
   settings: CharacterAISettings,
-  characterClass: string
+  _characterClass: string
 ): string {
-  const { actionPriority, personality, communicationStyle } = settings;
+  const { actionPriority: _actionPriority, personality, communicationStyle } = settings;
   
   // コミュニケーションスタイルに基づく発話テンプレート
   const dialogueTemplates = {

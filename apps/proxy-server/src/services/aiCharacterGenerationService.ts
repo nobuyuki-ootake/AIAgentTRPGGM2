@@ -147,11 +147,9 @@ class AICharacterGenerationService {
         id: 'custom',
         name: 'カスタム',
         description,
-        genre: 'custom',
-        setting: description,
-        mood: 'dramatic',
-        difficulty: 'normal',
-        style: 'balanced'
+        tags: ['custom'],
+        atmosphere: 'dramatic',
+        commonElements: [description]
       },
       characterType,
     });
@@ -231,12 +229,12 @@ class AICharacterGenerationService {
 あなたはTRPGキャラクター生成の専門家です。以下の設定に基づいて、魅力的なキャラクターを1体生成してください。
 
 ## テーマ設定
-- ジャンル: ${theme.genre}
-- 世界観: ${theme.setting}
-- 雰囲気: ${theme.mood}
-- 難易度: ${theme.difficulty}
-- スタイル: ${theme.style}
-${theme.keyElements ? `- 重要要素: ${theme.keyElements.join(', ')}` : ''}
+- ジャンル: ${theme.tags.join(", ")}
+- 世界観: ${theme.description}
+- 雰囲気: ${theme.atmosphere}
+- 難易度: ${"balanced"}
+- スタイル: ${"standard"}
+${theme.commonElements ? `- 重要要素: ${theme.commonElements.join(', ')}` : ''}
 
 ## キャラクター要件
 - タイプ: ${characterType}
@@ -270,8 +268,8 @@ ${role ? `- 役割: ${role}` : ''}
 ## 注意事項
 - ${characterType === 'PC' ? 'プレイヤーが操作する主人公' : characterType === 'NPC' ? '協力的な仲間キャラクター' : '敵対的なキャラクター'}として設計してください
 - **キャラクター名は必ず日本語名**（ひらがな、カタカナ、漢字）を使用してください
-- テーマの${theme.genre}ジャンルに適した日本語の名前と設定にしてください
-- ステータスは${theme.difficulty}難易度に適したバランスにしてください
+- テーマの${theme.tags.join(", ")}ジャンルに適した日本語の名前と設定にしてください
+- ステータスは${"balanced"}難易度に適したバランスにしてください
 - **JSON内で二重引用符を使用する場合は必ずエスケープ（\\"）してください**
 - すべて日本語で回答してください
 `;
@@ -287,12 +285,12 @@ ${role ? `- 役割: ${role}` : ''}
 あなたはTRPGキャラクター企画の専門家です。以下のテーマに基づいて、3体のキャラクター概要を生成してください。
 
 ## テーマ設定
-- ジャンル: ${theme.genre}
-- 世界観: ${theme.setting}
-- 雰囲気: ${theme.mood}
-- 難易度: ${theme.difficulty}
-- スタイル: ${theme.style}
-${theme.keyElements ? `- 重要要素: ${theme.keyElements.join(', ')}` : ''}
+- ジャンル: ${theme.tags.join(", ")}
+- 世界観: ${theme.description}
+- 雰囲気: ${theme.atmosphere}
+- 難易度: ${"balanced"}
+- スタイル: ${"standard"}
+${theme.commonElements ? `- 重要要素: ${theme.commonElements.join(', ')}` : ''}
 
 ## 生成要件
 1つ目: プレイヤーキャラクター（戦士・前衛タイプ）
@@ -332,7 +330,7 @@ ${theme.keyElements ? `- 重要要素: ${theme.keyElements.join(', ')}` : ''}
 
 ## 注意事項
 - **キャラクター名は必ず日本語名**（ひらがな、カタカナ、漢字）を使用してください
-- ${theme.genre}ジャンルに適した日本語の名前と職業を設定してください
+- ${theme.tags.join(", ")}ジャンルに適した日本語の名前と職業を設定してください
 - 3つの異なるプレイスタイル（戦士系、魔法系、技能系）のキャラクターを作成してください
 - **全てのキャラクターは "characterType": "PC" として生成してください**（プレイヤー選択用）
 - プレイヤーが選択しやすいよう、明確に特徴を分けてください
@@ -352,12 +350,12 @@ ${theme.keyElements ? `- 重要要素: ${theme.keyElements.join(', ')}` : ''}
 あなたはTRPGキャラクター詳細設計の専門家です。以下の概要に基づいて、詳細なキャラクターを1体生成してください。
 
 ## テーマ設定
-- ジャンル: ${theme.genre}
-- 世界観: ${theme.setting}
-- 雰囲気: ${theme.mood}
-- 難易度: ${theme.difficulty}
-- スタイル: ${theme.style}
-${theme.keyElements ? `- 重要要素: ${theme.keyElements.join(', ')}` : ''}
+- ジャンル: ${theme.tags.join(", ")}
+- 世界観: ${theme.description}
+- 雰囲気: ${theme.atmosphere}
+- 難易度: ${"balanced"}
+- スタイル: ${"standard"}
+${theme.commonElements ? `- 重要要素: ${theme.commonElements.join(', ')}` : ''}
 
 ## キャラクター概要
 - 名前: ${concept.name}
@@ -394,8 +392,8 @@ ${theme.keyElements ? `- 重要要素: ${theme.keyElements.join(', ')}` : ''}
 ## 注意事項
 - 指定された日本語名前と職業を必ず使用してください
 - ${concept.role}としての特徴を反映してください
-- ${theme.genre}ジャンルに適した日本語の設定にしてください
-- ステータスは${theme.difficulty}難易度に適したバランスにしてください
+- ${theme.tags.join(", ")}ジャンルに適した日本語の設定にしてください
+- ステータスは${"balanced"}難易度に適したバランスにしてください
 - **JSON内で二重引用符を使用する場合は必ずエスケープ（\\"）してください**
 - すべて日本語で回答してください
 - JSONの構文エラーがないよう十分注意してください
@@ -804,33 +802,10 @@ ${theme.keyElements ? `- 重要要素: ${theme.keyElements.join(', ')}` : ''}
       },
       skills: [],
       feats: [],
-      equipment: {
-        weapon: null,
-        armor: null,
-        shield: null,
-        accessories: [],
-        inventory: [],
-        totalWeight: 0,
-        carryingCapacity: 50,
-      },
+      equipment: [],
       statusEffects: [],
-      appearance: {
-        height: '170cm',
-        weight: '70kg',
-        eyeColor: 'Brown',
-        hairColor: 'Black',
-        skinColor: 'Light',
-        distinguishingFeatures: 'None',
-      },
-      background: {
-        backstory: aiResponse.background || 'Unknown background.',
-        personality: aiResponse.personality || 'A unique personality.',
-        ideals: 'Justice and righteousness',
-        bonds: 'Loyal to companions',
-        flaws: 'Sometimes too trusting',
-        languages: ['Common'],
-        proficiencies: ['Basic combat'],
-      },
+      appearance: aiResponse.description || 'A mysterious figure.',
+      background: aiResponse.background || 'Unknown background.',
       currentLocationId: undefined,
       locationHistory: [],
       createdAt: new Date().toISOString(),

@@ -590,7 +590,27 @@ aiAgentRouter.post('/trigger-chain', asyncHandler(async (req, res) => {
 
 // 利用可能なAIプロバイダー一覧
 aiAgentRouter.get('/providers', (_req, res) => {
-  const providers = getAIService().getAvailableProviders();
+  // プロバイダー一覧を直接定義（getAvailableProvidersメソッドが削除されたため）
+  const providers = [
+    {
+      id: 'openai',
+      name: 'OpenAI',
+      models: ['gpt-3.5-turbo', 'gpt-4', 'gpt-4-turbo-preview'],
+      requiresApiKey: true,
+    },
+    {
+      id: 'anthropic',
+      name: 'Anthropic Claude',
+      models: ['claude-3-haiku-20240307', 'claude-3-sonnet-20240229', 'claude-3-opus-20240229'],
+      requiresApiKey: true,
+    },
+    {
+      id: 'google',
+      name: 'Google Gemini',
+      models: ['gemini-2.0-flash-lite', 'gemini-pro'],
+      requiresApiKey: true,
+    },
+  ];
   
   const response: APIResponse<typeof providers> = {
     success: true,

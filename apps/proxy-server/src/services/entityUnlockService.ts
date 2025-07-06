@@ -8,15 +8,11 @@ import { database } from '../database/database';
 import { logger } from '../utils/logger';
 import {
   UnifiedMilestone,
-  EntityRelationships,
-  EntityRelationshipRule,
   getMilestoneBaseInfo,
   ExplorationActionType,
-  SkillCheckType,
-  ID
-} from '@repo/types';
+  SkillCheckType
+} from '@ai-agent-trpg/types';
 import { explorationActionService } from './explorationActionService';
-import { milestoneProgressService } from './milestoneProgressService';
 
 // ==========================================
 // エンティティ解放システム用型定義
@@ -77,14 +73,22 @@ export interface UnlockEvent {
 }
 
 export class EntityUnlockService {
+  private initialized = false;
 
   constructor() {
-    this.initializeDatabase();
+    // Lazy initialization - database will be initialized on first use
   }
 
   // ==========================================
   // データベース初期化
   // ==========================================
+
+  private ensureInitialized() {
+    if (!this.initialized) {
+      this.initializeDatabase();
+      this.initialized = true;
+    }
+  }
 
   private initializeDatabase() {
     try {
@@ -146,15 +150,11 @@ export class EntityUnlockService {
    * エンティティ解放条件を登録
    */
   async registerUnlockCondition(condition: Omit<EntityUnlockCondition, 'id' | 'createdAt'>): Promise<string> {
+    this.ensureInitialized();
     try {
       const conditionId = uuidv4();
       const timestamp = new Date().toISOString();
 
-      const fullCondition: EntityUnlockCondition = {
-        ...condition,
-        id: conditionId,
-        createdAt: timestamp
-      };
 
       const stmt = database.prepare(`
         INSERT INTO entity_unlock_conditions (
@@ -195,6 +195,7 @@ export class EntityUnlockService {
     currentProgress: number,
     characterId?: string
   ): Promise<void> {
+    this.ensureInitialized();
     try {
       const activeConditions = await this.getActiveUnlockConditions(sessionId);
       
@@ -224,6 +225,7 @@ export class EntityUnlockService {
     completedMilestone: UnifiedMilestone,
     characterId?: string
   ): Promise<void> {
+    this.ensureInitialized();
     try {
       const baseInfo = getMilestoneBaseInfo(completedMilestone);
       const activeConditions = await this.getActiveUnlockConditions(sessionId);
@@ -255,6 +257,7 @@ export class EntityUnlockService {
     characterId: string,
     interactionSuccess: boolean
   ): Promise<void> {
+    this.ensureInitialized();
     try {
       const activeConditions = await this.getActiveUnlockConditions(sessionId);
       
@@ -367,7 +370,7 @@ export class EntityUnlockService {
   private async evaluateMilestoneProgressRule(
     rule: UnlockConditionRule,
     context: any,
-    sessionId: string
+    _sessionId: string
   ): Promise<boolean> {
     try {
       if (context.milestoneId !== rule.targetId) {
@@ -456,7 +459,7 @@ export class EntityUnlockService {
   private async evaluateCharacterActionRule(
     rule: UnlockConditionRule,
     context: any,
-    sessionId: string
+    _sessionId: string
   ): Promise<boolean> {
     try {
       if (context.characterId !== rule.targetId) {
@@ -577,6 +580,7 @@ export class EntityUnlockService {
    * アクティブな解放条件を取得
    */
   private async getActiveUnlockConditions(sessionId: string): Promise<EntityUnlockCondition[]> {
+    this.ensureInitialized();
     try {
       const rows = database.prepare(`
         SELECT * FROM entity_unlock_conditions 

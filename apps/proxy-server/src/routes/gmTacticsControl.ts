@@ -6,7 +6,6 @@ import { v4 as uuidv4 } from 'uuid';
 import { 
   EnemyTacticsLevel, 
   GMTacticsResponse, 
-  UpdateTacticsRequest,
   AIDecisionLog
 } from '@ai-agent-trpg/types';
 

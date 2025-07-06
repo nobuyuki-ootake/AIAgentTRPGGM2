@@ -17,16 +17,26 @@ import {
 } from '../mastra/agents/storyProgressionAgent';
 import {
   UnifiedMilestone,
-  getMilestoneBaseInfo,
-  ID
-} from '@repo/types';
+  getMilestoneBaseInfo
+} from '@ai-agent-trpg/types';
 
 export class StoryProgressionService {
   private static instance: StoryProgressionService;
   private app: express.Application | null = null;
+  private initialized = false;
 
   private constructor() {
-    this.initializeDatabase();
+    // Lazy initialization - database will be initialized on first use
+  }
+
+  /**
+   * 初期化確認
+   */
+  private ensureInitialized(): void {
+    if (!this.initialized) {
+      this.initializeDatabase();
+      this.initialized = true;
+    }
   }
 
   /**
@@ -143,6 +153,7 @@ export class StoryProgressionService {
     characterId: string,
     narrativeText: string
   ): Promise<void> {
+    this.ensureInitialized();
     try {
       const baseInfo = getMilestoneBaseInfo(milestone);
       
@@ -493,6 +504,7 @@ export class StoryProgressionService {
    * セッションデータの取得
    */
   private async getSessionData(sessionId: string): Promise<any> {
+    this.ensureInitialized();
     try {
       const stmt = database.prepare('SELECT * FROM sessions WHERE id = ?');
       return stmt.get(sessionId) || {};

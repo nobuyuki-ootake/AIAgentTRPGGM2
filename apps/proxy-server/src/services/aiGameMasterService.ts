@@ -1,5 +1,5 @@
 import { Database } from 'better-sqlite3';
-import { ID, SessionStatus, Character, Quest, Milestone, SessionDurationConfig, TRPGSession } from '@ai-agent-trpg/types';
+import { ID, Character, Quest, Milestone, SessionDurationConfig, TRPGSession } from '@ai-agent-trpg/types';
 import { getDatabase } from '../database/database';
 import { getAIService } from './aiService';
 import { getSessionService } from './sessionService';
@@ -1649,7 +1649,7 @@ JSONのみを出力してください。`;
         sessionId,
         campaignId,
         sessionSummary: response.message,
-        currentObjectives: milestones.slice(0, 3).map(m => m.title),
+        currentObjectives: milestones.slice(0, 3).map(m => m.title).filter((title): title is string => title !== undefined),
         keyNPCs: entityPool.npcs.map(npc => ({
           id: npc.id,
           name: npc.name,

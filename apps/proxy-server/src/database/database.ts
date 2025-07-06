@@ -1,4 +1,4 @@
-import * as Database from 'better-sqlite3';
+import Database from 'better-sqlite3';
 import * as path from 'path';
 import * as fs from 'fs';
 import { logger } from '../utils/logger';
@@ -11,14 +11,19 @@ let db: Database.Database | null = null;
 
 export async function initializeDatabase(): Promise<void> {
   try {
+    logger.info(`Database path: ${DB_PATH}`);
+    logger.info(`Database directory: ${DB_DIR}`);
+    
     // データベースディレクトリを作成
     if (!fs.existsSync(DB_DIR)) {
       fs.mkdirSync(DB_DIR, { recursive: true });
       logger.info(`Created database directory: ${DB_DIR}`);
+    } else {
+      logger.info(`Database directory already exists: ${DB_DIR}`);
     }
 
     // データベース接続
-    db = new (Database as any)(DB_PATH);
+    db = new Database(DB_PATH);
     logger.info(`Connected to database: ${DB_PATH}`);
 
     // WALモードを有効化（Litestreamとの互換性）
@@ -35,7 +40,12 @@ export async function initializeDatabase(): Promise<void> {
     logger.info('Database initialized successfully');
   } catch (error) {
     logger.error('Failed to initialize database:', error);
-    logger.error('Error details:', JSON.stringify(error));
+    if (error instanceof Error) {
+      logger.error('Error message:', error.message);
+      logger.error('Error stack:', error.stack);
+    } else {
+      logger.error('Error details:', error);
+    }
     throw new DatabaseError('Failed to initialize database', { error });
   }
 }

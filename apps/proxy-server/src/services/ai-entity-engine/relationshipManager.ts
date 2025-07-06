@@ -42,20 +42,12 @@ export class RelationshipManager {
 
   constructor(initialGraph?: EntityRelationshipGraph) {
     this.graph = initialGraph || {
-      nodes: [],
-      edges: [],
-      clusters: [],
       relationships: {},
-      analysisMetadata: {
-        lastAnalyzed: new Date().toISOString(),
-        complexity: 0,
-        criticality: {},
-        pathOptimization: []
-      },
       metadata: {
-        version: '1.0',
+        totalNodes: 0,
+        totalEdges: 0,
         lastUpdated: new Date().toISOString(),
-        totalRelationships: 0
+        validationStatus: 'valid'
       }
     };
   }
@@ -64,7 +56,7 @@ export class RelationshipManager {
    * 関係性追加
    */
   addRelationship(relationship: EntityRelationship): void {
-    const sourceId = relationship.sourceId;
+    const sourceId = relationship.sourceEntityId;
     
     // Initialize relationships if not present
     if (!this.graph.relationships) {
@@ -74,448 +66,356 @@ export class RelationshipManager {
     if (!this.graph.relationships[sourceId]) {
       this.graph.relationships[sourceId] = [];
     }
-
-    // 既存の関係をチェック
-    const existingIndex = this.graph.relationships[sourceId].findIndex(
-      r => r.targetId === relationship.targetId && r.type === relationship.type
+    
+    // Add the relationship if it doesn't already exist
+    const exists = this.graph.relationships[sourceId].some(
+      rel => rel.targetEntityId === relationship.targetEntityId && 
+             rel.relationType === relationship.relationType
     );
-
-    if (existingIndex >= 0) {
-      // 既存の関係を更新
-      this.graph.relationships[sourceId][existingIndex] = relationship;
-    } else {
-      // 新しい関係を追加
+    
+    if (!exists) {
       this.graph.relationships[sourceId].push(relationship);
-      if (this.graph.metadata) {
-        this.graph.metadata.totalRelationships++;
-      }
+      this.graph.metadata.totalEdges++;
+      
+      // Update node count
+      const allNodeIds = new Set<ID>();
+      Object.keys(this.graph.relationships).forEach(id => allNodeIds.add(id));
+      Object.values(this.graph.relationships).forEach(rels => {
+        rels.forEach(rel => allNodeIds.add(rel.targetEntityId));
+      });
+      this.graph.metadata.totalNodes = allNodeIds.size;
     }
-
-    this.updateMetadata();
-    this.clearRelatedCache(sourceId);
+    
+    // Clear caches
+    this.clearCaches();
+    
+    // Update metadata
+    this.graph.metadata.lastUpdated = new Date().toISOString();
   }
 
   /**
    * 関係性削除
    */
-  removeRelationship(sourceId: ID, targetId: ID, relationshipType?: string): boolean {
-    if (!this.graph.relationships) return false;
+  removeRelationship(sourceId: ID, targetId: ID, relationType?: string): void {
+    if (!this.graph.relationships[sourceId]) return;
     
-    const relationships = this.graph.relationships[sourceId];
-    if (!relationships) return false;
-
-    const initialLength = relationships.length;
+    const prevLength = this.graph.relationships[sourceId].length;
+    this.graph.relationships[sourceId] = this.graph.relationships[sourceId].filter(
+      rel => !(rel.targetEntityId === targetId && 
+              (!relationType || rel.relationType === relationType))
+    );
     
-    this.graph.relationships[sourceId] = relationships.filter(r => {
-      const typeMatch = !relationshipType || r.type === relationshipType;
-      return !(r.targetId === targetId && typeMatch);
+    const removedCount = prevLength - this.graph.relationships[sourceId].length;
+    this.graph.metadata.totalEdges -= removedCount;
+    
+    // Clean up empty arrays
+    if (this.graph.relationships[sourceId].length === 0) {
+      delete this.graph.relationships[sourceId];
+    }
+    
+    // Update node count
+    const allNodeIds = new Set<ID>();
+    Object.keys(this.graph.relationships).forEach(id => allNodeIds.add(id));
+    Object.values(this.graph.relationships).forEach(rels => {
+      rels.forEach(rel => allNodeIds.add(rel.targetEntityId));
     });
-
-    const removed = initialLength > this.graph.relationships[sourceId].length;
+    this.graph.metadata.totalNodes = allNodeIds.size;
     
-    if (removed && this.graph.metadata) {
-      this.graph.metadata.totalRelationships--;
-      this.updateMetadata();
-      this.clearRelatedCache(sourceId);
-    }
-
-    return removed;
-  }
-
-  /**
-   * エンティティの全関係性取得
-   */
-  getEntityRelationships(entityId: ID, includeIncoming = false): EntityRelationship[] {
-    if (!this.graph.relationships) return [];
-    
-    const outgoing = this.graph.relationships[entityId] || [];
-    
-    if (!includeIncoming) {
-      return outgoing;
-    }
-
-    const incoming: EntityRelationship[] = [];
-    for (const [sourceId, relationships] of Object.entries(this.graph.relationships)) {
-      if (sourceId === entityId) continue;
-      
-      for (const relationship of relationships) {
-        if (relationship.targetId === entityId) {
-          incoming.push({
-            ...relationship,
-            sourceId: sourceId,
-            direction: 'unidirectional'
-          });
-        }
-      }
-    }
-
-    return [...outgoing, ...incoming];
+    this.clearCaches();
+    this.graph.metadata.lastUpdated = new Date().toISOString();
   }
 
   /**
    * 関係性分析
    */
   analyzeRelationships(entityId: ID): RelationshipAnalysis {
-    const cacheKey = `analysis_${entityId}`;
-    const cached = this.relationshipCache.get(cacheKey);
+    // Check cache
+    const cached = this.relationshipCache.get(entityId);
     if (cached) return cached;
-
-    const directRelationships = this.getEntityRelationships(entityId, true);
-    const indirectRelationships = this.findIndirectRelationships(entityId, 2);
+    
+    const directRelationships = this.getDirectRelationships(entityId);
+    const indirectRelationships = this.findIndirectRelationships(entityId);
     const dependencyChain = this.buildDependencyChain(entityId);
-    const circularDependencies = this.detectCircularDependencies(entityId);
-    const relationshipScore = this.calculateRelationshipScore(entityId);
-    const impactLevel = this.determineImpactLevel(relationshipScore, directRelationships.length);
-
+    const circularDependencies = this.findCircularDependencies(entityId);
+    
     const analysis: RelationshipAnalysis = {
       entityId,
       directRelationships,
       indirectRelationships,
       dependencyChain,
       circularDependencies,
-      relationshipScore,
-      impactLevel
+      relationshipScore: this.calculateRelationshipScore(entityId),
+      impactLevel: this.determineImpactLevel(entityId)
     };
-
-    this.relationshipCache.set(cacheKey, analysis);
+    
+    this.relationshipCache.set(entityId, analysis);
     return analysis;
   }
 
   /**
-   * エンティティ間のパス検索
+   * 直接関係性取得
    */
-  findPath(fromId: ID, toId: ID, maxHops = 5): PathfindingResult | null {
-    const cacheKey = `path_${fromId}_${toId}_${maxHops}`;
-    const cached = this.pathCache.get(cacheKey);
-    if (cached) return cached;
-
-    const result = this.breadthFirstSearch(fromId, toId, maxHops);
-    if (result) {
-      this.pathCache.set(cacheKey, result);
-    }
-
-    return result;
+  private getDirectRelationships(entityId: ID): EntityRelationship[] {
+    const outgoing = this.graph.relationships[entityId] || [];
+    const incoming: EntityRelationship[] = [];
+    
+    // Find incoming relationships
+    Object.entries(this.graph.relationships).forEach(([sourceId, rels]) => {
+      rels.forEach(rel => {
+        if (rel.targetEntityId === entityId) {
+          incoming.push({
+            ...rel,
+            sourceEntityId: entityId,
+            targetEntityId: sourceId,
+            metadata: {
+              ...rel.metadata,
+              createdAt: rel.metadata?.createdAt || new Date().toISOString(),
+              validationCount: rel.metadata?.validationCount || 0
+            }
+          });
+        }
+      });
+    });
+    
+    return [...outgoing, ...incoming];
   }
 
   /**
-   * 強い関係性を持つエンティティグループ検出
+   * 関係性グラフ構築
    */
-  findStronglyConnectedGroups(minStrength = 0.7): ID[][] {
-    const visited = new Set<ID>();
-    const groups: ID[][] = [];
-
-    if (!this.graph.relationships) return groups;
-
-    for (const entityId of Object.keys(this.graph.relationships)) {
-      if (visited.has(entityId)) continue;
-
-      const group = this.exploreStrongConnections(entityId, minStrength, visited);
-      if (group.length > 1) {
-        groups.push(group);
+  buildRelationshipGraph(centerEntityId: ID, depth: number = 2): EntityRelationshipGraph {
+    const visitedNodes = new Set<ID>();
+    const subgraph: EntityRelationshipGraph = {
+      relationships: {},
+      metadata: {
+        totalNodes: 0,
+        totalEdges: 0,
+        lastUpdated: new Date().toISOString(),
+        validationStatus: 'valid'
       }
-    }
+    };
+    
+    const explore = (entityId: ID, currentDepth: number) => {
+      if (currentDepth > depth || visitedNodes.has(entityId)) return;
+      visitedNodes.add(entityId);
+      
+      const relationships = this.getDirectRelationships(entityId);
+      if (relationships.length > 0) {
+        subgraph.relationships[entityId] = relationships;
+        subgraph.metadata.totalEdges += relationships.length;
+        
+        relationships.forEach(rel => {
+          explore(rel.targetEntityId, currentDepth + 1);
+        });
+      }
+    };
+    
+    explore(centerEntityId, 0);
+    subgraph.metadata.totalNodes = visitedNodes.size;
+    
+    return subgraph;
+  }
 
-    return groups;
+  /**
+   * パスファインディング
+   */
+  findPath(sourceId: ID, targetId: ID): PathfindingResult | null {
+    const cacheKey = `${sourceId}->${targetId}`;
+    const cached = this.pathCache.get(cacheKey);
+    if (cached) return cached;
+    
+    const visited = new Set<ID>();
+    const queue: { id: ID; path: ID[]; strength: number }[] = [
+      { id: sourceId, path: [sourceId], strength: 1 }
+    ];
+    
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      
+      if (current.id === targetId) {
+        const result: PathfindingResult = {
+          path: current.path,
+          relationshipStrength: current.strength,
+          hops: current.path.length - 1,
+          pathType: current.path.length === 2 ? 'direct' : 
+                   current.path.length <= 4 ? 'indirect' : 'complex'
+        };
+        this.pathCache.set(cacheKey, result);
+        return result;
+      }
+      
+      if (visited.has(current.id)) continue;
+      visited.add(current.id);
+      
+      const relationships = this.graph.relationships[current.id] || [];
+      relationships.forEach(rel => {
+        if (!visited.has(rel.targetEntityId)) {
+          queue.push({
+            id: rel.targetEntityId,
+            path: [...current.path, rel.targetEntityId],
+            strength: current.strength * rel.strength
+          });
+        }
+      });
+    }
+    
+    return null;
+  }
+
+  /**
+   * 間接関係性検出
+   */
+  private findIndirectRelationships(entityId: ID, maxDepth: number = 3): EntityRelationship[] {
+    const indirectRels: EntityRelationship[] = [];
+    const visited = new Set<ID>();
+    
+    const traverse = (currentId: ID, depth: number, path: ID[]) => {
+      if (depth > maxDepth || visited.has(currentId)) return;
+      visited.add(currentId);
+      
+      const relationships = this.graph.relationships[currentId] || [];
+      relationships.forEach(rel => {
+        if (depth > 0 && rel.targetEntityId !== entityId) {
+          const targetEntity = rel.targetEntityId;
+          if (!path.includes(targetEntity)) {
+            const indirectRel: EntityRelationship = {
+              id: `indirect-${entityId}-${targetEntity}`,
+              sourceEntityId: entityId,
+              targetEntityId: targetEntity,
+              relationType: 'sequence',
+              strength: rel.strength * Math.pow(0.8, depth),
+              bidirectional: false,
+              metadata: {
+                description: `Indirect relationship through ${path.length} entities`,
+                createdAt: new Date().toISOString(),
+                validationCount: 0
+              }
+            };
+            indirectRels.push(indirectRel);
+          }
+          traverse(targetEntity, depth + 1, [...path, targetEntity]);
+        }
+      });
+    };
+    
+    traverse(entityId, 0, [entityId]);
+    return indirectRels;
   }
 
   /**
    * 依存関係チェーン構築
    */
   private buildDependencyChain(entityId: ID): ID[] {
-    const chain: ID[] = [];
-    const visited = new Set<ID>();
+    const chain: ID[] = [entityId];
+    const visited = new Set<ID>([entityId]);
     
-    const buildChain = (currentId: ID) => {
-      if (visited.has(currentId)) return;
-      visited.add(currentId);
-      chain.push(currentId);
-
-      if (!this.graph.relationships) return;
+    const findDependencies = (currentId: ID) => {
+      const relationships = this.graph.relationships[currentId] || [];
+      const dependencies = relationships.filter(
+        rel => rel.relationType === 'dependency' || rel.relationType === 'prerequisite'
+      );
       
-      const dependencies = this.graph.relationships[currentId]?.filter(
-        r => r.type === 'dependency' || r.type === 'prerequisite'
-      ) || [];
-
-      for (const dep of dependencies) {
-        buildChain(dep.targetId);
-      }
+      dependencies.forEach(dep => {
+        if (!visited.has(dep.targetEntityId)) {
+          visited.add(dep.targetEntityId);
+          chain.push(dep.targetEntityId);
+          findDependencies(dep.targetEntityId);
+        }
+      });
     };
-
-    buildChain(entityId);
+    
+    findDependencies(entityId);
     return chain;
   }
 
   /**
    * 循環依存検出
    */
-  private detectCircularDependencies(entityId: ID): ID[][] {
+  private findCircularDependencies(entityId: ID): ID[][] {
     const cycles: ID[][] = [];
     const visited = new Set<ID>();
-    const recursionStack = new Set<ID>();
-
-    const detectCycle = (currentId: ID, path: ID[]) => {
-      if (recursionStack.has(currentId)) {
-        // 循環依存発見
-        const cycleStart = path.indexOf(currentId);
-        cycles.push(path.slice(cycleStart));
-        return;
-      }
-
-      if (visited.has(currentId)) return;
-
-      visited.add(currentId);
-      recursionStack.add(currentId);
-
-      if (!this.graph.relationships) return;
-
-      const dependencies = this.graph.relationships[currentId]?.filter(
-        r => r.type === 'dependency' || r.type === 'prerequisite'
-      ) || [];
-
-      for (const dep of dependencies) {
-        detectCycle(dep.targetId, [...path, currentId]);
-      }
-
-      recursionStack.delete(currentId);
-    };
-
-    detectCycle(entityId, []);
-    return cycles;
-  }
-
-  /**
-   * 間接的関係性検索
-   */
-  private findIndirectRelationships(entityId: ID, maxDepth: number): EntityRelationship[] {
-    const indirect: EntityRelationship[] = [];
-    const visited = new Set<ID>();
-
-    const searchIndirect = (currentId: ID, depth: number, path: ID[]) => {
-      if (depth >= maxDepth || visited.has(currentId)) return;
-      visited.add(currentId);
-
-      if (!this.graph.relationships) return;
-
-      const relationships = this.graph.relationships[currentId] || [];
-      for (const relationship of relationships) {
-        if (relationship.targetId !== entityId && !path.includes(relationship.targetId)) {
-          indirect.push({
-            ...relationship,
-            sourceId: entityId,
-            targetId: relationship.targetId,
-            strength: relationship.strength * (1 / (depth + 1)), // 距離による減衰
-            metadata: {
-              ...relationship.metadata,
-              isIndirect: true,
-              pathLength: depth + 1,
-              intermediatePath: path
-            }
-          });
-
-          searchIndirect(relationship.targetId, depth + 1, [...path, currentId]);
-        }
-      }
-    };
-
-    searchIndirect(entityId, 0, []);
-    return indirect;
-  }
-
-  /**
-   * 関係性スコア計算
-   */
-  private calculateRelationshipScore(entityId: ID): number {
-    const relationships = this.getEntityRelationships(entityId, true);
+    const recStack = new Set<ID>();
+    const path: ID[] = [];
     
-    let score = 0;
-    for (const relationship of relationships) {
-      let relationshipValue = relationship.strength;
-
-      // 関係タイプによる重み付け
-      switch (relationship.type) {
-        case 'dependency':
-        case 'prerequisite':
-          relationshipValue *= 1.5;
-          break;
-        case 'conflicts':
-        case 'mutual_exclusive':
-          relationshipValue *= 1.3;
-          break;
-        case 'enhances':
-        case 'synergy':
-          relationshipValue *= 1.2;
-          break;
-        case 'reference':
-          relationshipValue *= 0.8;
-          break;
-      }
-
-      // 方向による重み付け
-      if (relationship.direction === 'bidirectional') {
-        relationshipValue *= 1.1;
-      }
-
-      score += relationshipValue;
-    }
-
-    return Math.min(score / Math.max(relationships.length, 1), 1.0);
-  }
-
-  /**
-   * 影響レベル判定
-   */
-  private determineImpactLevel(score: number, relationshipCount: number): 'low' | 'medium' | 'high' | 'critical' {
-    if (score >= 0.8 && relationshipCount >= 5) return 'critical';
-    if (score >= 0.6 && relationshipCount >= 3) return 'high';
-    if (score >= 0.4 || relationshipCount >= 2) return 'medium';
-    return 'low';
-  }
-
-  /**
-   * 幅優先探索によるパス検索
-   */
-  private breadthFirstSearch(fromId: ID, toId: ID, maxHops: number): PathfindingResult | null {
-    if (fromId === toId) {
-      return {
-        path: [fromId],
-        relationshipStrength: 1.0,
-        hops: 0,
-        pathType: 'direct'
-      };
-    }
-
-    if (!this.graph.relationships) return null;
-
-    const queue: { id: ID; path: ID[]; strength: number }[] = [
-      { id: fromId, path: [fromId], strength: 1.0 }
-    ];
-    const visited = new Set<ID>();
-
-    while (queue.length > 0) {
-      const current = queue.shift()!;
+    const dfs = (currentId: ID): boolean => {
+      visited.add(currentId);
+      recStack.add(currentId);
+      path.push(currentId);
       
-      if (current.path.length - 1 >= maxHops) continue;
-      if (visited.has(current.id)) continue;
-      
-      visited.add(current.id);
-
-      const relationships = this.graph.relationships[current.id] || [];
-      
-      for (const relationship of relationships) {
-        const targetId = relationship.targetId;
-        
-        if (targetId === toId) {
-          const finalStrength = current.strength * relationship.strength;
-          return {
-            path: [...current.path, targetId],
-            relationshipStrength: finalStrength,
-            hops: current.path.length,
-            pathType: current.path.length === 1 ? 'direct' : 
-                     current.path.length <= 3 ? 'indirect' : 'complex'
-          };
-        }
-
-        if (!visited.has(targetId) && !current.path.includes(targetId)) {
-          queue.push({
-            id: targetId,
-            path: [...current.path, targetId],
-            strength: current.strength * relationship.strength
-          });
-        }
-      }
-    }
-
-    return null;
-  }
-
-  /**
-   * 強い結合探索
-   */
-  private exploreStrongConnections(startId: ID, minStrength: number, globalVisited: Set<ID>): ID[] {
-    const group: ID[] = [];
-    const queue: ID[] = [startId];
-    const localVisited = new Set<ID>();
-
-    while (queue.length > 0) {
-      const currentId = queue.shift()!;
-      
-      if (localVisited.has(currentId) || globalVisited.has(currentId)) continue;
-      
-      localVisited.add(currentId);
-      globalVisited.add(currentId);
-      group.push(currentId);
-
-      if (!this.graph.relationships) continue;
-
       const relationships = this.graph.relationships[currentId] || [];
-      
-      for (const relationship of relationships) {
-        if (relationship.strength >= minStrength && !localVisited.has(relationship.targetId)) {
-          queue.push(relationship.targetId);
+      for (const rel of relationships) {
+        if (rel.relationType === 'dependency' || rel.relationType === 'prerequisite') {
+          const targetId = rel.targetEntityId;
+          
+          if (!visited.has(targetId)) {
+            if (dfs(targetId)) {
+              return true;
+            }
+          } else if (recStack.has(targetId)) {
+            // Found a cycle
+            const cycleStart = path.indexOf(targetId);
+            if (cycleStart !== -1) {
+              cycles.push(path.slice(cycleStart).concat(targetId));
+            }
+          }
         }
       }
-    }
-
-    return group;
+      
+      path.pop();
+      recStack.delete(currentId);
+      return false;
+    };
+    
+    dfs(entityId);
+    return cycles;
   }
 
   /**
    * グラフメトリクス計算
    */
   calculateGraphMetrics(): GraphMetrics {
-    const allNodes = new Set<ID>();
+    const nodeIds = new Set<ID>();
     let totalEdges = 0;
-
-    if (!this.graph.relationships) {
-      return {
-        totalNodes: 0,
-        totalEdges: 0,
-        averageConnectivity: 0,
-        stronglyConnectedComponents: [],
-        isolatedNodes: [],
-        hubNodes: []
-      };
-    }
-
-    // ノードとエッジの計算
-    for (const [sourceId, relationships] of Object.entries(this.graph.relationships)) {
-      allNodes.add(sourceId);
-      totalEdges += relationships.length;
-      
-      for (const relationship of relationships) {
-        allNodes.add(relationship.targetId);
-      }
-    }
-
-    const totalNodes = allNodes.size;
-
-    // 平均接続性計算
+    
+    // Collect all nodes and edges
+    Object.entries(this.graph.relationships).forEach(([sourceId, rels]) => {
+      nodeIds.add(sourceId);
+      rels.forEach(rel => {
+        nodeIds.add(rel.targetEntityId);
+        totalEdges++;
+      });
+    });
+    
+    const totalNodes = nodeIds.size;
     const averageConnectivity = totalNodes > 0 ? totalEdges / totalNodes : 0;
-
-    // 強結合成分検出
-    const stronglyConnectedComponents = this.findStronglyConnectedGroups(0.5);
-
-    // 孤立ノード検出
-    const isolatedNodes: ID[] = [];
-    for (const nodeId of allNodes) {
-      const hasOutgoing = this.graph.relationships[nodeId]?.length > 0;
-      const hasIncoming = this.hasIncomingRelationships(nodeId);
-      
-      if (!hasOutgoing && !hasIncoming) {
-        isolatedNodes.push(nodeId);
-      }
-    }
-
-    // ハブノード検出
-    const hubNodes: { id: ID; connectionCount: number }[] = [];
-    for (const nodeId of allNodes) {
-      const connectionCount = this.getConnectionCount(nodeId);
-      if (connectionCount >= 5) { // 5つ以上の接続を持つノードをハブとする
-        hubNodes.push({ id: nodeId, connectionCount });
-      }
-    }
-    hubNodes.sort((a, b) => b.connectionCount - a.connectionCount);
-
+    
+    // Find strongly connected components using Tarjan's algorithm
+    const stronglyConnectedComponents = this.findStronglyConnectedComponents();
+    
+    // Find isolated nodes
+    const isolatedNodes = Array.from(nodeIds).filter(id => {
+      const hasOutgoing = !!this.graph.relationships[id]?.length;
+      const hasIncoming = Object.values(this.graph.relationships).some(
+        rels => rels.some(rel => rel.targetEntityId === id)
+      );
+      return !hasOutgoing && !hasIncoming;
+    });
+    
+    // Find hub nodes
+    const connectionCounts = new Map<ID, number>();
+    nodeIds.forEach(id => {
+      const outgoing = this.graph.relationships[id]?.length || 0;
+      const incoming = Object.values(this.graph.relationships).filter(
+        rels => rels.some(rel => rel.targetEntityId === id)
+      ).length;
+      connectionCounts.set(id, outgoing + incoming);
+    });
+    
+    const hubNodes = Array.from(connectionCounts.entries())
+      .map(([id, count]) => ({ id, connectionCount: count }))
+      .filter(node => node.connectionCount > averageConnectivity * 2)
+      .sort((a, b) => b.connectionCount - a.connectionCount);
+    
     return {
       totalNodes,
       totalEdges,
@@ -527,132 +427,158 @@ export class RelationshipManager {
   }
 
   /**
-   * 入力関係の存在チェック
+   * 強連結成分検出
    */
-  private hasIncomingRelationships(targetId: ID): boolean {
-    if (!this.graph.relationships) return false;
-
-    for (const relationships of Object.values(this.graph.relationships)) {
-      if (relationships.some(r => r.targetId === targetId)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /**
-   * 接続数計算
-   */
-  private getConnectionCount(nodeId: ID): number {
-    if (!this.graph.relationships) return 0;
-
-    const outgoing = this.graph.relationships[nodeId]?.length || 0;
-    let incoming = 0;
+  private findStronglyConnectedComponents(): ID[][] {
+    const components: ID[][] = [];
+    const stack: ID[] = [];
+    const lowlinks = new Map<ID, number>();
+    const indices = new Map<ID, number>();
+    const onStack = new Set<ID>();
+    let index = 0;
     
-    for (const relationships of Object.values(this.graph.relationships)) {
-      incoming += relationships.filter(r => r.targetId === nodeId).length;
-    }
-    
-    return outgoing + incoming;
-  }
-
-  /**
-   * メタデータ更新
-   */
-  private updateMetadata(): void {
-    if (this.graph.metadata) {
-      this.graph.metadata.lastUpdated = new Date().toISOString();
-    }
-  }
-
-  /**
-   * 関連キャッシュクリア
-   */
-  private clearRelatedCache(entityId: ID): void {
-    const keysToDelete: string[] = [];
-    
-    for (const key of this.relationshipCache.keys()) {
-      if (key.includes(entityId)) {
-        keysToDelete.push(key);
-      }
-    }
-    
-    for (const key of keysToDelete) {
-      this.relationshipCache.delete(key);
-    }
-
-    // パスキャッシュもクリア
-    for (const key of this.pathCache.keys()) {
-      if (key.includes(entityId)) {
-        this.pathCache.delete(key);
-      }
-    }
-  }
-
-  /**
-   * グラフ全体をリセット
-   */
-  resetGraph(): void {
-    this.graph = {
-      nodes: [],
-      edges: [],
-      clusters: [],
-      relationships: {},
-      analysisMetadata: {
-        lastAnalyzed: new Date().toISOString(),
-        complexity: 0,
-        criticality: {},
-        pathOptimization: []
-      },
-      metadata: {
-        version: '1.0',
-        lastUpdated: new Date().toISOString(),
-        totalRelationships: 0
+    const strongconnect = (v: ID) => {
+      indices.set(v, index);
+      lowlinks.set(v, index);
+      index++;
+      stack.push(v);
+      onStack.add(v);
+      
+      const relationships = this.graph.relationships[v] || [];
+      relationships.forEach(rel => {
+        const w = rel.targetEntityId;
+        if (!indices.has(w)) {
+          strongconnect(w);
+          lowlinks.set(v, Math.min(lowlinks.get(v)!, lowlinks.get(w)!));
+        } else if (onStack.has(w)) {
+          lowlinks.set(v, Math.min(lowlinks.get(v)!, indices.get(w)!));
+        }
+      });
+      
+      if (lowlinks.get(v) === indices.get(v)) {
+        const component: ID[] = [];
+        let w: ID;
+        do {
+          w = stack.pop()!;
+          onStack.delete(w);
+          component.push(w);
+        } while (w !== v);
+        
+        if (component.length > 1) {
+          components.push(component);
+        }
       }
     };
-    this.clearAllCaches();
+    
+    // Get all nodes
+    const allNodes = new Set<ID>();
+    Object.keys(this.graph.relationships).forEach(id => allNodes.add(id));
+    Object.values(this.graph.relationships).forEach(rels => {
+      rels.forEach(rel => allNodes.add(rel.targetEntityId));
+    });
+    
+    allNodes.forEach(node => {
+      if (!indices.has(node)) {
+        strongconnect(node);
+      }
+    });
+    
+    return components;
   }
 
   /**
-   * 全キャッシュクリア
+   * 関係性スコア計算
    */
-  clearAllCaches(): void {
+  private calculateRelationshipScore(entityId: ID): number {
+    const directRels = this.getDirectRelationships(entityId);
+    const incomingCount = directRels.filter(
+      rel => rel.targetEntityId === entityId
+    ).length;
+    const outgoingCount = directRels.filter(
+      rel => rel.sourceEntityId === entityId
+    ).length;
+    
+    const strengthSum = directRels.reduce((sum, rel) => sum + rel.strength, 0);
+    const avgStrength = directRels.length > 0 ? strengthSum / directRels.length : 0;
+    
+    // Score based on connectivity and strength
+    const connectivityScore = Math.min((incomingCount + outgoingCount) / 10, 1);
+    const strengthScore = avgStrength;
+    
+    return (connectivityScore + strengthScore) / 2;
+  }
+
+  /**
+   * 影響レベル判定
+   */
+  private determineImpactLevel(entityId: ID): 'low' | 'medium' | 'high' | 'critical' {
+    const score = this.calculateRelationshipScore(entityId);
+    const dependencies = this.buildDependencyChain(entityId);
+    const metrics = this.calculateGraphMetrics();
+    const isHub = metrics.hubNodes.some(hub => hub.id === entityId);
+    
+    if (isHub || dependencies.length > 10) return 'critical';
+    if (score > 0.7 || dependencies.length > 5) return 'high';
+    if (score > 0.4 || dependencies.length > 2) return 'medium';
+    return 'low';
+  }
+
+  /**
+   * キャッシュクリア
+   */
+  private clearCaches(): void {
     this.relationshipCache.clear();
     this.pathCache.clear();
   }
 
   /**
-   * グラフデータ取得
+   * グラフエクスポート
    */
-  getGraph(): EntityRelationshipGraph {
-    return { ...this.graph };
+  exportGraph(): EntityRelationshipGraph {
+    return JSON.parse(JSON.stringify(this.graph));
   }
 
   /**
-   * グラフデータ設定
+   * グラフインポート
    */
-  setGraph(graph: EntityRelationshipGraph): void {
-    this.graph = graph;
-    this.clearAllCaches();
+  importGraph(graph: EntityRelationshipGraph): void {
+    this.graph = JSON.parse(JSON.stringify(graph));
+    this.clearCaches();
   }
 
   /**
-   * グラフ統計情報取得
+   * グラフ妥当性検証
    */
-  getStatistics() {
-    const totalNodes = this.graph.relationships ? Object.keys(this.graph.relationships).length : 0;
-    const totalRelationships = this.graph.metadata?.totalRelationships || 0;
-
+  validateGraph(): { isValid: boolean; errors: string[] } {
+    const errors: string[] = [];
+    
+    // Check for self-references
+    Object.entries(this.graph.relationships).forEach(([sourceId, rels]) => {
+      rels.forEach(rel => {
+        if (rel.sourceEntityId === rel.targetEntityId) {
+          errors.push(`Self-reference detected: ${sourceId}`);
+        }
+      });
+    });
+    
+    // Check for duplicate relationships
+    Object.entries(this.graph.relationships).forEach(([sourceId, rels]) => {
+      const seen = new Set<string>();
+      rels.forEach(rel => {
+        const key = `${rel.targetEntityId}-${rel.relationType}`;
+        if (seen.has(key)) {
+          errors.push(`Duplicate relationship: ${sourceId} -> ${rel.targetEntityId} (${rel.relationType})`);
+        }
+        seen.add(key);
+      });
+    });
+    
+    // Update validation status
+    this.graph.metadata.validationStatus = errors.length === 0 ? 'valid' : 'invalid';
+    
     return {
-      totalNodes,
-      totalRelationships,
-      cacheSize: {
-        relationships: this.relationshipCache.size,
-        paths: this.pathCache.size
-      },
-      lastUpdated: this.graph.metadata?.lastUpdated || new Date().toISOString()
+      isValid: errors.length === 0,
+      errors
     };
   }
 }
-
-export const relationshipManager = new RelationshipManager();

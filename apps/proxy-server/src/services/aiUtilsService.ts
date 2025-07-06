@@ -7,7 +7,7 @@
 import { logger } from '../utils/logger';
 import { systemPrompts } from '../utils/systemPrompts';
 import { getDatabase } from '../database/database';
-import { aiProviderService, AIServiceRequest } from './aiProviderService';
+import { aiProviderService } from './aiProviderService';
 
 // ==========================================
 // AIユーティリティサービスクラス
@@ -326,7 +326,7 @@ Return the response as a structured JSON object compatible with the ThemeAdaptat
     availableChoices: any[];
     context: any;
   }) {
-    const systemPrompt = systemPrompts.getPlayerChoiceInterpretationPrompt();
+    const systemPrompt = systemPrompts.getChoiceInterpretationPrompt();
     
     const contextMessage = `
 プレイヤー入力: "${params.playerInput}"
@@ -379,7 +379,7 @@ ${JSON.stringify(params.context, null, 2)}
     challengeContext: any;
     difficultySettings: any;
   }) {
-    const systemPrompt = systemPrompts.getPlayerSolutionEvaluationPrompt();
+    const systemPrompt = systemPrompts.getGMAssistantPrompt();
     
     const contextMessage = `
 プレイヤーの解決策:
@@ -439,7 +439,7 @@ ${JSON.stringify(params.difficultySettings, null, 2)}
     sessionProgress: any;
     targetBalance: any;
   }) {
-    const systemPrompt = systemPrompts.getDynamicDifficultyPrompt();
+    const systemPrompt = systemPrompts.getGMAssistantPrompt();
     
     const contextMessage = `
 プレイヤーパフォーマンス:
@@ -497,7 +497,16 @@ ${JSON.stringify(params.targetBalance, null, 2)}
     try {
       const db = getDatabase();
       
-      const stats = {
+      interface StatsData {
+        totalRequests: number;
+        requestsByProvider: Record<string, any>;
+        requestsByCategory: Record<string, any>;
+        averageProcessingTime: number;
+        totalTokensUsed: number;
+        recentActivity: any[];
+      }
+
+      const stats: StatsData = {
         totalRequests: 0,
         requestsByProvider: {},
         requestsByCategory: {},
@@ -517,7 +526,7 @@ ${JSON.stringify(params.targetBalance, null, 2)}
         GROUP BY provider
       `).all() as any[];
 
-      providerStats.forEach(stat => {
+      providerStats.forEach((stat: any) => {
         stats.requestsByProvider[stat.provider] = {
           count: stat.count,
           averageTime: stat.avg_time,
@@ -532,7 +541,7 @@ ${JSON.stringify(params.targetBalance, null, 2)}
         GROUP BY category
       `).all() as any[];
 
-      categoryStats.forEach(stat => {
+      categoryStats.forEach((stat: any) => {
         stats.requestsByCategory[stat.category] = stat.count;
       });
 
@@ -552,7 +561,7 @@ ${JSON.stringify(params.targetBalance, null, 2)}
         LIMIT 10
       `).all() as any[];
 
-      stats.recentActivity = recentActivity;
+      stats.recentActivity = recentActivity || [];
 
       return stats;
 
@@ -624,11 +633,11 @@ ${JSON.stringify(params.targetBalance, null, 2)}
 
   private extractCampaignSuggestions(response: string): any {
     const suggestions = {
-      worldBuilding: [],
-      questIdeas: [],
-      npcs: [],
-      locations: [],
-      conflicts: [],
+      worldBuilding: [] as string[],
+      questIdeas: [] as string[],
+      npcs: [] as string[],
+      locations: [] as string[],
+      conflicts: [] as string[],
     };
 
     const lines = response.split('\n');
@@ -649,8 +658,9 @@ ${JSON.stringify(params.targetBalance, null, 2)}
         currentSection = 'conflicts';
       }
 
-      if (currentSection && trimmedLine.startsWith('-') || trimmedLine.match(/^\d+\./)) {
-        suggestions[currentSection].push(trimmedLine);
+      if (currentSection && (trimmedLine.startsWith('-') || trimmedLine.match(/^\d+\./))) {
+        const sectionKey = currentSection as keyof typeof suggestions;
+        suggestions[sectionKey].push(trimmedLine);
       }
     }
 

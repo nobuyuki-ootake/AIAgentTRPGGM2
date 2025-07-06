@@ -12,7 +12,7 @@ import {
   RefreshLocationEntitiesResponse,
   EntityExplorationAction,
   ID
-} from '@repo/types';
+} from '@ai-agent-trpg/types';
 import { logger } from '../utils/logger';
 
 class LocationEntityService {
@@ -134,7 +134,7 @@ class LocationEntityService {
           id: `new-entity-${Date.now()}`,
           entityId: `new-${Date.now()}`,
           name: 'AI生成エンティティ',
-          type: 'mystery',
+          type: 'object',
           status: 'undiscovered',
           discoveryMethod: 'ai_generated',
           interactionCount: 0,
@@ -358,12 +358,16 @@ class LocationEntityService {
   }
 
   private calculateDangerLevel(actions: EntityExplorationAction['availableActions']): LocationEntity['displayInfo']['dangerLevel'] {
-    const maxRiskLevel = actions.reduce((max, action) => {
-      const riskOrder = { safe: 0, low: 1, medium: 2, high: 3, dangerous: 4 };
+    const riskOrder = { safe: 0, low: 1, medium: 2, high: 3, dangerous: 4 };
+    
+    let maxRiskLevel: 'safe' | 'low' | 'medium' | 'high' | 'dangerous' = 'safe';
+    for (const action of actions) {
       const currentLevel = riskOrder[action.riskLevel];
-      const maxLevel = riskOrder[max];
-      return currentLevel > maxLevel ? action.riskLevel : max;
-    }, 'safe' as const);
+      const maxLevel = riskOrder[maxRiskLevel];
+      if (currentLevel > maxLevel) {
+        maxRiskLevel = action.riskLevel;
+      }
+    }
 
     return maxRiskLevel;
   }

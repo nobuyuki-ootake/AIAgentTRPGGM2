@@ -9,34 +9,36 @@ import {
   AIAgentActionLog,
   AIMovementVoteLog,
   AIAgentPerformanceMetrics,
-  AIAgentMonitoringSettings,
-  AIAgentAlert,
-  AIAgentNotification,
   AIAgentMonitoringDashboard,
   AIAgentActionType,
-  AIAgentLogLevel,
   VoteChoice,
   GetAIAgentLogsRequest,
   GetAIAgentLogsResponse,
   GetAIAgentPerformanceRequest,
   GetAIAgentPerformanceResponse,
   GetMonitoringDashboardRequest,
-  GetMonitoringDashboardResponse,
-  UpdateMonitoringSettingsRequest,
-  UpdateMonitoringSettingsResponse
-} from '@repo/types';
+  GetMonitoringDashboardResponse
+} from '@ai-agent-trpg/types';
 
 export class AIAgentMonitoringService {
+  private initialized = false;
 
   constructor() {
-    this.initializeDatabase();
+    // コンストラクタでは初期化しない（データベースがまだ利用できない可能性があるため）
+  }
+
+  private async ensureInitialized() {
+    if (!this.initialized) {
+      await this.initializeDatabase();
+      this.initialized = true;
+    }
   }
 
   // ==========================================
   // データベース初期化
   // ==========================================
 
-  private initializeDatabase() {
+  private async initializeDatabase() {
     try {
       // AI Agentアクションログテーブル
       database.exec(`
@@ -144,6 +146,7 @@ export class AIAgentMonitoringService {
    * AI Agentアクションログを記録
    */
   async logAIAgentAction(log: Omit<AIAgentActionLog, 'id' | 'timestamp'>): Promise<string> {
+    await this.ensureInitialized();
     try {
       const logId = uuidv4();
       const timestamp = new Date().toISOString();
@@ -253,6 +256,7 @@ export class AIAgentMonitoringService {
    * AI Agentログを取得
    */
   async getAIAgentLogs(request: GetAIAgentLogsRequest): Promise<GetAIAgentLogsResponse> {
+    await this.ensureInitialized();
     try {
       let query = `
         SELECT * FROM ai_agent_logs 
@@ -349,6 +353,7 @@ export class AIAgentMonitoringService {
    * AI Agent性能メトリクスを取得
    */
   async getAIAgentPerformance(request: GetAIAgentPerformanceRequest): Promise<GetAIAgentPerformanceResponse> {
+    await this.ensureInitialized();
     try {
       // TODO: 性能分析ロジックを実装
       // 現在は基本的な統計のみ提供
@@ -389,7 +394,7 @@ export class AIAgentMonitoringService {
         failedActions: row.failed_actions,
         averageProcessingTime: row.avg_processing_time,
         averageConfidenceScore: row.avg_confidence_score,
-        actionTypeBreakdown: {}, // TODO: 詳細な分析
+        actionTypeBreakdown: this.createActionTypeBreakdown(),
         decisionQuality: {
           consistencyScore: 85,
           adaptabilityScore: 78,
@@ -438,6 +443,7 @@ export class AIAgentMonitoringService {
    * 監視ダッシュボードデータを取得
    */
   async getMonitoringDashboard(request: GetMonitoringDashboardRequest): Promise<GetMonitoringDashboardResponse> {
+    await this.ensureInitialized();
     try {
       const timeRange = request.timeRange || '24h';
       const hoursBack = this.parseTimeRange(timeRange);
@@ -570,6 +576,29 @@ export class AIAgentMonitoringService {
     if (minutesSinceLastAction < 5) return 'active';
     if (minutesSinceLastAction < 30) return 'idle';
     return 'offline';
+  }
+
+  private createActionTypeBreakdown(): Record<AIAgentActionType, { count: number; successRate: number; averageConfidence: number; }> {
+    const actionTypes: AIAgentActionType[] = [
+      'movement_vote',
+      'combat_action', 
+      'dialogue_response',
+      'skill_check',
+      'exploration_action',
+      'decision_making'
+    ];
+
+    const breakdown: Record<AIAgentActionType, { count: number; successRate: number; averageConfidence: number; }> = {} as any;
+
+    actionTypes.forEach(actionType => {
+      breakdown[actionType] = {
+        count: 0,
+        successRate: 0,
+        averageConfidence: 0
+      };
+    });
+
+    return breakdown;
   }
 }
 

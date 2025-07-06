@@ -3,7 +3,8 @@
 // Phase 4-4.1: マイルストーン完了時の詳細な物語変化フィードバックシステム
 // ==========================================
 
-import { Agent, type Step } from '@mastra/core';
+import { Agent } from '@mastra/core';
+import { openai } from '@ai-sdk/openai';
 import { logger } from '../../utils/logger';
 
 export interface NarrativeFeedbackContext {
@@ -204,11 +205,7 @@ export const narrativeFeedbackAgent = new Agent({
   }
 }
 `,
-  model: {
-    provider: 'openai',
-    name: 'gpt-4',
-    toolChoice: 'auto',
-  },
+  model: openai('gpt-4'),
 });
 
 /**
@@ -258,7 +255,7 @@ ${context.worldState.weatherCondition ? `- 天候: ${context.worldState.weatherC
 `;
 
     const result = await narrativeFeedbackAgent.generate(contextDescription, {
-      schema: {
+      output: {
         type: 'object',
         properties: {
           mainNarrative: {

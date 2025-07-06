@@ -10,7 +10,6 @@ import {
   ExecutePartyMovementRequest,
   ExecutePartyMovementResponse,
   ConsensusSettings,
-  PartyMovementSystem,
   MovementProposalStatus,
   VoteChoice,
   ID
@@ -19,9 +18,8 @@ import { database } from '../database/database';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '../utils/logger';
 import { aiAgentMonitoringService } from './aiAgentMonitoringService';
-import { mixedVotingService } from './mixedVotingService';
 import { getTimeManagementService } from './timeManagementService';
-import { getAIService } from './aiService';
+import { locationService } from './locationService';
 
 class PartyMovementService {
   // ==========================================
@@ -308,7 +306,7 @@ class PartyMovementService {
 
     // 投票統計情報を計算
     const humanVoters = voterDetails.filter(v => v.voterType === 'human');
-    const aiVoters = voterDetails.filter(v => v.voterType === 'ai_agent');
+    const aiVoters = voterDetails.filter(v => v.voterType === 'ai_agent' as any); // TODO: 実際のAI判別ロジック実装
 
     return {
       proposalId,
@@ -482,7 +480,7 @@ class PartyMovementService {
   // プライベートヘルパーメソッド
   // ==========================================
 
-  private async estimateMovementTime(sessionId: ID, targetLocationId: ID, method: string): Promise<number> {
+  private async estimateMovementTime(_sessionId: ID, _targetLocationId: ID, method: string): Promise<number> {
     // 実装簡略化：基本的な時間推定
     const baseTime = 30; // 30分
     const methodMultiplier = {
@@ -496,7 +494,7 @@ class PartyMovementService {
     return baseTime * (methodMultiplier[method as keyof typeof methodMultiplier] || 1.0);
   }
 
-  private async assessMovementDifficulty(targetLocationId: ID): Promise<'easy' | 'normal' | 'hard' | 'dangerous'> {
+  private async assessMovementDifficulty(_targetLocationId: ID): Promise<'easy' | 'normal' | 'hard' | 'dangerous'> {
     // 実装簡略化：固定値
     return 'normal';
   }
@@ -522,7 +520,7 @@ class PartyMovementService {
     }));
   }
 
-  private async getMovementRestrictions(sessionId: ID) {
+  private async getMovementRestrictions(_sessionId: ID) {
     return {
       canPropose: true,
       canVote: true,
@@ -659,22 +657,15 @@ class PartyMovementService {
 
   private async moveCharacterToLocation(characterId: ID, locationId: ID, method: string): Promise<{success: boolean}> {
     try {
-      // 既存のLocationServiceを使用してキャラクターを移動
-      const moveData = {
+      const estimatedDuration = await this.estimateMovementTime('', locationId, method);
+      
+      await locationService.moveCharacter({
         characterId,
         toLocationId: locationId,
-        movementType: method as any,
-        estimatedDuration: 30 // デフォルト30分
-      };
-
-      // 実際の移動処理は既存のLocationServiceに委譲
-      // ここでは簡略化して成功とする
-      database.prepare(`
-        UPDATE characters 
-        SET current_location_id = ?, updated_at = ?
-        WHERE id = ?
-      `).run(locationId, new Date().toISOString(), characterId);
-
+        method: method,
+        estimatedDuration
+      });
+      
       return { success: true };
     } catch (error) {
       logger.error(`Failed to move character ${characterId} to ${locationId}:`, error);

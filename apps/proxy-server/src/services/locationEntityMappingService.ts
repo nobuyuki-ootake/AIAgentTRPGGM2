@@ -1,10 +1,24 @@
 import { Database } from 'better-sqlite3';
 import { randomUUID } from 'crypto';
-import { 
-  LocationEntityMapping
-} from '@ai-agent-trpg/types';
 import { getDatabase } from '../database/database';
 import { logger } from '../utils/logger';
+
+/**
+ * データベース用の拡張LocationEntityMapping型
+ */
+export interface DatabaseLocationEntityMapping {
+  id?: string;
+  sessionId: string;
+  locationId: string;
+  entityId: string;
+  entityType: 'core' | 'bonus';
+  entityCategory: 'enemy' | 'event' | 'npc' | 'item' | 'quest' | 'practical' | 'trophy' | 'mystery';
+  timeConditions?: string[];
+  prerequisiteEntities?: string[];
+  isAvailable?: boolean;
+  discoveredAt?: string;
+  createdAt?: string;
+}
 
 /**
  * エンティティ参照型（場所で利用可能なエンティティ一覧用）
@@ -91,7 +105,7 @@ export class LocationEntityMappingService {
   /**
    * 複数のマッピングを一括作成
    */
-  async createMappings(sessionId: string, mappings: Omit<LocationEntityMapping, 'id' | 'created_at'>[]): Promise<void> {
+  async createMappings(sessionId: string, mappings: Omit<DatabaseLocationEntityMapping, 'id' | 'created_at'>[]): Promise<void> {
     logger.debug('📍 場所エンティティマッピング一括作成開始', { 
       sessionId, 
       mappingsCount: mappings.length 
@@ -136,7 +150,7 @@ export class LocationEntityMappingService {
   /**
    * 特定場所のマッピング取得
    */
-  async getMappingsByLocation(locationId: string, sessionId: string): Promise<LocationEntityMapping[]> {
+  async getMappingsByLocation(locationId: string, sessionId: string): Promise<DatabaseLocationEntityMapping[]> {
     logger.debug('🔍 場所別マッピング取得', { locationId, sessionId });
 
     const stmt = this.db.prepare(`
@@ -159,7 +173,7 @@ export class LocationEntityMappingService {
   /**
    * 特定エンティティのマッピング取得
    */
-  async getMappingsByEntity(entityId: string): Promise<LocationEntityMapping[]> {
+  async getMappingsByEntity(entityId: string): Promise<DatabaseLocationEntityMapping[]> {
     logger.debug('🔍 エンティティ別マッピング取得', { entityId });
 
     const stmt = this.db.prepare(`
@@ -248,7 +262,7 @@ export class LocationEntityMappingService {
     
     for (const mapping of mappings) {
       // 時間条件チェック
-      const timeCheck = await this.checkTimeConditions(mapping.timeConditions);
+      const timeCheck = await this.checkTimeConditions(mapping.timeConditions || []);
       if (!timeCheck.isValid) {
         logger.debug('⏰ 時間条件不適合でスキップ', { 
           entityId: mapping.entityId, 
@@ -277,10 +291,10 @@ export class LocationEntityMappingService {
       const entityReference: EntityReference = {
         id: mapping.entityId,
         name: await this.getEntityName(mapping.entityId, mapping.entityCategory),
-        type: mapping.entityType,
+        type: mapping.entityType as 'core' | 'bonus',
         category: mapping.entityCategory,
         description: await this.getEntityDescription(mapping.entityId, mapping.entityCategory),
-        isAvailable: mapping.isAvailable,
+        isAvailable: Boolean(mapping.isAvailable),
         timeConditions: mapping.timeConditions,
         prerequisiteEntities: mapping.prerequisiteEntities,
         discoveredAt: mapping.discoveredAt
@@ -398,7 +412,7 @@ export class LocationEntityMappingService {
 
     for (const mapping of mappings) {
       // 時間条件チェック
-      const timeCheck = await this.checkTimeConditions(mapping.timeConditions);
+      const timeCheck = await this.checkTimeConditions(mapping.timeConditions || []);
       
       // 前提条件チェック
       const prerequisiteCheck = await this.checkPrerequisites(mapping.prerequisiteEntities || [], sessionId);
@@ -407,7 +421,7 @@ export class LocationEntityMappingService {
       const newAvailability = timeCheck.isValid && prerequisiteCheck.isValid;
       
       // 状態が変更された場合のみ更新
-      if (mapping.isAvailable !== newAvailability) {
+      if (mapping.isAvailable !== newAvailability && mapping.id) {
         await this.updateAvailability(mapping.id, newAvailability);
         updatedCount++;
         
@@ -435,7 +449,7 @@ export class LocationEntityMappingService {
   /**
    * データベース行をLocationEntityMappingに変換
    */
-  private rowToLocationEntityMapping(row: any): LocationEntityMapping {
+  private rowToLocationEntityMapping(row: any): DatabaseLocationEntityMapping {
     return {
       id: row.id,
       sessionId: row.session_id,
@@ -454,7 +468,7 @@ export class LocationEntityMappingService {
   /**
    * 発見済みエンティティ一覧取得
    */
-  private async getDiscoveredEntities(sessionId: string): Promise<LocationEntityMapping[]> {
+  private async getDiscoveredEntities(sessionId: string): Promise<DatabaseLocationEntityMapping[]> {
     const stmt = this.db.prepare(`
       SELECT * FROM location_entity_mappings 
       WHERE session_id = ? AND discovered_at IS NOT NULL

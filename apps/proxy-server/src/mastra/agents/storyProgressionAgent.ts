@@ -3,7 +3,8 @@
 // Phase 4-2.3.2: マイルストーン完了時のAI自律判断機能
 // ==========================================
 
-import { Agent, type Step } from '@mastra/core';
+import { Agent } from '@mastra/core';
+import { openai } from '@ai-sdk/openai';
 import { logger } from '../../utils/logger';
 
 export interface StoryProgressionContext {
@@ -100,11 +101,7 @@ export const storyProgressionAgent = new Agent({
   }
 }
 `,
-  model: {
-    provider: 'openai',
-    name: 'gpt-4',
-    toolChoice: 'auto',
-  },
+  model: openai('gpt-4'),
 });
 
 /**
@@ -143,7 +140,7 @@ export async function evaluateStoryProgression(
 
 上記を総合的に判断して、シナリオ進行の決定を JSON 形式で出力してください。`,
       {
-        schema: {
+        output: {
           type: 'object',
           properties: {
             shouldProgress: { type: 'boolean' },
@@ -218,7 +215,7 @@ export function analyzeSessionContext(
  */
 export function evaluateContextualFactors(
   sessionState: StoryProgressionContext['sessionState'],
-  recentActions: any[]
+  _recentActions: any[]
 ): StoryProgressionContext['contextualFactors'] {
   // 簡易的な評価ロジック（実際のプロジェクトでは詳細な分析を実装）
   const progressRatio = sessionState.completedMilestones / sessionState.totalMilestones;

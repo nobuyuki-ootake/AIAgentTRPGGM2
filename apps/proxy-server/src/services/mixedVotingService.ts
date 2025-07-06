@@ -16,19 +16,26 @@ import {
   GetMixedVotingStatusResponse,
   UpdateMixedVotingFlowRequest,
   UpdateMixedVotingFlowResponse,
-  VoteChoice,
-  ID
-} from '@repo/types';
+  VoteChoice
+} from '@ai-agent-trpg/types';
 
 export class MixedVotingService {
+  private initialized = false;
 
   constructor() {
-    this.initializeDatabase();
+    // Lazy initialization - database will be initialized on first use
   }
 
   // ==========================================
   // データベース初期化
   // ==========================================
+
+  private ensureInitialized() {
+    if (!this.initialized) {
+      this.initializeDatabase();
+      this.initialized = true;
+    }
+  }
 
   private initializeDatabase() {
     try {
@@ -98,6 +105,7 @@ export class MixedVotingService {
   // ==========================================
 
   async getMixedVotingStatus(request: GetMixedVotingStatusRequest): Promise<GetMixedVotingStatusResponse> {
+    this.ensureInitialized();
     try {
       // 基本的な投票サマリーを取得
       const votingSummary = await this.calculateEnhancedVotingSummary(request.proposalId);
@@ -351,7 +359,7 @@ export class MixedVotingService {
       const voterDetails = partyMembersRows.map(member => {
         const vote = votes.find(v => v.voterId === member.id);
         const isProposer = member.id === proposalRow.proposer_id;
-        const voterType = (!member.player_id || member.player_id === 'ai-agent') ? 'ai_agent' : 'human';
+        const voterType: "npc" | "human" | "ai_agent" = (!member.player_id || member.player_id === 'ai-agent') ? 'ai_agent' : 'human';
 
         return {
           voterId: member.id,

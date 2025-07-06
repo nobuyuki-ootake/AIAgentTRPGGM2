@@ -123,6 +123,10 @@ async function startServer(): Promise<void> {
 
   } catch (error) {
     logger.error('Failed to start server:', error);
+    if (error instanceof Error) {
+      logger.error('Error message:', error.message);
+      logger.error('Error stack:', error.stack);
+    }
     process.exit(1);
   }
 }
@@ -142,4 +146,4 @@ process.on('unhandledRejection', (reason, promise) => {
 startServer().catch((error) => {
   logger.error('Failed to start server:', error);
   process.exit(1);
-});
+});// EntityPool types fixed Sun Jul  6 13:44:51 JST 2025

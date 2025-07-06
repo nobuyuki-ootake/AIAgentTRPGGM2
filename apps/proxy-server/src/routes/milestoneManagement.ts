@@ -1,15 +1,16 @@
-import express from 'express';
+import { Router } from 'express';
 import { MilestoneManagementService } from '../services/milestoneManagementService';
 import { logger } from '../utils/logger';
+import { asyncHandler } from '../middleware/errorHandler';
 
-const router = express.Router();
+const router = Router();
 const milestoneManagementService = MilestoneManagementService.getInstance();
 
 /**
  * マイルストーン進捗情報を取得
  * POST /api/milestone-management/progress
  */
-router.post('/progress', async (req, res) => {
+router.post('/progress', asyncHandler(async (req, res) => {
   try {
     const { sessionId, milestoneId } = req.body;
 
@@ -23,22 +24,22 @@ router.post('/progress', async (req, res) => {
 
     const progressInfo = await milestoneManagementService.getMilestoneProgress(sessionId, milestoneId);
 
-    res.json(progressInfo);
+    return res.json(progressInfo);
 
   } catch (error) {
     logger.error('Error in /milestone-management/progress:', error);
-    res.status(500).json({
+    return res.status(500).json({
       error: 'Failed to get milestone progress',
       details: error instanceof Error ? error.message : 'Unknown error',
     });
   }
-});
+}));
 
 /**
  * マイルストーンを手動で完了
  * POST /api/milestone-management/complete
  */
-router.post('/complete', async (req, res) => {
+router.post('/complete', asyncHandler(async (req, res) => {
   try {
     const { sessionId, milestoneId, skipValidation, narrativeMessage, gmNote } = req.body;
 
@@ -56,22 +57,22 @@ router.post('/complete', async (req, res) => {
       gmNote,
     });
 
-    res.json(result);
+    return res.json(result);
 
   } catch (error) {
     logger.error('Error in /milestone-management/complete:', error);
-    res.status(500).json({
+    return res.status(500).json({
       error: 'Failed to complete milestone manually',
       details: error instanceof Error ? error.message : 'Unknown error',
     });
   }
-});
+}));
 
 /**
  * GMナラティブアナウンスを投稿
  * POST /api/milestone-management/gm-announcement
  */
-router.post('/gm-announcement', async (req, res) => {
+router.post('/gm-announcement', asyncHandler(async (req, res) => {
   try {
     const { sessionId, title, message, type, priority, relatedMilestoneId } = req.body;
 
@@ -107,22 +108,22 @@ router.post('/gm-announcement', async (req, res) => {
       relatedMilestoneId,
     });
 
-    res.json(result);
+    return res.json(result);
 
   } catch (error) {
     logger.error('Error in /milestone-management/gm-announcement:', error);
-    res.status(500).json({
+    return res.status(500).json({
       error: 'Failed to post GM narrative announcement',
       details: error instanceof Error ? error.message : 'Unknown error',
     });
   }
-});
+}));
 
 /**
  * シナリオ進行をトリガー
  * POST /api/milestone-management/scenario-progression
  */
-router.post('/scenario-progression', async (req, res) => {
+router.post('/scenario-progression', asyncHandler(async (req, res) => {
   try {
     const { sessionId, progressionType, milestoneId, customMessage, unlockEntities } = req.body;
 
@@ -149,22 +150,22 @@ router.post('/scenario-progression', async (req, res) => {
       unlockEntities,
     });
 
-    res.json(result);
+    return res.json(result);
 
   } catch (error) {
     logger.error('Error in /milestone-management/scenario-progression:', error);
-    res.status(500).json({
+    return res.status(500).json({
       error: 'Failed to trigger scenario progression',
       details: error instanceof Error ? error.message : 'Unknown error',
     });
   }
-});
+}));
 
 /**
  * デバッグ用: セッションのマイルストーン一覧取得
  * GET /api/milestone-management/session/:sessionId/milestones
  */
-router.get('/session/:sessionId/milestones', async (req, res) => {
+router.get('/session/:sessionId/milestones', asyncHandler(async (req, res) => {
   try {
     const { sessionId } = req.params;
 
@@ -189,7 +190,7 @@ router.get('/session/:sessionId/milestones', async (req, res) => {
       },
     ];
 
-    res.json({
+    return res.json({
       sessionId,
       milestones,
       count: milestones.length,
@@ -197,23 +198,23 @@ router.get('/session/:sessionId/milestones', async (req, res) => {
 
   } catch (error) {
     logger.error('Error in /milestone-management/session/:sessionId/milestones:', error);
-    res.status(500).json({
+    return res.status(500).json({
       error: 'Failed to get session milestones',
       details: error instanceof Error ? error.message : 'Unknown error',
     });
   }
-});
+}));
 
 /**
  * ヘルスチェック
  * GET /api/milestone-management/health
  */
-router.get('/health', (req, res) => {
-  res.json({
+router.get('/health', asyncHandler(async (_req, res) => {
+  return res.json({
     status: 'ok',
     service: 'milestone-management',
     timestamp: new Date().toISOString(),
   });
-});
+}));
 
 export default router;

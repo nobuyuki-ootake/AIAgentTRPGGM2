@@ -16,16 +16,16 @@ import {
 } from '../mastra/agents/narrativeFeedbackAgent';
 import {
   UnifiedMilestone,
-  getMilestoneBaseInfo,
-  ID
-} from '@repo/types';
+  getMilestoneBaseInfo
+} from '@ai-agent-trpg/types';
 
 export class NarrativeFeedbackService {
   private static instance: NarrativeFeedbackService;
   private app: express.Application | null = null;
+  private initialized = false;
 
   private constructor() {
-    this.initializeDatabase();
+    // Lazy initialization - database will be initialized on first use
   }
 
   public static getInstance(): NarrativeFeedbackService {
@@ -45,6 +45,13 @@ export class NarrativeFeedbackService {
   /**
    * データベース初期化
    */
+  private ensureInitialized(): void {
+    if (!this.initialized) {
+      this.initializeDatabase();
+      this.initialized = true;
+    }
+  }
+
   private initializeDatabase(): void {
     try {
       // Narrative feedback関連テーブル作成
@@ -103,6 +110,7 @@ export class NarrativeFeedbackService {
     characterId: string,
     narrativeText: string
   ): Promise<void> {
+    this.ensureInitialized();
     try {
       const baseInfo = getMilestoneBaseInfo(milestone);
       
@@ -476,7 +484,7 @@ export class NarrativeFeedbackService {
     }
   }
 
-  private async getCurrentWorldState(sessionId: string): Promise<any> {
+  private async getCurrentWorldState(_sessionId: string): Promise<any> {
     // 現在の世界状態を取得（簡易版）
     return {
       currentLocation: '現在地',
@@ -495,8 +503,10 @@ export class NarrativeFeedbackService {
         SELECT COUNT(*) as completed FROM milestone_completions WHERE session_id = ?
       `);
       
-      const total = milestonesStmt.get(sessionId)?.total || 0;
-      const completed = completedStmt.get(sessionId)?.completed || 0;
+      const totalResult = milestonesStmt.get(sessionId) as any;
+      const completedResult = completedStmt.get(sessionId) as any;
+      const total = totalResult?.total || 0;
+      const completed = completedResult?.completed || 0;
       
       return {
         totalMilestones: total,
@@ -518,7 +528,7 @@ export class NarrativeFeedbackService {
     }
   }
 
-  private async getPlayerActionHistory(sessionId: string, characterId: string): Promise<any> {
+  private async getPlayerActionHistory(_sessionId: string, _characterId: string): Promise<any> {
     // プレイヤーの行動履歴分析（簡易版）
     return {
       preferredActions: ['探索', '調査', '対話'],

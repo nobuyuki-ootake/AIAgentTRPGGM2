@@ -6,7 +6,7 @@
 
 import { logger } from '../utils/logger';
 import { systemPrompts } from '../utils/systemPrompts';
-import { aiProviderService, AIServiceRequest } from './aiProviderService';
+import { aiProviderService } from './aiProviderService';
 
 // ==========================================
 // AIコンテンツ生成サービスクラス
@@ -209,7 +209,7 @@ Make sure the event fits the campaign context and player level.
     playerConstraints?: any;
     difficultySettings?: any;
   }) {
-    const systemPrompt = systemPrompts.getEventChoicesPrompt();
+    const systemPrompt = systemPrompts.getEventGenerationPrompt();
     
     const contextMessage = `
 イベントコンテキスト:

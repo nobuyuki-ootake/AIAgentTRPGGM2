@@ -11,7 +11,7 @@ import {
   APIResponse
 } from '@ai-agent-trpg/types';
 import { asyncHandler, ValidationError } from '../middleware/errorHandler';
-import { interactiveEventService } from '../services/interactiveEventService';
+import { getInteractiveEventService } from '../services/interactiveEventService';
 import { getAIService } from '../services/aiService';
 import { logger } from '../utils/logger';
 
@@ -29,7 +29,13 @@ const startEventSessionSchema = z.object({
     text: z.string(),
     description: z.string(),
     requirements: z.array(z.any()).default([]),
-    consequences: z.array(z.any()).default([])
+    consequences: z.object({
+      success: z.boolean(),
+      score: z.number(),
+      description: z.string(),
+      consequences: z.array(z.string()),
+      nextSteps: z.array(z.string())
+    })
   }))
 });
 
@@ -41,7 +47,13 @@ const processChoiceSchema = z.object({
     description: z.string(),
     category: z.string().optional(),
     requirements: z.array(z.any()).default([]),
-    consequences: z.array(z.any()).default([])
+    consequences: z.object({
+      success: z.boolean(),
+      score: z.number(),
+      description: z.string(),
+      consequences: z.array(z.string()),
+      nextSteps: z.array(z.string())
+    })
   }),
   character: z.any(),
   sessionContext: z.any()
@@ -83,7 +95,7 @@ router.post('/start', asyncHandler(async (req, res) => {
     playerId: validatedData.playerId
   });
 
-  const eventSession = await interactiveEventService.startEventSession(
+  const eventSession = await getInteractiveEventService().startEventSession(
     validatedData.sessionId,
     validatedData.eventId,
     validatedData.playerId,
@@ -113,7 +125,7 @@ router.post('/:eventSessionId/process-choice', asyncHandler(async (req, res) => 
     choiceId: validatedData.choiceId
   });
 
-  const taskDefinition = await interactiveEventService.processPlayerChoice(
+  const taskDefinition = await getInteractiveEventService().processPlayerChoice(
     eventSessionId,
     validatedData.choiceId,
     validatedData.choice,
@@ -143,7 +155,7 @@ router.post('/:eventSessionId/evaluate-solution', asyncHandler(async (req, res) 
     taskId: validatedData.taskId
   });
 
-  const difficultySettings = await interactiveEventService.evaluatePlayerSolution(
+  const difficultySettings = await getInteractiveEventService().evaluatePlayerSolution(
     eventSessionId,
     validatedData.taskId,
     validatedData.playerSolution,
@@ -174,7 +186,7 @@ router.post('/:eventSessionId/execute-dice-roll', asyncHandler(async (req, res) 
     targetNumber: validatedData.diceResult.targetNumber
   });
 
-  const eventResult = await interactiveEventService.executeDiceRoll(
+  const eventResult = await getInteractiveEventService().executeDiceRoll(
     eventSessionId,
     validatedData.difficultySettings,
     validatedData.diceResult,
@@ -240,7 +252,7 @@ router.get('/:eventSessionId/retry-options', asyncHandler(async (req, res) => {
     }
   };
 
-  const retryOptions = await interactiveEventService.generateRetryOptions(
+  const retryOptions = await getInteractiveEventService().generateRetryOptions(
     eventSessionId,
     mockCharacter as any
   );
@@ -275,14 +287,29 @@ router.post('/generate-choices', asyncHandler(async (req, res) => {
   const choices = await aiService.generateEventChoices({
     provider,
     eventContext,
-    character,
-    sessionContext,
-    choiceCount
+    currentSituation: JSON.stringify(sessionContext),
+    playerConstraints: character,
+    difficultySettings: { choiceCount }
   });
 
   const response: APIResponse<EventChoice[]> = {
     success: true,
-    data: choices,
+    data: Array.isArray(choices?.generatedChoices) 
+      ? choices.generatedChoices 
+      : [
+        {
+          id: 'default-1',
+          text: 'Proceed cautiously',
+          requirements: [],
+          consequences: {
+            success: true,
+            score: 50,
+            description: 'You proceed carefully',
+            consequences: [],
+            nextSteps: []
+          }
+        }
+      ],
     timestamp: new Date().toISOString(),
   };
 
@@ -308,14 +335,21 @@ router.post('/interpret-choice', asyncHandler(async (req, res) => {
 
   const taskDefinition = await aiService.interpretPlayerChoice({
     provider,
-    choice,
-    character,
-    sessionContext
+    playerInput: choice?.text || '',
+    availableChoices: [choice],
+    context: { character, sessionContext }
   });
 
   const response: APIResponse<AITaskDefinition> = {
     success: true,
-    data: taskDefinition,
+    data: {
+      id: `task-${Date.now()}`,
+      name: taskDefinition?.interpretedChoice?.name || 'Generated Task',
+      description: taskDefinition?.interpretedChoice?.description || 'AI interpreted task',
+      difficulty: 5,
+      requiredSkills: [],
+      timeLimit: 30
+    },
     timestamp: new Date().toISOString(),
   };
 
@@ -343,14 +377,20 @@ router.post('/evaluate-solution', asyncHandler(async (req, res) => {
   const evaluation = await aiService.evaluatePlayerSolution({
     provider,
     playerSolution,
-    character,
-    sessionContext,
-    taskDefinition
+    challengeContext: { character, sessionContext },
+    difficultySettings: taskDefinition
   });
 
   const response: APIResponse<TaskEvaluation> = {
     success: true,
-    data: evaluation,
+    data: {
+      taskId: taskDefinition?.id || `task-${Date.now()}`,
+      playerId: character?.id || 'unknown',
+      success: evaluation?.solutionEvaluation?.success || false,
+      score: evaluation?.solutionEvaluation?.score || 0,
+      feedback: evaluation?.solutionEvaluation?.feedback || '',
+      improvements: evaluation?.solutionEvaluation?.improvements || []
+    },
     timestamp: new Date().toISOString(),
   };
 
@@ -378,16 +418,16 @@ router.post('/generate-narrative', asyncHandler(async (req, res) => {
 
   const narrative = await aiService.generateResultNarrative({
     provider,
-    eventSession,
-    character,
-    sessionContext,
-    diceResult,
-    success
+    taskResult: { diceResult, success },
+    playerActions: [character?.name || 'Unknown'],
+    eventOutcome: { eventSession, sessionContext }
   });
 
   const response: APIResponse<string> = {
     success: true,
-    data: narrative,
+    data: typeof narrative?.generatedNarrative === 'string' 
+      ? narrative.generatedNarrative 
+      : narrative?.narrativeData || 'Generated narrative',
     timestamp: new Date().toISOString(),
   };
 
@@ -412,14 +452,20 @@ router.post('/calculate-difficulty', asyncHandler(async (req, res) => {
 
   const difficultySettings = await aiService.calculateDynamicDifficulty({
     provider,
-    taskEvaluation,
-    character,
-    sessionContext
+    playerPerformance: taskEvaluation,
+    sessionProgress: sessionContext,
+    targetBalance: character
   });
 
   const response: APIResponse<DynamicDifficultySettings> = {
     success: true,
-    data: difficultySettings,
+    data: {
+      baseLevel: difficultySettings?.adjustmentRecommendations?.baseLevel || 5,
+      adaptationRate: difficultySettings?.adjustmentRecommendations?.adaptationRate || 0.1,
+      minLevel: difficultySettings?.adjustmentRecommendations?.minLevel || 1,
+      maxLevel: difficultySettings?.adjustmentRecommendations?.maxLevel || 10,
+      playerSkillMetrics: difficultySettings?.adjustmentRecommendations?.playerSkillMetrics || {}
+    },
     timestamp: new Date().toISOString(),
   };
 

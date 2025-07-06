@@ -2,22 +2,23 @@
 // 混合投票システムAPI（人間PC + AI PC統合投票管理）
 // ==========================================
 
-import express from 'express';
+import { Router } from 'express';
 import { mixedVotingService } from '../services/mixedVotingService';
 import { logger } from '../utils/logger';
+import { asyncHandler } from '../middleware/errorHandler';
 import {
   SendVotingReminderRequest,
   GetMixedVotingStatusRequest,
   UpdateMixedVotingFlowRequest
-} from '@repo/types';
+} from '@ai-agent-trpg/types';
 
-const router = express.Router();
+const router = Router();
 
 // ==========================================
 // 混合投票状況取得
 // ==========================================
 
-router.get('/status/:proposalId', async (req, res) => {
+router.get('/status/:proposalId', asyncHandler(async (req, res) => {
   try {
     const proposalId = req.params.proposalId;
     
@@ -26,11 +27,11 @@ router.get('/status/:proposalId', async (req, res) => {
     };
 
     const response = await mixedVotingService.getMixedVotingStatus(request);
-    res.json(response);
+    return res.json(response);
 
   } catch (error) {
     logger.error('Failed to get mixed voting status:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       realTimeStats: {
         humanVotingProgress: 0,
@@ -41,13 +42,13 @@ router.get('/status/:proposalId', async (req, res) => {
       error: '混合投票状況の取得に失敗しました'
     });
   }
-});
+}));
 
 // ==========================================
 // 投票催促送信
 // ==========================================
 
-router.post('/remind', async (req, res) => {
+router.post('/remind', asyncHandler(async (req, res) => {
   try {
     const request: SendVotingReminderRequest = {
       proposalId: req.body.proposalId,
@@ -66,24 +67,24 @@ router.post('/remind', async (req, res) => {
     }
 
     const response = await mixedVotingService.sendVotingReminder(request);
-    res.json(response);
+    return res.json(response);
 
   } catch (error) {
     logger.error('Failed to send voting reminders:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       remindersSent: 0,
       targetVoters: [],
       error: '投票催促の送信に失敗しました'
     });
   }
-});
+}));
 
 // ==========================================
 // 投票フロー設定更新
 // ==========================================
 
-router.put('/flow/:proposalId', async (req, res) => {
+router.put('/flow/:proposalId', asyncHandler(async (req, res) => {
   try {
     const proposalId = req.params.proposalId;
     
@@ -100,22 +101,22 @@ router.put('/flow/:proposalId', async (req, res) => {
     }
 
     const response = await mixedVotingService.updateMixedVotingFlow(request);
-    res.json(response);
+    return res.json(response);
 
   } catch (error) {
     logger.error('Failed to update mixed voting flow:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: '投票フロー設定の更新に失敗しました'
     });
   }
-});
+}));
 
 // ==========================================
 // 投票進捗サマリー取得
 // ==========================================
 
-router.get('/progress/:proposalId', async (req, res) => {
+router.get('/progress/:proposalId', asyncHandler(async (req, res) => {
   try {
     const proposalId = req.params.proposalId;
     
@@ -167,25 +168,25 @@ router.get('/progress/:proposalId', async (req, res) => {
       lastUpdated: new Date().toISOString()
     };
 
-    res.json({
+    return res.json({
       success: true,
       progress: progressSummary
     });
 
   } catch (error) {
     logger.error('Failed to get voting progress:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: '投票進捗の取得に失敗しました'
     });
   }
-});
+}));
 
 // ==========================================
 // 投票者詳細情報取得
 // ==========================================
 
-router.get('/voters/:proposalId', async (req, res) => {
+router.get('/voters/:proposalId', asyncHandler(async (req, res) => {
   try {
     const proposalId = req.params.proposalId;
     const showAiDetails = req.query.showAiDetails === 'true';
@@ -220,7 +221,7 @@ router.get('/voters/:proposalId', async (req, res) => {
     const humanVoters = voterDetails.filter(v => v.voterType === 'human');
     const aiVoters = voterDetails.filter(v => v.voterType === 'ai_agent');
 
-    res.json({
+    return res.json({
       success: true,
       voters: {
         all: voterDetails,
@@ -232,19 +233,19 @@ router.get('/voters/:proposalId', async (req, res) => {
 
   } catch (error) {
     logger.error('Failed to get voter details:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       voters: [],
       error: '投票者詳細の取得に失敗しました'
     });
   }
-});
+}));
 
 // ==========================================
 // 自動催促機能トリガー
 // ==========================================
 
-router.post('/auto-remind/:proposalId', async (req, res) => {
+router.post('/auto-remind/:proposalId', asyncHandler(async (req, res) => {
   try {
     const proposalId = req.params.proposalId;
     const forceRemind = req.body.forceRemind === true;
@@ -294,25 +295,25 @@ router.post('/auto-remind/:proposalId', async (req, res) => {
       reminderMessage: '⏰ 投票締切が近づいています。早めの投票をお願いします。'
     });
 
-    res.json(reminderResponse);
+    return res.json(reminderResponse);
 
   } catch (error) {
     logger.error('Failed to trigger auto reminder:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       remindersSent: 0,
       error: '自動催促の実行に失敗しました'
     });
   }
-});
+}));
 
 // ==========================================
 // ヘルスチェック
 // ==========================================
 
-router.get('/health', async (req, res) => {
+router.get('/health', asyncHandler(async (_req, res) => {
   try {
-    res.json({
+    return res.json({
       success: true,
       service: 'mixed-voting',
       status: 'healthy',
@@ -328,7 +329,7 @@ router.get('/health', async (req, res) => {
     });
   } catch (error) {
     logger.error('Mixed voting health check failed:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       service: 'mixed-voting',
       status: 'error',
@@ -336,6 +337,6 @@ router.get('/health', async (req, res) => {
       error: error instanceof Error ? error.message : '不明なエラー'
     });
   }
-});
+}));
 
 export default router;

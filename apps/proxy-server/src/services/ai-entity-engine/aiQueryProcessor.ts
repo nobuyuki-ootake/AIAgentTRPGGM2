@@ -451,7 +451,7 @@ export class AIQueryProcessor {
     const relatedEntities: any[] = [];
 
     for (const relationship of relationships) {
-      const relatedEntity = await this.fetchEntityById(relationship.targetId);
+      const relatedEntity = await this.fetchEntityById(relationship.targetId || '');
       if (relatedEntity && this.isRelationshipRelevant(relationship, gameContext)) {
         relatedEntities.push(relatedEntity);
       }

@@ -43,7 +43,7 @@ export class MilestoneManagementService {
   private app: express.Application | null = null;
 
   private constructor() {
-    this.milestoneCompletionService = MilestoneCompletionService.getInstance();
+    this.milestoneCompletionService = new MilestoneCompletionService();
   }
 
   /**
@@ -454,7 +454,7 @@ export class MilestoneManagementService {
   /**
    * 特定マイルストーン基準の進行処理
    */
-  private async processMilestoneBasedProgression(sessionId: string, milestoneId: string): Promise<{
+  private async processMilestoneBasedProgression(_sessionId: string, milestoneId: string): Promise<{
     unlockedEntities: string[];
     newNPCs: string[];
     newEvents: string[];
@@ -480,7 +480,7 @@ export class MilestoneManagementService {
   /**
    * 手動進行処理
    */
-  private async processManualProgression(sessionId: string, customMessage?: string): Promise<{
+  private async processManualProgression(_sessionId: string, customMessage?: string): Promise<{
     unlockedEntities: string[];
     newNPCs: string[];
     newEvents: string[];

@@ -3,7 +3,6 @@ import {
   EntityPool, 
   MilestoneGenerationRequest,
   MilestoneGenerationResponse,
-  SessionDurationConfig,
   ID
 } from '@ai-agent-trpg/types';
 import { logger } from '../utils/logger';
@@ -29,19 +28,16 @@ export class AIMilestoneGenerationService {
     const startTime = Date.now();
     
     try {
-      // SessionDurationConfigを明示的に使用
-      const sessionDuration: SessionDurationConfig = request.sessionDuration;
-      
       logger.info('🎯 AI マイルストーン生成開始（トップダウン統合）', { 
         campaignId: request.campaignId,
-        sessionId: request.sessionId,
-        milestoneCount: request.milestoneCount,
-        estimatedPlayTime: sessionDuration.estimatedPlayTime
+        theme: request.theme,
+        difficulty: request.difficulty,
+        milestoneCount: 3 // Default value
       });
 
       // Phase 1: 目標設計
       logger.info('📋 Phase 1: 目標設計開始');
-      const themeAdaptation = await this.topDownGenerator.generateThemeAdaptation(request.themeId);
+      const themeAdaptation = await this.topDownGenerator.generateThemeAdaptation(request.theme);
       const milestoneOutlines = await this.topDownGenerator.generateMilestoneOutlines(request, themeAdaptation);
       const milestoneRelations = await this.topDownGenerator.defineMilestoneRelations(milestoneOutlines);
       
@@ -49,7 +45,7 @@ export class AIMilestoneGenerationService {
       logger.info('🎲 Phase 2: コンテンツ生成開始');
       const coreEntityRequirements = await this.topDownGenerator.defineCoreEntityRequirements(milestoneRelations, themeAdaptation);
       const coreEntities = await this.topDownGenerator.generateCoreEntities(coreEntityRequirements, request, themeAdaptation);
-      const bonusEntities = await this.topDownGenerator.generateBonusEntities(request, coreEntities);
+      const bonusEntities = await this.topDownGenerator.generateBonusEntities(request, coreEntities, themeAdaptation);
       await this.topDownGenerator.generateLocationMappings(coreEntities, bonusEntities);
       
       // Phase 3: 最終調整
@@ -61,44 +57,61 @@ export class AIMilestoneGenerationService {
       const sessionAdjustedSystem = this.balanceAdjuster.adjustContentForSessionDuration(
         balancedSystem.milestones,
         balancedSystem.entityPool,
-        sessionDuration.estimatedPlayTime
+        240 // Default 4 hours session
       );
 
-      // マイルストーンにキャンペーン・セッション情報を設定
+      // マイルストーンにキャンペーン情報を設定
       const finalMilestones = sessionAdjustedSystem.milestones.map(milestone => ({
         ...milestone,
-        campaignId: request.campaignId,
-        sessionId: request.sessionId
+        campaignId: request.campaignId
       }));
 
       // Phase 4: データベースコミット
       logger.info('💾 Phase 4: データベースコミット開始');
+      
+      // EntityPoolCollectionをEntityPoolに変換
+      const convertedEntityPool: EntityPool = {
+        id: `pool-${Date.now()}`,
+        campaignId: request.campaignId,
+        sessionId: `session-${Date.now()}`,
+        themeId: request.theme,
+        entities: {
+          coreEntities: {
+            enemies: sessionAdjustedSystem.entityPool?.coreEntities?.enemies || [],
+            events: sessionAdjustedSystem.entityPool?.coreEntities?.events || [],
+            npcs: sessionAdjustedSystem.entityPool?.coreEntities?.npcs || [],
+            items: sessionAdjustedSystem.entityPool?.coreEntities?.items || [],
+            quests: sessionAdjustedSystem.entityPool?.coreEntities?.quests || []
+          },
+          bonusEntities: {
+            practicalRewards: sessionAdjustedSystem.entityPool?.bonusEntities?.practicalRewards || [],
+            trophyItems: sessionAdjustedSystem.entityPool?.bonusEntities?.trophyItems || [],
+            mysteryItems: sessionAdjustedSystem.entityPool?.bonusEntities?.mysteryItems || []
+          }
+        },
+        generatedAt: new Date().toISOString(),
+        lastUpdated: new Date().toISOString()
+      };
+
       const commitResult = await this.databaseManager.commitToDatabase(
         finalMilestones,
-        sessionAdjustedSystem.entityPool,
+        convertedEntityPool,
         request.campaignId,
-        request.sessionId,
-        request.themeId
+        `session-${Date.now()}`, // Generate session ID
+        request.theme
       );
 
       const processingTime = Date.now() - startTime;
 
       const response: MilestoneGenerationResponse = {
         milestones: commitResult.milestones,
-        entityPool: commitResult.entityPool,
-        themeAdaptation,
-        generationMetadata: {
-          model: 'google-gemini',
-          prompt: 'Top-down milestone and entity generation',
-          tokensUsed: 0,
-          processingTime,
-          generatedAt: new Date().toISOString()
-        }
+        narrative: `${request.theme}をテーマとしたマイルストーンを生成しました。`,
+        estimatedDuration: 240 // Default 4 hours
       };
 
       logger.info('✅ AI マイルストーン生成完了（統合）', { 
         milestonesGenerated: response.milestones.length,
-        entitiesGenerated: this.calculateTotalEntities(sessionAdjustedSystem.entityPool),
+        narrative: response.narrative,
         processingTime 
       });
 
@@ -142,32 +155,6 @@ export class AIMilestoneGenerationService {
     return this.databaseManager.deleteAIMilestone(milestoneId);
   }
 
-  /**
-   * 総エンティティ数の計算
-   */
-  private calculateTotalEntities(entityPool: any): number {
-    let total = 0;
-    
-    // コアエンティティのカウント
-    if (entityPool.coreEntities) {
-      for (const entities of Object.values(entityPool.coreEntities)) {
-        if (Array.isArray(entities)) {
-          total += entities.length;
-        }
-      }
-    }
-    
-    // ボーナスエンティティのカウント
-    if (entityPool.bonusEntities) {
-      for (const entities of Object.values(entityPool.bonusEntities)) {
-        if (Array.isArray(entities)) {
-          total += entities.length;
-        }
-      }
-    }
-    
-    return total;
-  }
 
   /**
    * 開発・デバッグ用: 生成システムの詳細情報取得

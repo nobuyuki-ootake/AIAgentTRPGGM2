@@ -2,27 +2,26 @@
 // 探索アクション・エンティティ発見API
 // ==========================================
 
-import express from 'express';
+import { Router } from 'express';
 import { explorationActionService } from '../services/explorationActionService';
 import { logger } from '../utils/logger';
+import { asyncHandler } from '../middleware/errorHandler';
 import {
   StartExplorationActionRequest,
   ProvideUserInputRequest,
   ExecuteSkillCheckRequest,
   GetLocationEntitiesRequest,
-  GetExplorationFlowStateRequest,
-  EntityGenerationRequest,
   ExplorationActionType,
   SkillCheckType
-} from '@repo/types';
+} from '@ai-agent-trpg/types';
 
-const router = express.Router();
+const router = Router();
 
 // ==========================================
 // 場所のエンティティ一覧取得
 // ==========================================
 
-router.get('/entities/:sessionId/:locationId', async (req, res) => {
+router.get('/entities/:sessionId/:locationId', asyncHandler(async (req, res) => {
   try {
     const { sessionId, locationId } = req.params;
     
@@ -34,24 +33,24 @@ router.get('/entities/:sessionId/:locationId', async (req, res) => {
     };
 
     const response = await explorationActionService.getLocationEntities(request);
-    res.json(response);
+    return res.json(response);
 
   } catch (error) {
     logger.error('Failed to get location entities:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       entities: [],
       totalCount: 0,
       error: 'エンティティの取得に失敗しました'
     });
   }
-});
+}));
 
 // ==========================================
 // 探索アクション開始
 // ==========================================
 
-router.post('/start', async (req, res) => {
+router.post('/start', asyncHandler(async (req, res) => {
   try {
     const request: StartExplorationActionRequest = {
       sessionId: req.body.sessionId,
@@ -70,22 +69,22 @@ router.post('/start', async (req, res) => {
     }
 
     const response = await explorationActionService.startExplorationAction(request);
-    res.json(response);
+    return res.json(response);
 
   } catch (error) {
     logger.error('Failed to start exploration action:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: '探索アクションの開始に失敗しました'
     });
   }
-});
+}));
 
 // ==========================================
 // ユーザー入力提供
 // ==========================================
 
-router.post('/user-input', async (req, res) => {
+router.post('/user-input', asyncHandler(async (req, res) => {
   try {
     const request: ProvideUserInputRequest = {
       executionId: req.body.executionId,
@@ -103,23 +102,23 @@ router.post('/user-input', async (req, res) => {
     }
 
     const response = await explorationActionService.provideUserInput(request);
-    res.json(response);
+    return res.json(response);
 
   } catch (error) {
     logger.error('Failed to provide user input:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       judgmentTriggered: false,
       error: 'ユーザー入力の処理に失敗しました'
     });
   }
-});
+}));
 
 // ==========================================
 // スキルチェック実行（手動）
 // ==========================================
 
-router.post('/skill-check', async (req, res) => {
+router.post('/skill-check', asyncHandler(async (req, res) => {
   try {
     const request: ExecuteSkillCheckRequest = {
       executionId: req.body.executionId,
@@ -138,22 +137,22 @@ router.post('/skill-check', async (req, res) => {
     }
 
     const response = await explorationActionService.executeSkillCheck(request);
-    res.json(response);
+    return res.json(response);
 
   } catch (error) {
     logger.error('Failed to execute skill check:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'スキルチェックの実行に失敗しました'
     });
   }
-});
+}));
 
 // ==========================================
 // 新しいエンティティ生成（開発・テスト用）
 // ==========================================
 
-router.post('/generate-entity', async (req, res) => {
+router.post('/generate-entity', asyncHandler(async (req, res) => {
   try {
     const { sessionId, locationId, entityName, entityType } = req.body;
 
@@ -203,7 +202,7 @@ router.post('/generate-entity', async (req, res) => {
         description: '慎重に探索してみます',
         difficulty: 'normal' as const,
         requiredSkill: 'investigation' as SkillCheckType,
-        riskLevel: 'medium' as const
+        riskLevel: 'low' as const
       });
     }
 
@@ -215,25 +214,25 @@ router.post('/generate-entity', async (req, res) => {
       defaultActions
     );
 
-    res.json({
+    return res.json({
       success: true,
       entity
     });
 
   } catch (error) {
     logger.error('Failed to generate entity:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'エンティティの生成に失敗しました'
     });
   }
-});
+}));
 
 // ==========================================
 // 探索フロー状態取得
 // ==========================================
 
-router.get('/flow-state/:sessionId', async (req, res) => {
+router.get('/flow-state/:sessionId', asyncHandler(async (req, res) => {
   try {
     const sessionId = req.params.sessionId;
     
@@ -254,31 +253,29 @@ router.get('/flow-state/:sessionId', async (req, res) => {
       lastUpdated: new Date().toISOString()
     };
 
-    res.json({
+    return res.json({
       success: true,
       flowState: basicState
     });
 
   } catch (error) {
     logger.error('Failed to get exploration flow state:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: '探索フロー状態の取得に失敗しました'
     });
   }
-});
+}));
 
 // ==========================================
 // アクティブな探索アクション一覧
 // ==========================================
 
-router.get('/active/:sessionId', async (req, res) => {
+router.get('/active/:sessionId', asyncHandler(async (_req, res) => {
   try {
-    const sessionId = req.params.sessionId;
-    
     // TODO: アクティブな探索アクション取得の実装
     // 現在は空の配列を返す
-    res.json({
+    return res.json({
       success: true,
       activeExplorations: [],
       pendingInputs: [],
@@ -287,7 +284,7 @@ router.get('/active/:sessionId', async (req, res) => {
 
   } catch (error) {
     logger.error('Failed to get active explorations:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       activeExplorations: [],
       pendingInputs: [],
@@ -295,20 +292,19 @@ router.get('/active/:sessionId', async (req, res) => {
       error: 'アクティブな探索の取得に失敗しました'
     });
   }
-});
+}));
 
 // ==========================================
 // 探索履歴取得
 // ==========================================
 
-router.get('/history/:sessionId', async (req, res) => {
+router.get('/history/:sessionId', asyncHandler(async (_req, res) => {
   try {
-    const sessionId = req.params.sessionId;
-    const characterId = req.query.characterId as string;
-    const limit = parseInt(req.query.limit as string) || 20;
-    
     // TODO: 探索履歴取得の実装
-    res.json({
+    // const sessionId = req.params.sessionId;
+    // const characterId = req.query.characterId as string;
+    // const limit = parseInt(req.query.limit as string) || 20;
+    return res.json({
       success: true,
       history: [],
       totalCount: 0,
@@ -317,7 +313,7 @@ router.get('/history/:sessionId', async (req, res) => {
 
   } catch (error) {
     logger.error('Failed to get exploration history:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       history: [],
       totalCount: 0,
@@ -325,15 +321,16 @@ router.get('/history/:sessionId', async (req, res) => {
       error: '探索履歴の取得に失敗しました'
     });
   }
-});
+}));
 
 // ==========================================
 // エンティティ詳細取得
 // ==========================================
 
-router.get('/entity/:entityId', async (req, res) => {
+router.get('/entity/:entityId', asyncHandler(async (req, res) => {
   try {
-    const entityId = req.params.entityId;
+    // TODO: 個別エンティティ取得の実装
+    // const entityId = req.params.entityId;
     const sessionId = req.query.sessionId as string;
 
     if (!sessionId) {
@@ -344,7 +341,7 @@ router.get('/entity/:entityId', async (req, res) => {
     }
 
     // TODO: 個別エンティティ取得の実装
-    res.json({
+    return res.json({
       success: true,
       entity: null,
       interactions: [],
@@ -353,20 +350,20 @@ router.get('/entity/:entityId', async (req, res) => {
 
   } catch (error) {
     logger.error('Failed to get entity details:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'エンティティ詳細の取得に失敗しました'
     });
   }
-});
+}));
 
 // ==========================================
 // ヘルスチェック
 // ==========================================
 
-router.get('/health', async (req, res) => {
+router.get('/health', asyncHandler(async (_req, res) => {
   try {
-    res.json({
+    return res.json({
       success: true,
       service: 'exploration-actions',
       status: 'healthy',
@@ -374,7 +371,7 @@ router.get('/health', async (req, res) => {
     });
   } catch (error) {
     logger.error('Exploration actions health check failed:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       service: 'exploration-actions',
       status: 'error',
@@ -382,6 +379,6 @@ router.get('/health', async (req, res) => {
       error: error instanceof Error ? error.message : '不明なエラー'
     });
   }
-});
+}));
 
 export default router;

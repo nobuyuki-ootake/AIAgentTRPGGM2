@@ -8,9 +8,8 @@ import { logger } from '../utils/logger';
 import {
   GetAIAgentLogsRequest,
   GetAIAgentPerformanceRequest,
-  GetMonitoringDashboardRequest,
-  UpdateMonitoringSettingsRequest
-} from '@repo/types';
+  GetMonitoringDashboardRequest
+} from '@ai-agent-trpg/types';
 
 const router = express.Router();
 

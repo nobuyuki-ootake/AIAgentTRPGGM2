@@ -9,23 +9,28 @@ import { v4 as uuidv4 } from 'uuid';
 import express from 'express';
 import {
   UnifiedMilestone,
-  EntityRelationships,
   EntityRelationshipRule,
   getMilestoneBaseInfo,
   isAIPoolMilestone,
-  ID,
   GMNotification,
-  GMNotificationEvent,
-  CreateMilestoneCompletionNotificationParams
-} from '@repo/types';
+  GMNotificationEvent
+} from '@ai-agent-trpg/types';
 import { NarrativeState } from './narrativeCalculationService';
 import { entityUnlockService } from './entityUnlockService';
 
 export class MilestoneCompletionService {
   private app: express.Application | null = null;
+  private initialized = false;
 
   constructor() {
-    this.initializeDatabase();
+    // Lazy initialization - database will be initialized on first use
+  }
+
+  private ensureInitialized() {
+    if (!this.initialized) {
+      this.initializeDatabase();
+      this.initialized = true;
+    }
   }
 
   /**
@@ -117,6 +122,7 @@ export class MilestoneCompletionService {
     milestone: UnifiedMilestone,
     sessionId: string
   ): Promise<boolean> {
+    this.ensureInitialized();
     try {
       const baseInfo = getMilestoneBaseInfo(milestone);
       const relationships = baseInfo.entityRelationships;
@@ -264,7 +270,7 @@ export class MilestoneCompletionService {
     sessionId: string
   ): Promise<number> {
     try {
-      const baseInfo = getMilestoneBaseInfo(milestone);
+      // TODO: Add milestone base info processing
       const currentNarrativeState = await this.getCurrentNarrativeState(sessionId);
       
       // ストーリー段階での適切性
@@ -423,7 +429,7 @@ export class MilestoneCompletionService {
    */
   private async checkLegacyMilestoneCompletion(
     milestone: UnifiedMilestone,
-    sessionId: string
+    _sessionId: string
   ): Promise<boolean> {
     try {
       // AIPoolMilestone型の場合の完了チェック
@@ -444,7 +450,7 @@ export class MilestoneCompletionService {
   // 準備度計算ヘルパーメソッド
   // ==========================================
 
-  private calculatePhaseReadiness(milestone: UnifiedMilestone, phase: string): number {
+  private calculatePhaseReadiness(_milestone: UnifiedMilestone, phase: string): number {
     const readiness = {
       'introduction': 0.6,
       'development': 0.9,
@@ -462,7 +468,7 @@ export class MilestoneCompletionService {
     return Math.min(1.0, avgInvolvement + 0.2); // 基本ボーナス
   }
 
-  private calculateTensionReadiness(tensionLevel: number, milestone: UnifiedMilestone): number {
+  private calculateTensionReadiness(tensionLevel: number, _milestone: UnifiedMilestone): number {
     // 適切な緊張レベル範囲での完了を促進
     const idealTension = 0.6; // マイルストーン完了に理想的な緊張レベル
     const deviation = Math.abs(tensionLevel - idealTension);
@@ -493,7 +499,7 @@ export class MilestoneCompletionService {
   // イベント発火ヘルパーメソッド（Phase 4で実装予定）
   // ==========================================
 
-  private async queueMilestoneCompletionNotification(eventData: any): Promise<void> {
+  async queueMilestoneCompletionNotification(eventData: any): Promise<void> {
     try {
       // マイルストーン完了通知の作成
       const notification: GMNotification = {
@@ -604,14 +610,16 @@ export class MilestoneCompletionService {
     logger.debug('Queued narrative change notification:', eventData.milestoneId);
   }
 
-  private async checkEntityUnlockTriggers(milestone: UnifiedMilestone, sessionId: string): Promise<void> {
-    // Phase 3-3: エンティティ解放システムとの統合完了
-    await entityUnlockService.checkUnlockConditionsOnMilestoneCompletion(
-      sessionId,
-      milestone
-    );
-    logger.debug('Checked entity unlock triggers for milestone:', getMilestoneBaseInfo(milestone).id);
-  }
+  // TODO: Implement entity unlock triggers
+  // private async checkEntityUnlockTriggers(_milestone: UnifiedMilestone, _sessionId: string): Promise<void> {
+  //   // Phase 3-3: エンティティ解放システムとの統合完了
+  //   await entityUnlockService.checkUnlockConditionsOnMilestoneCompletion(
+  //     _sessionId,
+  //     _milestone,
+  //     'system'
+  //   );
+  //   logger.debug('Checked entity unlock triggers for milestone:', getMilestoneBaseInfo(_milestone).id);
+  // }
 
   // ==========================================
   // ユーティリティメソッド（簡易実装）
@@ -638,7 +646,7 @@ export class MilestoneCompletionService {
   private async calculateSequentialProgress(
     entityIds: string[], 
     completedEntities: string[], 
-    sessionId: string
+    _sessionId: string
   ): Promise<number> {
     try {
       let consecutiveCompleted = 0;

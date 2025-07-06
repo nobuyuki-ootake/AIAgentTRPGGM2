@@ -86,16 +86,49 @@ export interface AIMilestone {
   entityRelationships?: EntityRelationships;
 }
 
-export interface EntityPool {
-  id: ID;
-  name: string;
-  description: string;
-  entities: any[];
-  conditions: AIConditionExpression[];
-  priority: number;
+// ==========================================
+// エンティティ分類構造
+// ==========================================
+
+export interface CoreEntities {
+  enemies: any[];
+  events: any[];
+  npcs: any[];
+  items: any[];
+  quests: any[];
 }
 
+export interface BonusEntities {
+  practicalRewards: any[];
+  trophyItems: any[];
+  mysteryItems: any[];
+}
+
+// エンティティプールの実際のデータ構造
 export interface EntityPoolCollection {
+  coreEntities: CoreEntities;
+  bonusEntities: BonusEntities;
+  // 後方互換性のための直接エンティティアクセス（オプション）
+  enemies?: any[];
+  events?: any[];
+  npcs?: any[];
+  items?: any[];
+  quests?: any[];
+}
+
+// セッション用エンティティプール
+export interface EntityPool {
+  id: ID;
+  campaignId: ID;
+  sessionId: ID;
+  themeId: ID;
+  entities: EntityPoolCollection;
+  generatedAt: string;
+  lastUpdated: string;
+}
+
+// 旧EntityPoolCollectionをEntityPoolsContainerに改名（既存コードとの互換性のため）
+export interface EntityPoolsContainer {
   id: ID;
   campaignId: ID;
   pools: EntityPool[];
