@@ -132,7 +132,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         }}
       >
         <Stack spacing={1}>
-          {session.chatLog.map((msg) => (
+          {(session.chatLog || []).map((msg) => (
             <Box
               key={msg.id}
               sx={{

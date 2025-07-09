@@ -288,6 +288,24 @@ interface SessionInitializationRequest {
   model?: string;
 }
 
+interface SessionInitializationProgressUpdate {
+  phase: 'scenario' | 'milestone' | 'entity';
+  progress: number;
+  status: 'in_progress' | 'completed' | 'error';
+  currentTask: string;
+  completedTasks: string[];
+  totalTasks: number;
+  estimatedTimeRemaining: number;
+  error?: string;
+}
+
+interface SessionInitializationCallbacks {
+  onProgress?: (update: SessionInitializationProgressUpdate) => void;
+  onPhaseChange?: (phase: 'scenario' | 'milestone' | 'entity', progress: number) => void;
+  onComplete?: (result: SessionInitializationResult) => void;
+  onError?: (error: string) => void;
+}
+
 interface SessionInitializationResult {
   milestones: Milestone[];
   entityPool: EntityPool;
@@ -583,6 +601,38 @@ export const aiGameMasterAPI = {
   },
 
   /**
+   * セッション初期化（進捗コールバック付き）
+   */
+  async initializeSessionWithProgress(
+    request: SessionInitializationRequest,
+    callbacks?: SessionInitializationCallbacks
+  ): Promise<SessionInitializationResult> {
+    // WebSocketを使用した場合の進捗更新は useSessionInitialization フックで処理
+    // ここでは通常のAPI呼び出しとして実装
+    try {
+      callbacks?.onProgress?.({
+        phase: 'scenario',
+        progress: 0,
+        status: 'in_progress',
+        currentTask: 'セッション初期化を開始しています...',
+        completedTasks: [],
+        totalTasks: 16,
+        estimatedTimeRemaining: 500,
+      });
+
+      const result = await this.initializeSession(request);
+      
+      callbacks?.onComplete?.(result);
+      
+      return result;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'セッション初期化中にエラーが発生しました';
+      callbacks?.onError?.(errorMessage);
+      throw error;
+    }
+  },
+
+  /**
    * セッション初期化（便利メソッド）
    */
   async initializeSessionWithDefaults(
@@ -627,4 +677,6 @@ export type {
   EntityPoolQuest,
   SessionInitializationRequest,
   SessionInitializationResult,
+  SessionInitializationProgressUpdate,
+  SessionInitializationCallbacks,
 };

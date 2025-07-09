@@ -11,16 +11,16 @@ router.post('/', async (req, res) => {
     const request: ConversationStartRequest = req.body;
     
     // バリデーション
-    if (!request.characterId || !request.npcId || !request.location) {
+    if (!request.locationId || !request.initiatorId || !request.targetCharacterIds || request.targetCharacterIds.length === 0) {
       res.status(400).json({ 
-        error: 'Missing required fields: characterId, npcId, location' 
+        error: 'Missing required fields: locationId, initiatorId, targetCharacterIds' 
       });
       return;
     }
 
     const conversation = await conversationService.startConversation(request);
     
-    logger.info(`Conversation started: ${conversation.id} at location ${conversation.location}`);
+    logger.info(`Conversation started: ${conversation.id} at location ${conversation.locationId}`);
     res.status(201).json(conversation);
   } catch (error) {
     logger.error('Failed to start conversation:', error);

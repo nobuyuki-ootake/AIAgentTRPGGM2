@@ -1,4 +1,4 @@
-import { SessionState, SessionDurationConfig } from '@ai-agent-trpg/types';
+import { SessionState, SessionDurationConfig, SESSION_DURATION_PRESETS } from '@ai-agent-trpg/types';
 import { apiClient } from './client';
 
 interface ChatMessage {
@@ -64,9 +64,11 @@ class SessionAPI {
   }
 
   // セッション更新のポーリング（リアルタイム更新の簡易実装）
-  async pollSession(sessionId: string, callback: (session: SessionState) => void, interval: number = 2000): Promise<() => void> {
+  async pollSession(sessionId: string, callback: (session: SessionState) => void, interval: number = 10000): Promise<() => void> {
     let isPolling = true;
     let timeoutId: number | null = null;
+    let consecutiveFailures = 0;
+    const maxFailures = 3;
     
     const poll = async () => {
       if (!isPolling) return;
@@ -75,10 +77,24 @@ class SessionAPI {
         const session = await this.getSessionById(sessionId);
         if (isPolling) {
           callback(session);
+          consecutiveFailures = 0; // リセット on success
         }
       } catch (error) {
-        console.error('Session polling error:', error);
-        // エラーが発生してもポーリングを続行
+        consecutiveFailures++;
+        console.error(`Session polling error (${consecutiveFailures}/${maxFailures}):`, error);
+        
+        // 連続失敗が多い場合はポーリングを停止
+        if (consecutiveFailures >= maxFailures) {
+          console.log(`🚫 Stopping polling due to ${maxFailures} consecutive failures`);
+          isPolling = false;
+          return;
+        }
+        
+        // ネットワークエラーの場合は間隔を延長
+        if (error instanceof Error && error.message.includes('Network')) {
+          interval = Math.min(interval * 1.5, 30000); // 最大30秒まで延長
+          console.log(`📡 Network error detected, extending polling interval to ${interval}ms`);
+        }
       }
       
       if (isPolling) {
@@ -86,8 +102,8 @@ class SessionAPI {
       }
     };
 
-    // 最初のポーリングを開始
-    timeoutId = setTimeout(poll, 100);
+    // 最初のポーリングを開始（少し遅延を入れる）
+    timeoutId = setTimeout(poll, 1000);
 
     // ポーリング停止用の関数を返す
     return () => {
@@ -96,6 +112,7 @@ class SessionAPI {
         clearTimeout(timeoutId);
         timeoutId = null;
       }
+      console.log('📡 Session polling stopped');
     };
   }
 
@@ -125,6 +142,8 @@ class SessionAPI {
         players: {},
         shared: '',
       },
+      // デフォルトのセッション期間設定（中時間プレイ - ユーザー満足度が最も高い想定）
+      durationConfig: SESSION_DURATION_PRESETS.medium,
     };
   }
 

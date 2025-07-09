@@ -83,6 +83,19 @@ partyMovementRouter.post('/proposals', asyncHandler(async (req, res) => {
     
     if (response.success) {
       logger.info(`Movement proposal created successfully: ${response.proposal?.id}`);
+      
+      // WebSocketで全セッション参加者に通知
+      const io = req.app.get('socketio');
+      if (io) {
+        io.to(`session-${proposalRequest.sessionId}`).emit('party-movement-updated', {
+          type: 'proposal-created',
+          sessionId: proposalRequest.sessionId,
+          proposal: response.proposal,
+          timestamp: new Date().toISOString()
+        });
+        logger.debug(`Broadcasted party movement update to session ${proposalRequest.sessionId}`);
+      }
+      
       res.status(201).json(response);
     } else {
       res.status(400).json(response);
@@ -117,6 +130,25 @@ partyMovementRouter.post('/votes', asyncHandler(async (req, res) => {
     
     if (response.success) {
       logger.info(`Vote cast successfully for proposal ${voteRequest.proposalId} by ${voteRequest.voterId}`);
+      
+      // WebSocketで全セッション参加者に通知
+      const io = req.app.get('socketio');
+      if (io) {
+        const sessionId = await partyMovementService.getSessionIdFromProposal(voteRequest.proposalId);
+        if (sessionId) {
+          io.to(`session-${sessionId}`).emit('party-movement-updated', {
+            type: 'vote-cast',
+            sessionId,
+            proposalId: voteRequest.proposalId,
+            voterId: voteRequest.voterId,
+            choice: voteRequest.choice,
+            consensusReached: response.consensusReached,
+            timestamp: new Date().toISOString()
+          });
+          logger.debug(`Broadcasted vote update for proposal ${voteRequest.proposalId} to session ${sessionId}`);
+        }
+      }
+      
       res.json(response);
     } else {
       res.status(400).json(response);
@@ -148,6 +180,19 @@ partyMovementRouter.post('/execute', asyncHandler(async (req, res) => {
     
     if (response.success) {
       logger.info(`Party movement executed successfully: ${executeRequest.proposalId}`);
+      
+      // WebSocketで全セッション参加者に移動実行を通知
+      const io = req.app.get('socketio');
+      if (io) {
+        io.to(`session-${executeRequest.sessionId}`).emit('party-movement-updated', {
+          type: 'movement-executed',
+          sessionId: executeRequest.sessionId,
+          proposalId: executeRequest.proposalId,
+          timestamp: new Date().toISOString()
+        });
+        logger.debug(`Broadcasted movement execution to session ${executeRequest.sessionId}`);
+      }
+      
       res.json(response);
     } else {
       res.status(400).json(response);

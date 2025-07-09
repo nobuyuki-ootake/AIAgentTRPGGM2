@@ -62,7 +62,7 @@ export const AIAgentMonitoringDashboard: React.FC<AIAgentMonitoringDashboardProp
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState<'1h' | '6h' | '24h' | '7d'>('24h');
-  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [autoRefresh, setAutoRefresh] = useState(false);
 
   // ==========================================
   // データ取得
@@ -103,11 +103,6 @@ export const AIAgentMonitoringDashboard: React.FC<AIAgentMonitoringDashboardProp
   useEffect(() => {
     if (!open || !autoRefresh) return;
 
-    const interval = setInterval(() => {
-      fetchDashboard();
-    }, 30000); // 30秒間隔
-
-    return () => clearInterval(interval);
   }, [open, autoRefresh, sessionId, timeRange]);
 
   // ==========================================

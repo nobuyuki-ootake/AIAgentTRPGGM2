@@ -1,6 +1,14 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 import { APIResponse } from '@ai-agent-trpg/types';
 
+// グローバル通知システム用のコールバック
+let globalNotificationCallback: ((type: '404-error' | 'error', message: string, options?: { details?: string }) => void) | null = null;
+
+// 通知システムとの連携
+export const setGlobalNotificationCallback = (callback: typeof globalNotificationCallback) => {
+  globalNotificationCallback = callback;
+};
+
 class ApiClient {
   private client: AxiosInstance;
 
@@ -60,14 +68,40 @@ class ApiClient {
         // エラーレスポンスの処理
         if (error.response) {
           // サーバーからのエラーレスポンス
+          const status = error.response.status;
+          const method = error.config?.method?.toUpperCase() || 'GET';
+          const url = error.config?.url || 'Unknown URL';
           const errorMessage = error.response.data?.error || 
-                              `HTTP ${error.response.status}: ${error.response.statusText}`;
+                              `HTTP ${status}: ${error.response.statusText}`;
           
-          console.error(`❌ API Error: ${error.config?.method?.toUpperCase()} ${error.config?.url}`, {
-            status: error.response.status,
+          console.error(`❌ API Error: ${method} ${url}`, {
+            status,
             error: errorMessage,
             data: error.response.data,
           });
+
+          // 404エラーの場合は特別な通知を表示
+          if (status === 404) {
+            if (globalNotificationCallback) {
+              const details = `Request Details:
+• Method: ${method}
+• URL: ${url}
+• Status: ${status} ${error.response.statusText}
+• Server Response: ${JSON.stringify(error.response.data, null, 2)}
+
+This error indicates that the API endpoint is not implemented on the server.`;
+              
+              globalNotificationCallback('404-error', `${method} ${url}`, { details });
+            }
+          }
+          // その他のエラーも通知
+          else if (status >= 500) {
+            if (globalNotificationCallback) {
+              globalNotificationCallback('error', `Server Error (${status}): ${errorMessage}`, {
+                details: `Request: ${method} ${url}\nStatus: ${status}\nResponse: ${JSON.stringify(error.response.data, null, 2)}`
+              });
+            }
+          }
 
           // ユーザーフレンドリーなエラーメッセージを設定
           error.message = errorMessage;
@@ -75,9 +109,21 @@ class ApiClient {
           // ネットワークエラー
           console.error('🌐 Network Error:', error.request);
           error.message = 'Network error. Please check your connection and try again.';
+          
+          if (globalNotificationCallback) {
+            globalNotificationCallback('error', 'Network connection failed', {
+              details: 'Unable to connect to the server. Please check your internet connection and try again.'
+            });
+          }
         } else {
           // その他のエラー
           console.error('⚠️ Unknown Error:', error.message);
+          
+          if (globalNotificationCallback) {
+            globalNotificationCallback('error', 'Unexpected error occurred', {
+              details: error.message
+            });
+          }
         }
 
         return Promise.reject(error);

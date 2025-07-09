@@ -185,9 +185,11 @@ export const playerCharacterAtom = atom<Character | null>({
 
 interface Notification {
   id: string;
-  type: 'success' | 'error' | 'warning' | 'info';
+  type: 'success' | 'error' | 'warning' | 'info' | '404-error';
   message: string;
   timestamp: string;
+  persistent?: boolean; // 表示時間制限なしフラグ
+  details?: string; // エラー詳細情報
 }
 
 export const notificationsAtom = atom<Notification[]>({
@@ -344,4 +346,83 @@ export const narrativeFeedbackLoadingAtom = atom<boolean>({
 export const narrativeFeedbackErrorAtom = atom<string | null>({
   key: 'narrativeFeedbackError',
   default: null,
+});
+
+// ==========================================
+// セッション初期化3層構造進捗システム
+// ==========================================
+
+export type SessionInitializationPhase = 'scenario' | 'milestone' | 'entity';
+
+export interface SessionInitializationProgressDetail {
+  phase: SessionInitializationPhase;
+  phaseName: string;
+  progress: number; // 0-100
+  status: 'pending' | 'in_progress' | 'completed' | 'error';
+  currentTask: string;
+  completedTasks: string[];
+  totalTasks: number;
+  estimatedTimeRemaining: number; // seconds
+  startTime?: string;
+  endTime?: string;
+  error?: string;
+}
+
+export interface SessionInitializationProgress {
+  isInitializing: boolean;
+  currentPhase: SessionInitializationPhase | null;
+  overallProgress: number; // 0-100
+  phases: {
+    scenario: SessionInitializationProgressDetail;
+    milestone: SessionInitializationProgressDetail;
+    entity: SessionInitializationProgressDetail;
+  };
+  sessionId: string | null;
+  campaignId: string | null;
+  startTime?: string;
+  endTime?: string;
+  error?: string;
+}
+
+export const sessionInitializationProgressAtom = atom<SessionInitializationProgress>({
+  key: 'sessionInitializationProgress',
+  default: {
+    isInitializing: false,
+    currentPhase: null,
+    overallProgress: 0,
+    phases: {
+      scenario: {
+        phase: 'scenario',
+        phaseName: 'シナリオ生成',
+        progress: 0,
+        status: 'pending',
+        currentTask: '',
+        completedTasks: [],
+        totalTasks: 0,
+        estimatedTimeRemaining: 0,
+      },
+      milestone: {
+        phase: 'milestone',
+        phaseName: 'マイルストーン生成',
+        progress: 0,
+        status: 'pending',
+        currentTask: '',
+        completedTasks: [],
+        totalTasks: 0,
+        estimatedTimeRemaining: 0,
+      },
+      entity: {
+        phase: 'entity',
+        phaseName: 'エンティティ生成',
+        progress: 0,
+        status: 'pending',
+        currentTask: '',
+        completedTasks: [],
+        totalTasks: 0,
+        estimatedTimeRemaining: 0,
+      },
+    },
+    sessionId: null,
+    campaignId: null,
+  },
 });

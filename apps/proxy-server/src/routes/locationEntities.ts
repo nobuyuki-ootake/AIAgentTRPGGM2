@@ -98,6 +98,23 @@ router.put('/status', asyncHandler(async (req, res) => {
     }
 
     const response = await locationEntityService.updateEntityStatus(request);
+    
+    if (response.success) {
+      // WebSocketで全セッション参加者にエンティティ状態変更を通知
+      const io = req.app.get('socketio');
+      if (io) {
+        io.to(`session-${request.sessionId}`).emit('location-entities-updated', {
+          type: 'entity-status-changed',
+          sessionId: request.sessionId,
+          locationId: response.updatedEntity?.locationId || 'unknown',
+          entityId: request.entityId,
+          newStatus: request.newStatus,
+          timestamp: new Date().toISOString()
+        });
+        logger.debug(`Broadcasted entity status update to session ${request.sessionId}`);
+      }
+    }
+    
     return res.json(response);
 
   } catch (error) {
@@ -132,6 +149,23 @@ router.post('/refresh', asyncHandler(async (req, res) => {
     }
 
     const response = await locationEntityService.refreshLocationEntities(request);
+    
+    if (response.success) {
+      // WebSocketで全セッション参加者にエンティティ更新を通知
+      const io = req.app.get('socketio');
+      if (io) {
+        const entityIds = response.refreshedEntities?.map(entity => entity.id) || [];
+        io.to(`session-${request.sessionId}`).emit('location-entities-updated', {
+          type: 'entities-refreshed',
+          sessionId: request.sessionId,
+          locationId: request.locationId,
+          entityIds,
+          timestamp: new Date().toISOString()
+        });
+        logger.debug(`Broadcasted entities refresh to session ${request.sessionId}`);
+      }
+    }
+    
     return res.json(response);
 
   } catch (error) {

@@ -147,9 +147,12 @@ class AICharacterGenerationService {
         id: 'custom',
         name: 'カスタム',
         description,
-        tags: ['custom'],
-        atmosphere: 'dramatic',
-        commonElements: [description]
+        genre: 'custom',
+        setting: description,
+        mood: 'dramatic',
+        difficulty: 'normal',
+        style: 'balanced',
+        keyElements: [description]
       },
       characterType,
     });
@@ -229,46 +232,56 @@ class AICharacterGenerationService {
 あなたはTRPGキャラクター生成の専門家です。以下の設定に基づいて、魅力的なキャラクターを1体生成してください。
 
 ## テーマ設定
-- ジャンル: ${theme.tags.join(", ")}
+- ジャンル: ${theme.genre || 'fantasy'}
 - 世界観: ${theme.description}
-- 雰囲気: ${theme.atmosphere}
+- 雰囲気: ${theme.mood || 'balanced'}
 - 難易度: ${"balanced"}
 - スタイル: ${"standard"}
-${theme.commonElements ? `- 重要要素: ${theme.commonElements.join(', ')}` : ''}
+${theme.keyElements ? `- 重要要素: ${theme.keyElements.join(', ')}` : ''}
 
 ## キャラクター要件
 - タイプ: ${characterType}
 ${role ? `- 役割: ${role}` : ''}
 
 ## 出力形式（JSON）
-以下のJSON形式で回答してください：
+**必ず以下の形式に厳密に従ってください。追加のフィールドや構造を含めないでください：**
 
 \`\`\`json
 {
-  "name": "田中太郎",
+  "name": "アーサー",
   "characterClass": "戦士",
   "description": "外見や特徴の詳細な説明（100文字程度）",
   "background": "背景設定や経歴（100文字程度）",
   "personality": "性格や行動傾向（100文字程度）",
-  "alignment": "善/中立/悪の属性",
+  "alignment": "秩序にして善",
   "baseStats": {
-    "strength": 10-18,
-    "dexterity": 10-18,
-    "constitution": 10-18,
-    "intelligence": 10-18,
-    "wisdom": 10-18,
-    "charisma": 10-18
+    "strength": 16,
+    "dexterity": 12,
+    "constitution": 14,
+    "intelligence": 10,
+    "wisdom": 11,
+    "charisma": 13
   },
-  "level": 1-5,
-  "maxHitPoints": 20-80,
-  "maxMagicPoints": 10-50
+  "level": 1,
+  "maxHitPoints": 40,
+  "maxMagicPoints": 0
 }
 \`\`\`
 
+## 重要な注意事項
+- **上記のJSON形式を厳密に守ってください**
+- **追加のフィールドや入れ子構造（traits, flaws, ideals等）を含めないでください**
+- **数値は範囲ではなく具体的な数値を入れてください**
+- **JSONの構文エラーがないよう注意してください**
+
 ## 注意事項
 - ${characterType === 'PC' ? 'プレイヤーが操作する主人公' : characterType === 'NPC' ? '協力的な仲間キャラクター' : '敵対的なキャラクター'}として設計してください
-- **キャラクター名は必ず日本語名**（ひらがな、カタカナ、漢字）を使用してください
-- テーマの${theme.tags.join(", ")}ジャンルに適した日本語の名前と設定にしてください
+- **キャラクター名は${theme.genre}テーマに適した名前**を使用してください
+  - クラシックファンタジー: カタカナ表記の西洋風の名前（アーサー、エリザベス、ガレス等）
+  - 和風ファンタジー: 日本語名（源頼光、田中健太等）
+  - SF: 未来的な名前（ザック、レイナ、カイル等）
+  - 現代: 現代的な名前（トム、サラ、ケン等）
+- テーマの${theme.genre}ジャンルに適した日本語の名前と設定にしてください
 - ステータスは${"balanced"}難易度に適したバランスにしてください
 - **JSON内で二重引用符を使用する場合は必ずエスケープ（\\"）してください**
 - すべて日本語で回答してください
@@ -285,12 +298,13 @@ ${role ? `- 役割: ${role}` : ''}
 あなたはTRPGキャラクター企画の専門家です。以下のテーマに基づいて、3体のキャラクター概要を生成してください。
 
 ## テーマ設定
-- ジャンル: ${theme.tags.join(", ")}
+- ジャンル: ${theme.genre || 'fantasy'}
 - 世界観: ${theme.description}
-- 雰囲気: ${theme.atmosphere}
-- 難易度: ${"balanced"}
-- スタイル: ${"standard"}
-${theme.commonElements ? `- 重要要素: ${theme.commonElements.join(', ')}` : ''}
+- 設定: ${theme.setting || theme.name}
+- 雰囲気: ${theme.mood || 'balanced'}
+- 難易度: ${theme.difficulty || 'normal'}
+- スタイル: ${theme.style || 'balanced'}
+${theme.keyElements ? `- 重要要素: ${theme.keyElements.join(', ')}` : ''}
 
 ## 生成要件
 1つ目: プレイヤーキャラクター（戦士・前衛タイプ）
@@ -304,21 +318,21 @@ ${theme.commonElements ? `- 重要要素: ${theme.commonElements.join(', ')}` : 
 {
   "characters": [
     {
-      "name": "田中武",
+      "name": "アーサー",
       "role": "勇敢な戦士タイプ。剣と盾で前線に立ち、仲間を守る",
       "characterClass": "戦士",
       "characterType": "PC",
       "brief": "勇敢で頼りになる前衛戦士"
     },
     {
-      "name": "佐藤美咲",
+      "name": "エリザベス",
       "role": "知恵豊かな魔法使いタイプ。魔法と知識で冒険をサポート",
       "characterClass": "魔法使い",
       "characterType": "PC",
       "brief": "聡明で魔法に長けた後衛"
     },
     {
-      "name": "山田敏",
+      "name": "ガレス",
       "role": "身軽な盗賊タイプ。技と素早さで危険を回避し、宝を見つける",
       "characterClass": "盗賊",
       "characterType": "PC",
@@ -329,8 +343,12 @@ ${theme.commonElements ? `- 重要要素: ${theme.commonElements.join(', ')}` : 
 \`\`\`
 
 ## 注意事項
-- **キャラクター名は必ず日本語名**（ひらがな、カタカナ、漢字）を使用してください
-- ${theme.tags.join(", ")}ジャンルに適した日本語の名前と職業を設定してください
+- **キャラクター名は${theme.genre}テーマに適した名前**を使用してください
+  - クラシックファンタジー: カタカナ表記の西洋風の名前（アーサー、エリザベス、ガレス等）
+  - 和風ファンタジー: 日本語名（源頼光、田中健太等）
+  - SF: 未来的な名前（ザック、レイナ、カイル等）
+  - 現代: 現代的な名前（トム、サラ、ケン等）
+- ${theme.genre}ジャンルに適した名前と職業を設定してください
 - 3つの異なるプレイスタイル（戦士系、魔法系、技能系）のキャラクターを作成してください
 - **全てのキャラクターは "characterType": "PC" として生成してください**（プレイヤー選択用）
 - プレイヤーが選択しやすいよう、明確に特徴を分けてください
@@ -350,12 +368,12 @@ ${theme.commonElements ? `- 重要要素: ${theme.commonElements.join(', ')}` : 
 あなたはTRPGキャラクター詳細設計の専門家です。以下の概要に基づいて、詳細なキャラクターを1体生成してください。
 
 ## テーマ設定
-- ジャンル: ${theme.tags.join(", ")}
+- ジャンル: ${theme.genre || 'fantasy'}
 - 世界観: ${theme.description}
-- 雰囲気: ${theme.atmosphere}
+- 雰囲気: ${theme.mood || 'balanced'}
 - 難易度: ${"balanced"}
 - スタイル: ${"standard"}
-${theme.commonElements ? `- 重要要素: ${theme.commonElements.join(', ')}` : ''}
+${theme.keyElements ? `- 重要要素: ${theme.keyElements.join(', ')}` : ''}
 
 ## キャラクター概要
 - 名前: ${concept.name}
@@ -392,7 +410,7 @@ ${theme.commonElements ? `- 重要要素: ${theme.commonElements.join(', ')}` : 
 ## 注意事項
 - 指定された日本語名前と職業を必ず使用してください
 - ${concept.role}としての特徴を反映してください
-- ${theme.tags.join(", ")}ジャンルに適した日本語の設定にしてください
+- ${theme.genre}ジャンルに適した日本語の設定にしてください
 - ステータスは${"balanced"}難易度に適したバランスにしてください
 - **JSON内で二重引用符を使用する場合は必ずエスケープ（\\"）してください**
 - すべて日本語で回答してください

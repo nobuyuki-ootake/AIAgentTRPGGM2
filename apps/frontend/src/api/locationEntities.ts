@@ -11,7 +11,7 @@ import {
   RefreshLocationEntitiesResponse
 } from '@ai-agent-trpg/types';
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:3001';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4001';
 
 // ==========================================
 // 場所エンティティ取得

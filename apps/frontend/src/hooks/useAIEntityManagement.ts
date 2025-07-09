@@ -18,6 +18,7 @@ import {
   AIGameContext
 } from '@ai-agent-trpg/types';
 import { currentCampaignAtom, currentSessionAtom } from '../store/atoms';
+import { useWebSocket } from './useWebSocket';
 
 interface UseAIEntityManagementOptions {
   autoRefresh?: boolean;
@@ -73,6 +74,9 @@ export const useAIEntityManagement = (options: UseAIEntityManagementOptions = {}
   // Recoil state
   const currentCampaign = useRecoilValue(currentCampaignAtom);
   const sessionState = useRecoilValue(currentSessionAtom);
+  
+  // WebSocket接続
+  const { isConnected, onLocationEntitiesUpdated } = useWebSocket();
 
   // Local state
   const [state, setState] = useState<EntityManagementState>({
@@ -172,7 +176,7 @@ export const useAIEntityManagement = (options: UseAIEntityManagementOptions = {}
       activeEvents: sessionState.currentEvent ? [sessionState.currentEvent] : [],
       difficulty: 'medium',
       tension: 50,
-      playerActions: sessionState.chatLog
+      playerActions: (sessionState.chatLog || [])
         .filter(log => log.type === 'ic' && log.characterId)
         .map(log => ({
           characterId: log.characterId!,
@@ -448,16 +452,24 @@ export const useAIEntityManagement = (options: UseAIEntityManagementOptions = {}
     ]);
   }, [clearCache, fetchAvailableEntities, fetchSessionRecommendations, fetchEngineStats]);
 
-  // 自動リフレッシュ
+  // WebSocketリアルタイム更新
   useEffect(() => {
-    if (!autoRefresh || !gameContext) return;
+    if (!isConnected || !gameContext) return;
 
-    const interval = setInterval(() => {
-      refresh();
-    }, refreshInterval);
+    const handleEntityUpdate = (data: any) => {
+      console.log('AI entity management WebSocket update received:', data.type);
+      
+      // エンティティ関連の更新を受信したらデータを更新
+      if (data.type === 'entities-refreshed' || data.type === 'entity-status-changed') {
+        refresh();
+      }
+    };
 
-    return () => clearInterval(interval);
-  }, [autoRefresh, refreshInterval, gameContext, refresh]);
+    const cleanup = onLocationEntitiesUpdated(handleEntityUpdate);
+    
+    return cleanup;
+  }, [isConnected, onLocationEntitiesUpdated, gameContext, refresh]);
+
 
   // 初期データ読み込み
   useEffect(() => {

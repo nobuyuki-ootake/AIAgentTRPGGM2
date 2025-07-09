@@ -1310,7 +1310,7 @@ ${characterDescriptions}
   }
 
   /**
-   * セッション開始時の自動生成システム - メイン処理
+   * セッション開始時の自動生成システム - メイン処理（進捗通知対応）
    */
   async initializeSessionWithAI(
     sessionId: ID,
@@ -1318,12 +1318,16 @@ ${characterDescriptions}
     durationConfig: SessionDurationConfig,
     characters: Character[],
     campaignTheme: string,
-    aiSettings: { provider: string; model?: string }
+    aiSettings: { provider: string; model?: string },
+    onProgress?: (phase: 'scenario' | 'milestone' | 'entity', progress: number, currentTask: string) => void
   ): Promise<SessionInitializationResult> {
     try {
       console.log(`🎯 セッション自動初期化開始 - Session: ${sessionId}, Theme: ${campaignTheme}`);
 
-      // 1. エンティティプール生成
+      // 第1層: シナリオ生成フェーズ
+      onProgress?.('scenario', 0, 'シナリオ設定を準備中...');
+      
+      onProgress?.('scenario', 33, 'エンティティプール生成中...');
       const entityPool = await this.generateEntityPool(
         campaignId,
         campaignTheme,
@@ -1332,7 +1336,23 @@ ${characterDescriptions}
         aiSettings
       );
 
-      // 2. マイルストーン自動生成
+      onProgress?.('scenario', 66, 'ゲーム概要生成中...');
+      const gameOverview = await this.generateSessionGameOverview(
+        sessionId,
+        campaignId,
+        campaignTheme,
+        characters,
+        [],
+        entityPool,
+        aiSettings
+      );
+
+      onProgress?.('scenario', 100, 'シナリオ生成完了');
+
+      // 第2層: マイルストーン生成フェーズ
+      onProgress?.('milestone', 0, 'マイルストーン設計中...');
+      
+      onProgress?.('milestone', 25, 'メインマイルストーン生成中...');
       const milestones = await this.generateMilestones(
         campaignId,
         campaignTheme,
@@ -1342,19 +1362,25 @@ ${characterDescriptions}
         aiSettings
       );
 
-      // 3. ゲーム概要生成
-      const gameOverview = await this.generateSessionGameOverview(
-        sessionId,
-        campaignId,
-        campaignTheme,
-        characters,
-        milestones,
-        entityPool,
-        aiSettings
-      );
+      onProgress?.('milestone', 75, 'マイルストーン調整中...');
+      // マイルストーンの調整処理（必要に応じて）
+      
+      onProgress?.('milestone', 100, 'マイルストーン生成完了');
 
-      // 4. 結果をチャットに投稿
+      // 第3層: エンティティ生成フェーズ
+      onProgress?.('entity', 0, 'エンティティ統合開始...');
+      
+      onProgress?.('entity', 25, 'NPC配置調整中...');
+      // NPC配置の調整処理（必要に応じて）
+      
+      onProgress?.('entity', 50, 'アイテム配置調整中...');
+      // アイテム配置の調整処理（必要に応じて）
+      
+      onProgress?.('entity', 75, 'セッション統合処理中...');
+      // 結果をチャットに投稿
       await this.postInitializationMessageToChat(sessionId, gameOverview);
+
+      onProgress?.('entity', 100, 'エンティティ生成完了');
 
       console.log(`✅ セッション自動初期化完了 - ${milestones.length}マイルストーン, ${entityPool.enemies.length}エネミー生成`);
 

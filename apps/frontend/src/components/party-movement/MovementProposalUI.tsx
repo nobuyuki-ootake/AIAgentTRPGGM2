@@ -104,7 +104,10 @@ export const MovementProposalUI: React.FC<MovementProposalUIProps> = ({
     cancelProposal,
     consensusSettings,
     updateConsensusSettings
-  } = usePartyMovement({ sessionId });
+  } = usePartyMovement({ 
+    sessionId,
+    autoRefresh: false
+  });
 
   // ローカル状態
   const [showCreateDialog, setShowCreateDialog] = useState(false);

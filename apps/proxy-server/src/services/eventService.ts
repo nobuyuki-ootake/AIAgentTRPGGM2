@@ -124,7 +124,7 @@ class EventService {
     database.prepare(`
       INSERT INTO events (
         id, title, description, type, campaign_id, scheduled_date, duration,
-        location, participants, difficulty, challenge_rating, quest_id,
+        location_id, participants, difficulty, challenge_rating, quest_id,
         outcomes, ai_generated, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
@@ -173,7 +173,7 @@ class EventService {
     database.prepare(`
       UPDATE events SET
         title = ?, description = ?, type = ?, scheduled_date = ?, duration = ?,
-        location = ?, participants = ?, difficulty = ?, challenge_rating = ?,
+        location_id = ?, participants = ?, difficulty = ?, challenge_rating = ?,
         quest_id = ?, outcomes = ?, actual_start_time = ?, actual_end_time = ?,
         completed_at = ?, updated_at = ?
       WHERE id = ?

@@ -26,6 +26,20 @@ class PartyMovementService {
   // パーティ移動状態管理
   // ==========================================
 
+  // proposalIdからsessionIdを取得
+  async getSessionIdFromProposal(proposalId: ID): Promise<ID | null> {
+    try {
+      const row = database.prepare(`
+        SELECT session_id FROM party_movement_proposals WHERE id = ?
+      `).get(proposalId) as { session_id: ID } | undefined;
+      
+      return row?.session_id || null;
+    } catch (error) {
+      logger.error('Failed to get sessionId from proposal:', error);
+      return null;
+    }
+  }
+
   async getPartyMovementState(sessionId: ID): Promise<PartyMovementState | null> {
     try {
       // パーティメンバー取得（セッション参加者）

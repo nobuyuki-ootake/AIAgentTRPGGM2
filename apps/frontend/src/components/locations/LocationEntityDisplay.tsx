@@ -146,7 +146,7 @@ export const LocationEntityDisplay: React.FC<LocationEntityDisplayProps> = ({
   locationName = '現在の場所',
   onEntitySelect,
   onEntityAction,
-  autoRefresh = true,
+  autoRefresh = false,
   refreshInterval = 15000,
   compact = false,
   disabled = false,

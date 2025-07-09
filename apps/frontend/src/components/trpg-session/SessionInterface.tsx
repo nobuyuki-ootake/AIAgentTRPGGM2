@@ -63,6 +63,8 @@ import { useAIEntityManagement } from '../../hooks/useAIEntityManagement';
 import usePartyMovement from '../../hooks/usePartyMovement';
 import { useNarrativeFeedbackChatIntegration } from '../../hooks/useNarrativeFeedbackChatIntegration';
 import { NarrativeFeedbackDisplay } from '../narrative/NarrativeFeedbackDisplay';
+import { useSessionInitialization } from '../../hooks/useSessionInitialization';
+import { SessionInitializationModal } from './SessionInitializationModal';
 
 interface SessionInterfaceProps {
   session: SessionState;
@@ -125,9 +127,8 @@ export const SessionInterface: React.FC<SessionInterfaceProps> = ({
   const [partyMovementDialogOpen, setPartyMovementDialogOpen] = useState(false);
   
   // セッション初期化状態
-  const [isInitializing, setIsInitializing] = useState(false);
+  const sessionInitialization = useSessionInitialization();
   const [, setInitializationResult] = useState<SessionInitializationResult | null>(null);
-  const [initializationError, setInitializationError] = useState<string | null>(null);
   const [lastDurationConfig, setLastDurationConfig] = useState<SessionDurationConfig | null>(null);
   
   // 時間管理状態
@@ -145,11 +146,11 @@ export const SessionInterface: React.FC<SessionInterfaceProps> = ({
   });
   const [isAIControlActive, setIsAIControlActive] = useState(false);
 
-  // パーティ移動システム
+  // パーティ移動システム（一時的に無効化）
   const partyMovement = usePartyMovement({
     sessionId: session.id,
-    autoRefresh: session.status === 'active',
-    refreshInterval: 10000 // 10秒間隔で自動更新
+    autoRefresh: false, // 無効化
+    refreshInterval: 60000 // 60秒間隔に延長
   });
 
   // 会話ベースのTRPGフック
@@ -169,20 +170,14 @@ export const SessionInterface: React.FC<SessionInterfaceProps> = ({
     onRollDice
   );
 
-  // AIエンティティ管理フック
+  // AIエンティティ管理フック（一時的に無効化）
   const aiEntityManagement = useAIEntityManagement({
-    autoRefresh: session.status === 'active',
-    refreshInterval: 45000, // 45秒間隔で自動更新
+    autoRefresh: false, // 無効化
+    refreshInterval: 300000, // 5分間隔に延長
     enableCache: true,
     debug: false // 開発環境でのデバッグログ
   });
 
-  // 🆕 Phase 4-4.2: ナラティブフィードバックチャット統合
-  const narrativeFeedbackChatIntegration = useNarrativeFeedbackChatIntegration({
-    sessionId: session.id,
-    onSendMessage: handleSendMessage,
-    enabled: session.status === 'active',
-  });
 
 
   // Default progress tracker when not provided
@@ -336,9 +331,19 @@ export const SessionInterface: React.FC<SessionInterfaceProps> = ({
 
   const handleDurationConfirm = async (config: SessionDurationConfig) => {
     setDurationDialogOpen(false);
-    setIsInitializing(true);
-    setInitializationError(null);
+    sessionInitialization.startInitialization();
     setLastDurationConfig(config);
+    
+    // デバッグ: 送信するconfigの内容を確認
+    console.log('🔍 Sending SessionDurationConfig:', JSON.stringify(config, null, 2));
+    console.log('🔍 Config validation check:', {
+      hasTotalDays: !!config.totalDays,
+      hasActionsPerDay: !!config.actionsPerDay,
+      hasMilestoneCount: !!config.milestoneCount,
+      totalDays: config.totalDays,
+      actionsPerDay: config.actionsPerDay,
+      milestoneCount: config.milestoneCount
+    });
     
     try {
       // 1. セッションを開始
@@ -348,7 +353,12 @@ export const SessionInterface: React.FC<SessionInterfaceProps> = ({
       const initialLocation = partyLocation.currentLocationId;
       console.log(`📍 パーティ初期位置: ${initialLocation}`);
       
-      // 3. AI自動生成を実行（従来システム）
+      // 3. エンティティプール生成段階
+      sessionInitialization.updateStage('entities', {
+        details: 'エネミー、NPC、アイテム、イベントを生成中...',
+        progress: 10,
+      });
+      
       console.log('🎯 セッション自動初期化開始...');
       const result = await aiGameMasterAPI.initializeSessionWithDefaults(
         session.id,
@@ -357,6 +367,26 @@ export const SessionInterface: React.FC<SessionInterfaceProps> = ({
         characters,
         'クラシックファンタジー' // デフォルトテーマ
       );
+      
+      // 4. エンティティプール生成完了
+      sessionInitialization.updateStage('entities', {
+        details: `${result.entityPool.enemies.length}体のエネミー、${result.entityPool.npcs.length}人のNPC、${result.entityPool.items.length}個のアイテムを生成完了`,
+        progress: 100,
+      });
+      sessionInitialization.nextStage();
+      
+      // 5. マイルストーン生成段階
+      sessionInitialization.updateStage('milestones', {
+        details: `${result.milestones.length}個のマイルストーンを生成完了`,
+        progress: 100,
+      });
+      sessionInitialization.nextStage();
+      
+      // 6. ゲーム概要生成段階
+      sessionInitialization.updateStage('overview', {
+        details: 'セッション導入シーンを準備完了',
+        progress: 100,
+      });
       
       setInitializationResult(result);
       console.log('✅ セッション自動初期化完了:', result);
@@ -384,16 +414,19 @@ export const SessionInterface: React.FC<SessionInterfaceProps> = ({
       
       console.log('🎭 AI GM初回応答:', chainResponse);
       
-      // 6. 成功メッセージを表示
+      // 7. 初期化完了
+      sessionInitialization.completeInitialization();
+      
+      // 8. 成功メッセージを表示
       onSendMessage(
         `🎮 セッションの初期化が完了しました！${result.milestones.length}個のマイルストーンと豊富なエンティティプールが生成されました。`,
         'ooc'
       );
       
-      // 7. AI GMからの初回メッセージを表示
+      // 9. AI GMからの初回メッセージを表示
       onSendMessage(chainResponse.gmResponse.message, 'ic');
       
-      // 8. 利用可能なエンティティ情報を表示
+      // 10. 利用可能なエンティティ情報を表示
       if (chainResponse.contextAnalysis.availableEntities.length > 0) {
         const entitySummary = chainResponse.contextAnalysis.availableEntities
           .slice(0, 3)
@@ -405,13 +438,12 @@ export const SessionInterface: React.FC<SessionInterfaceProps> = ({
         );
       }
       
-      setInitializationError(null);
       console.log('✅ シームレスAI GM制御システム開始完了');
       
     } catch (error) {
       console.error('❌ セッション初期化エラー:', error);
       const errorMessage = error instanceof Error ? error.message : '不明なエラーが発生しました';
-      setInitializationError(errorMessage);
+      sessionInitialization.failInitialization(errorMessage);
       
       // エラーを明確に表示
       onSendMessage(
@@ -421,8 +453,6 @@ export const SessionInterface: React.FC<SessionInterfaceProps> = ({
       
       // AI制御も無効化
       setIsAIControlActive(false);
-    } finally {
-      setIsInitializing(false);
     }
   };
 
@@ -436,7 +466,7 @@ export const SessionInterface: React.FC<SessionInterfaceProps> = ({
       
       // 初期化状態をリセット
       setInitializationResult(null);
-      setInitializationError(null);
+      sessionInitialization.resetInitialization();
       setLastDurationConfig(null);
       
       // 時間管理データをリセット
@@ -482,6 +512,13 @@ export const SessionInterface: React.FC<SessionInterfaceProps> = ({
     }
   }, [onRollDice, awaitingDiceRoll, playerCharacter]);
 
+  // 🆕 Phase 4-4.2: ナラティブフィードバックチャット統合
+  const narrativeFeedbackChatIntegration = useNarrativeFeedbackChatIntegration({
+    sessionId: session.id,
+    onSendMessage: handleSendMessage,
+    enabled: session.status === 'active',
+  });
+
   // セッション初期化のリトライ
   const handleRetryInitialization = async () => {
     if (!lastDurationConfig) {
@@ -489,40 +526,7 @@ export const SessionInterface: React.FC<SessionInterfaceProps> = ({
       return;
     }
 
-    setIsInitializing(true);
-    setInitializationError(null);
-    
-    try {
-      console.log('🔄 セッション初期化リトライ開始...');
-      const result = await aiGameMasterAPI.initializeSessionWithDefaults(
-        session.id,
-        session.campaignId,
-        lastDurationConfig,
-        characters,
-        'クラシックファンタジー'
-      );
-      
-      setInitializationResult(result);
-      setInitializationError(null);
-      console.log('✅ セッション初期化リトライ成功:', result);
-      
-      onSendMessage(
-        `🎮 セッション初期化が成功しました！${result.milestones.length}個のマイルストーンと豊富なエンティティプールが生成されました。`,
-        'ooc'
-      );
-      
-    } catch (error) {
-      console.error('❌ セッション初期化リトライ失敗:', error);
-      const errorMessage = error instanceof Error ? error.message : '不明なエラーが発生しました';
-      setInitializationError(errorMessage);
-      
-      onSendMessage(
-        `❌ セッション初期化リトライに失敗しました: ${errorMessage}`,
-        'ooc'
-      );
-    } finally {
-      setIsInitializing(false);
-    }
+    await handleDurationConfirm(lastDurationConfig);
   };
   
   // 時間管理データの読み込み
@@ -774,9 +778,9 @@ ${specificPrompt}
                 variant="contained"
                 startIcon={<PlayArrowRounded />}
                 onClick={handleStartSessionClick}
-                disabled={isInitializing}
+                disabled={sessionInitialization.isInitializing}
               >
-                {isInitializing ? 'ゲーム開始中...' : 'ゲーム開始 (AI GM制御)'}
+                {sessionInitialization.isInitializing ? 'ゲーム開始中...' : 'ゲーム開始 (AI GM制御)'}
               </Button>
             )}
             {session.status === 'active' && (
@@ -812,57 +816,6 @@ ${specificPrompt}
           </Stack>
         </Box>
 
-        {/* セッション初期化状態表示 */}
-        {session.status === 'active' && (isInitializing || initializationError) && (
-          <Box sx={{ mt: 2 }}>
-            {isInitializing && (
-              <Alert severity="info" sx={{ mb: 1 }}>
-                <Box display="flex" alignItems="center" gap={1}>
-                  <CircularProgress size={16} />
-                  セッションを初期化中です...マイルストーンとエンティティプールを生成しています。
-                </Box>
-              </Alert>
-            )}
-            
-            {initializationError && !isInitializing && (
-              <Alert 
-                severity="error" 
-                sx={{ mb: 1 }}
-                action={
-                  <Stack direction="row" spacing={1}>
-                    <Button 
-                      color="inherit" 
-                      size="small" 
-                      onClick={handleRetryInitialization}
-                      startIcon={<RefreshRounded />}
-                    >
-                      リトライ
-                    </Button>
-                    <Button 
-                      color="inherit" 
-                      size="small" 
-                      onClick={() => setInitializationError(null)}
-                    >
-                      閉じる
-                    </Button>
-                  </Stack>
-                }
-              >
-                <Box>
-                  <Typography variant="subtitle2" gutterBottom>
-                    セッション初期化エラー
-                  </Typography>
-                  <Typography variant="body2">
-                    {initializationError}
-                  </Typography>
-                  <Typography variant="body2" sx={{ mt: 1 }}>
-                    「リトライ」ボタンでもう一度試すか、手動でセッションを進行してください。
-                  </Typography>
-                </Box>
-              </Alert>
-            )}
-          </Box>
-        )}
       </Paper>
 
       {/* メインコンテンツ */}
@@ -1168,7 +1121,7 @@ ${specificPrompt}
                               'ooc'
                             );
                           }}
-                          autoRefresh={session.status === 'active'}
+                          autoRefresh={false}
                           refreshInterval={20000}
                           compact={false}
                           disabled={session.status !== 'active'}
@@ -1393,6 +1346,17 @@ ${specificPrompt}
         open={durationDialogOpen}
         onClose={() => setDurationDialogOpen(false)}
         onConfirm={handleDurationConfirm}
+      />
+
+      {/* セッション初期化進捗モーダル */}
+      <SessionInitializationModal
+        open={sessionInitialization.isInitializing || !!sessionInitialization.error}
+        onClose={() => sessionInitialization.resetInitialization()}
+        onRetry={handleRetryInitialization}
+        stages={sessionInitialization.stages}
+        currentStage={sessionInitialization.currentStage}
+        overallProgress={sessionInitialization.overallProgress}
+        canClose={!sessionInitialization.isInitializing}
       />
 
     </Box>

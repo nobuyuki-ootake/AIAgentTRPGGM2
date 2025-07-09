@@ -71,17 +71,29 @@ export interface TRPGEvent {
   // 関連情報
   questId?: ID;
   locationId?: ID; // 発生場所のID
-  characterIds: ID[]; // 関連キャラクター
+  participants: ID[]; // 関連キャラクター (database schema uses 'participants')
   
-  // 実行条件
-  prerequisites: string[];
-  isOptional: boolean;
+  // 難易度設定
+  difficulty: 'trivial' | 'easy' | 'medium' | 'hard' | 'extreme';
+  challengeRating: number;
   
   // 実行結果
-  isCompleted: boolean;
-  outcomes: string[];
-  experience: number; // 獲得経験値
-  rewards: string[]; // 報酬
+  outcomes: {
+    success: boolean;
+    experience: number;
+    rewards: string[];
+    consequences: string[];
+    storyImpact: string[];
+  };
+  
+  // AI生成・管理
+  aiGenerated: boolean;
+  seedPrompt?: string;
+  
+  // タイムスタンプ
+  createdAt: DateTime;
+  updatedAt: DateTime;
+  completedAt?: DateTime;
 }
 
 // ==========================================

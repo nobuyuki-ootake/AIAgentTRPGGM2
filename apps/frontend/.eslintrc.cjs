@@ -31,6 +31,12 @@ module.exports = {
     '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     '@typescript-eslint/no-explicit-any': 'warn',
     '@typescript-eslint/no-empty-function': 'warn',
+    '@typescript-eslint/no-use-before-define': ['error', {
+      functions: true,
+      classes: true,
+      variables: true,
+      allowNamedExports: false
+    }],
     
     // 一般的なルール
     'no-console': 'off',

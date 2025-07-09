@@ -35,7 +35,6 @@ import {
   CheckCircle as CompleteIcon,
   RadioButtonUnchecked as IncompleteIcon,
   Announcement as AnnouncementIcon,
-  Forward as ProgressIcon,
 } from '@mui/icons-material';
 import { ID, SessionState, Character, Quest, Milestone, GMNotification } from '@ai-agent-trpg/types';
 import { useRecoilValue, useRecoilState } from 'recoil';
@@ -43,6 +42,8 @@ import { gmNotificationsAtom, gmNotificationUnreadCountAtom } from '../../store/
 import { aiGameMasterAPI, SessionContext, GameOverview, TaskExplanation, ResultJudgment, ScenarioAdjustment } from '../../api/aiGameMaster';
 import { milestoneManagementAPI } from '../../api/milestoneManagement';
 import { useAIEntityManagement } from '../../hooks/useAIEntityManagement';
+import { useSessionInitializationModal } from '../../hooks/useSessionInitializationModal';
+import { SessionInitializationProgressModal } from './SessionInitializationProgressModal';
 
 interface AIGameMasterPanelProps {
   sessionId: ID;
@@ -104,6 +105,16 @@ export const AIGameMasterPanel: React.FC<AIGameMasterPanelProps> = ({
   const [taskDescription, setTaskDescription] = useState('');
   const [selectedQuestId, setSelectedQuestId] = useState<ID | ''>('');
   const [selectedMilestoneId, setSelectedMilestoneId] = useState<ID | ''>('');
+  
+  // Session Initialization Modal
+  const { 
+    isModalOpen, 
+    isInitializing, 
+    startInitializationWithModal, 
+    cancelInitializationWithModal, 
+    closeModal,
+    openModal,
+  } = useSessionInitializationModal();
 
   // Initialize AI settings from localStorage (provider only)
   useEffect(() => {
@@ -403,6 +414,56 @@ export const AIGameMasterPanel: React.FC<AIGameMasterPanelProps> = ({
           </Stack>
         </AccordionDetails>
       </Accordion>
+
+      {/* セッション初期化 */}
+      <Card sx={{ mb: 2 }}>
+        <CardContent>
+          <Box display="flex" alignItems="center" gap={1} mb={2}>
+            <StartIcon color="primary" />
+            <Typography variant="h6">セッション初期化</Typography>
+          </Box>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            3層構造（シナリオ→マイルストーン→エンティティ）でセッションを自動生成します。
+          </Typography>
+          <Stack direction="row" spacing={2}>
+            <Button
+              variant="contained"
+              startIcon={<StartIcon />}
+              onClick={async () => {
+                try {
+                  await startInitializationWithModal({
+                    sessionId,
+                    campaignId,
+                    durationConfig: {
+                      totalDays: 3,
+                      actionsPerDay: 4,
+                      milestoneCount: 5,
+                    },
+                    characters,
+                    campaignTheme: 'クラシックファンタジー',
+                    provider: selectedProvider,
+                  });
+                } catch (error) {
+                  console.error('Failed to start session initialization:', error);
+                }
+              }}
+              disabled={isInitializing}
+              data-testid="start-session-initialization-button"
+            >
+              {isInitializing ? '初期化中...' : 'セッション初期化'}
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<ProgressIcon />}
+              onClick={openModal}
+              disabled={!isInitializing}
+              data-testid="show-initialization-progress-button"
+            >
+              進捗確認
+            </Button>
+          </Stack>
+        </CardContent>
+      </Card>
 
       {/* ゲーム概要 */}
       <Accordion defaultExpanded sx={{ mb: 2 }}>
@@ -1221,6 +1282,14 @@ export const AIGameMasterPanel: React.FC<AIGameMasterPanelProps> = ({
           </AccordionDetails>
         </Accordion>
       )}
+
+      {/* セッション初期化進捗モーダル */}
+      <SessionInitializationProgressModal
+        open={isModalOpen}
+        onClose={closeModal}
+        onCancel={cancelInitializationWithModal}
+        showCancelButton={isInitializing}
+      />
     </Box>
   );
 };

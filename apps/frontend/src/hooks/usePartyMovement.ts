@@ -11,6 +11,7 @@ import {
   ID
 } from '@ai-agent-trpg/types';
 import { partyMovementAPI } from '../api/partyMovement';
+import { useWebSocket } from './useWebSocket';
 
 // ==========================================
 // パーティ移動フック
@@ -46,12 +47,15 @@ export interface UsePartyMovementResult {
 
 export const usePartyMovement = ({
   sessionId,
-  autoRefresh = true,
+  autoRefresh = false,
   refreshInterval = 5000
 }: UsePartyMovementOptions): UsePartyMovementResult => {
   const [movementSystem, setMovementSystem] = useState<PartyMovementSystem | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // WebSocket接続
+  const { isConnected, joinSession, onPartyMovementUpdated } = useWebSocket();
 
   // パーティ移動状態を読み込み
   const refreshMovementState = useCallback(async () => {
@@ -87,8 +91,6 @@ export const usePartyMovement = ({
         throw new Error(response.error || '移動提案の作成に失敗しました');
       }
       
-      // 状態を更新
-      await refreshMovementState();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : '移動提案の作成に失敗しました';
       setError(errorMessage);
@@ -118,8 +120,6 @@ export const usePartyMovement = ({
         throw new Error(response.error || '投票に失敗しました');
       }
       
-      // 状態を更新
-      await refreshMovementState();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : '投票に失敗しました';
       setError(errorMessage);
@@ -148,8 +148,6 @@ export const usePartyMovement = ({
         throw new Error(response.error || 'パーティ移動の実行に失敗しました');
       }
       
-      // 状態を更新
-      await refreshMovementState();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'パーティ移動の実行に失敗しました';
       setError(errorMessage);
@@ -168,8 +166,6 @@ export const usePartyMovement = ({
       
       await partyMovementAPI.cancelProposal(proposalId, reason);
       
-      // 状態を更新
-      await refreshMovementState();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : '移動提案のキャンセルに失敗しました';
       setError(errorMessage);
@@ -205,21 +201,35 @@ export const usePartyMovement = ({
     }
   }, [sessionId, movementSystem]);
 
-  // 初期読み込み
+  // 初期読み込みとWebSocketセッション参加（無限リトライを防ぐ）
   useEffect(() => {
-    refreshMovementState();
-  }, [refreshMovementState]);
+    // 一時的に無効化 - 無限リトライを停止
+    console.log('🚫 Party movement state loading temporarily disabled to prevent infinite retry');
+    
+    // WebSocketセッション参加のみ実行
+    if (isConnected) {
+      joinSession(sessionId);
+    }
+    
+    // refreshMovementState(); // 無効化
+  }, [isConnected, sessionId, joinSession]); // refreshMovementStateを依存配列から削除
 
-  // 自動更新
+  // WebSocketイベント処理 - リアルタイム更新（一時的に無効化）
   useEffect(() => {
-    if (!autoRefresh) return;
+    if (!isConnected) return;
 
-    const interval = setInterval(() => {
-      refreshMovementState();
-    }, refreshInterval);
+    const handlePartyMovementUpdate = (data: any) => {
+      console.log('🚫 Party movement WebSocket update received but refreshMovementState disabled:', data.type);
+      
+      // 無限リトライを防ぐため一時的に無効化
+      // refreshMovementState();
+    };
 
-    return () => clearInterval(interval);
-  }, [autoRefresh, refreshInterval, refreshMovementState]);
+    const cleanup = onPartyMovementUpdated(handlePartyMovementUpdate);
+    
+    return cleanup;
+  }, [isConnected, onPartyMovementUpdated]); // refreshMovementStateを依存配列から削除
+
 
   // 計算されたプロパティ
   const activeProposal = movementSystem?.activeProposal || null;

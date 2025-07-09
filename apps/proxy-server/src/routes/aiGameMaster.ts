@@ -557,7 +557,7 @@ router.get('/session-summary/:sessionId', asyncHandler(async (req: Request, res:
 
 /**
  * @route POST /api/ai-game-master/initialize-session
- * @desc セッション開始時のマイルストーン・エンティティプール自動生成
+ * @desc セッション開始時のマイルストーン・エンティティプール自動生成（進捗通知対応）
  */
 router.post('/initialize-session', asyncHandler(async (req: Request, res: Response) => {
   const {
@@ -579,12 +579,48 @@ router.post('/initialize-session', asyncHandler(async (req: Request, res: Respon
     throw new ValidationError('At least one character is required');
   }
 
-  if (!durationConfig.totalDays || !durationConfig.actionsPerDay || !durationConfig.milestones) {
-    throw new ValidationError('Duration config must include totalDays, actionsPerDay, and milestones');
+  // デバッグ: 受信したdurationConfigの内容を確認
+  console.log('🔍 Received durationConfig:', JSON.stringify(durationConfig, null, 2));
+  console.log('🔍 durationConfig validation:', {
+    hasTotalDays: !!durationConfig.totalDays,
+    hasActionsPerDay: !!durationConfig.actionsPerDay,
+    hasMilestoneCount: !!durationConfig.milestoneCount,
+    totalDays: durationConfig.totalDays,
+    actionsPerDay: durationConfig.actionsPerDay,
+    milestoneCount: durationConfig.milestoneCount
+  });
+
+  if (!durationConfig.totalDays || !durationConfig.actionsPerDay || !durationConfig.milestoneCount) {
+    throw new ValidationError('Duration config must include totalDays, actionsPerDay, and milestoneCount');
   }
 
   try {
     console.log(`🎯 セッション初期化開始 - Session: ${sessionId}, Theme: ${campaignTheme}`);
+
+    // 進捗通知コールバック関数
+    const onProgressUpdate = (phase: 'scenario' | 'milestone' | 'entity', progress: number, currentTask: string) => {
+      // WebSocketでフロントエンドに進捗を通知
+      if (req.app.get('io')) {
+        req.app.get('io').emit('session-initialization-progress', {
+          sessionId,
+          currentPhase: phase,
+          overallProgress: Math.round((
+            (phase === 'scenario' ? progress / 3 : 0) +
+            (phase === 'milestone' ? (33 + progress) / 3 : phase === 'entity' ? 33 : 0) +
+            (phase === 'entity' ? 66 + progress / 3 : 0)
+          )),
+          phases: {
+            [phase]: {
+              phase,
+              progress,
+              status: progress === 100 ? 'completed' : 'in_progress',
+              currentTask,
+              estimatedTimeRemaining: Math.max(0, (100 - progress) * 3),
+            }
+          }
+        });
+      }
+    };
 
     const result = await getAIGameMasterService().initializeSessionWithAI(
       sessionId,
@@ -592,8 +628,22 @@ router.post('/initialize-session', asyncHandler(async (req: Request, res: Respon
       durationConfig as SessionDurationConfig,
       characters as Character[],
       campaignTheme,
-      { provider, model }
+      { provider, model },
+      onProgressUpdate
     );
+
+    // 完了通知
+    if (req.app.get('io')) {
+      req.app.get('io').emit('session-initialization-complete', {
+        sessionId,
+        result: {
+          milestones: result.milestones,
+          entityPool: result.entityPool,
+          gameOverview: result.gameOverview,
+          message: result.message
+        }
+      });
+    }
 
     res.json({
       success: result.success,
@@ -610,6 +660,14 @@ router.post('/initialize-session', asyncHandler(async (req: Request, res: Respon
 
   } catch (error) {
     console.error('❌ セッション初期化エラー:', error);
+    
+    // エラー通知
+    if (req.app.get('io')) {
+      req.app.get('io').emit('session-initialization-error', {
+        sessionId,
+        error: error instanceof Error ? error.message : 'セッション初期化中にエラーが発生しました'
+      });
+    }
     
     if (error instanceof Error && error.message.includes('AI')) {
       throw new AIServiceError(

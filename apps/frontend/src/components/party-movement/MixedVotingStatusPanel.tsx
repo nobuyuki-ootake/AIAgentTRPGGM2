@@ -46,7 +46,7 @@ import {
   VotingSummary,
   VoteChoice,
   ID
-} from '@repo/types';
+} from '@ai-agent-trpg/types';
 import {
   getMixedVotingStatus,
   getVotingProgress,
@@ -54,6 +54,7 @@ import {
   sendVotingReminder,
   triggerAutoReminder
 } from '../../api/mixedVoting';
+import { useWebSocket } from '../../hooks/useWebSocket';
 
 interface MixedVotingStatusPanelProps {
   proposalId: ID;
@@ -67,7 +68,7 @@ interface MixedVotingStatusPanelProps {
 export const MixedVotingStatusPanel: React.FC<MixedVotingStatusPanelProps> = ({
   proposalId,
   onReminderSent,
-  autoRefresh = true,
+  autoRefresh = false,
   refreshInterval = 10000,
   showAiDetails = false,
   disabled = false
@@ -79,6 +80,9 @@ export const MixedVotingStatusPanel: React.FC<MixedVotingStatusPanelProps> = ({
   const [expanded, setExpanded] = useState(false);
   const [showAiInfo, setShowAiInfo] = useState(showAiDetails);
   const [sendingReminder, setSendingReminder] = useState(false);
+  
+  // WebSocket接続
+  const { isConnected, onPartyMovementUpdated } = useWebSocket();
 
   // ==========================================
   // データ取得
@@ -118,16 +122,24 @@ export const MixedVotingStatusPanel: React.FC<MixedVotingStatusPanelProps> = ({
     fetchVotingStatus();
   }, [fetchVotingStatus]);
 
-  // 自動更新
+  // WebSocketリアルタイム更新
   useEffect(() => {
-    if (!autoRefresh) return;
+    if (!isConnected) return;
 
-    const interval = setInterval(() => {
-      fetchVotingStatus();
-    }, refreshInterval);
+    const handlePartyMovementUpdate = (data: any) => {
+      console.log('Voting status WebSocket update received:', data.type);
+      
+      // 投票関連の更新を受信したらデータを更新
+      if (data.type === 'vote-cast' && data.proposalId === proposalId) {
+        fetchVotingStatus();
+      }
+    };
 
-    return () => clearInterval(interval);
-  }, [autoRefresh, refreshInterval, fetchVotingStatus]);
+    const cleanup = onPartyMovementUpdated(handlePartyMovementUpdate);
+    
+    return cleanup;
+  }, [isConnected, onPartyMovementUpdated, fetchVotingStatus, proposalId]);
+
 
   // ==========================================
   // アクション処理

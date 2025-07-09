@@ -180,14 +180,14 @@ export const ExplorationActionPanel: React.FC<ExplorationActionPanelProps> = ({
     fetchActiveExplorations();
   }, [fetchEntities, fetchActiveExplorations]);
 
-  // 定期更新
-  useEffect(() => {
-    const interval = setInterval(() => {
-      fetchActiveExplorations();
-    }, 5000); // 5秒間隔
-
-    return () => clearInterval(interval);
-  }, [fetchActiveExplorations]);
+  // 定期更新は廃止 - WebSocketによるリアルタイム更新
+  // useEffect(() => {
+  //   const interval = setInterval(() => {
+  //     fetchActiveExplorations();
+  //   }, 5000); // 5秒間隔
+  //
+  //   return () => clearInterval(interval);
+  // }, [fetchActiveExplorations]);
 
   // ==========================================
   // アクション実行

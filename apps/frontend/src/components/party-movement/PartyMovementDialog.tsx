@@ -78,8 +78,8 @@ export const PartyMovementDialog: React.FC<PartyMovementDialogProps> = ({
     cancelProposal
   } = usePartyMovement({ 
     sessionId,
-    autoRefresh: open, // ダイアログが開いている間のみ自動更新
-    refreshInterval: 3000 // 3秒間隔でリアルタイム更新
+    autoRefresh: false,
+    refreshInterval: 3000 // 使用されない
   });
 
   // 投票結果の自動通知
@@ -299,7 +299,7 @@ export const PartyMovementDialog: React.FC<PartyMovementDialogProps> = ({
                   <Box sx={{ mb: 2 }}>
                     <MixedVotingStatusPanel
                       proposalId={activeProposal.id}
-                      autoRefresh={true}
+                      autoRefresh={false}
                       refreshInterval={5000}
                       showAiDetails={true}
                       onReminderSent={(count) => {

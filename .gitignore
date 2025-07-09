@@ -38,6 +38,8 @@ logs/
 .env.local
 .env.production
 .env.development
+.envrc.local
+.direnv/
 
 # IDE and editor files
 .vscode/
@@ -57,3 +59,4 @@ Thumbs.db
 
 # Claude Code specific
 claude.json
+.mcp.json

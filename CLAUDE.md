@@ -2,6 +2,15 @@
 
 This file provides comprehensive guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 毎回会話の開始時に読み上げる項目
+- フロントエンド・APIでのフォールバック機能の実装は *** 禁止 ***。
+エラーのフィードバックと、リトライを促すUIにする。
+- AIに生成してもらうコンテンツについてハードコードでの実装は *** 禁止 ***。
+- 実装においては、TRPGとしての楽しさ(考えて、対話して、シナリオを進める)を第一とする。
+特に会話する楽しさが大事。
+また、実装上で不明な点があればユーザーに質問する。
+- 次に会話を開始する際は、この 毎回会話の開始時に読み上げる項目 を読み上げる。
+
 ## Project Overview
 
 This is an AI-powered TRPG (Tabletop Role-Playing Game) campaign management and game master assistance tool built as a monorepo using pnpm workspaces. The project helps game masters create and run TRPG campaigns with integrated AI assistance for character generation, scenario planning, and session management.

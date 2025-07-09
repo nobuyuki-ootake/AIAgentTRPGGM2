@@ -133,7 +133,7 @@ const aiRequestLogsAPI: AIRequestLogsAPI = {
     if (params.search) queryParams.append('search', params.search);
     
     // Use the API base URL from the environment or default to localhost
-    const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:3001/api';
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4001/api';
     const url = `${apiBaseUrl}/ai-agent/request-logs/export?${queryParams}`;
     const response = await fetch(url);
     return response.blob();

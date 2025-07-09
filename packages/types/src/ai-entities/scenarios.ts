@@ -13,9 +13,15 @@ export interface GameTheme {
   id: ID;
   name: string;
   description: string;
-  tags: string[];
-  atmosphere: string;
-  commonElements: string[];
+  genre: string;
+  setting: string;
+  mood: string;
+  difficulty: string;
+  style: string;
+  keyElements?: string[];
+  // カスタムテーマ用の追加フィールド
+  playerPrompt?: string;
+  aiInstructions?: string;
 }
 
 export interface SessionScenario {
@@ -53,10 +59,12 @@ export interface ThemeAdaptation {
 // ==========================================
 
 export interface ConversationStartRequest {
-  characterId: ID;
-  npcId: ID;
-  context: string;
-  location: string;
+  locationId: ID;
+  initiatorId: ID;
+  targetCharacterIds: ID[];
+  conversationType?: string;
+  initialMessage?: string;
+  context?: Record<string, any>;
 }
 
 export interface InteractiveEventSession {

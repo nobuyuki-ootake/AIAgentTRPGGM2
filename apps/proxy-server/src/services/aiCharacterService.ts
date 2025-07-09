@@ -14,16 +14,14 @@ type AIBehaviorPattern = any;
 type AICharacterController = any;
 type AISessionController = any;
 
-// Extend AIDecisionContext to include missing properties
-declare module '@ai-agent-trpg/types' {
-  interface AIDecisionContext {
-    sessionId?: string;
-    sessionState?: any;
-    characterState?: any;
-    environmentContext?: any;
-    relationshipContext?: any;
-    gameContext?: any;
-  }
+// Extended context type for internal use (contains more detailed information)
+interface ExtendedAIDecisionContext extends AIDecisionContext {
+  sessionId?: string;
+  sessionState?: any;
+  characterState?: any;
+  environmentContext?: any;
+  relationshipContext?: any;
+  gameContext?: any;
 }
 import { database } from '../database/database';
 import { v4 as uuidv4 } from 'uuid';
@@ -137,7 +135,7 @@ class AICharacterService {
    */
   async decideCharacterAction(
     characterId: ID,
-    decisionContext: AIDecisionContext
+    decisionContext: ExtendedAIDecisionContext
   ): Promise<AIAction | null> {
     const controller = this.characterControllers.get(characterId);
     if (!controller || !controller.settings.enabled) {
@@ -184,7 +182,7 @@ class AICharacterService {
    */
   private async evaluateRelevantPatterns(
     _characterId: ID,
-    context: AIDecisionContext,
+    context: ExtendedAIDecisionContext,
     activePatternsIds: ID[]
   ): Promise<AIBehaviorPattern[]> {
     const relevantPatterns: AIBehaviorPattern[] = [];
@@ -210,7 +208,7 @@ class AICharacterService {
    */
   private evaluatePatternConditions(
     pattern: AIBehaviorPattern,
-    context: AIDecisionContext
+    context: ExtendedAIDecisionContext
   ): boolean {
     const { conditions } = pattern;
 
@@ -240,7 +238,7 @@ class AICharacterService {
    */
   private async selectBestAction(
     characterId: ID,
-    context: AIDecisionContext,
+    context: ExtendedAIDecisionContext,
     patterns: AIBehaviorPattern[],
     controller: AICharacterController
   ): Promise<AIAction | null> {
@@ -293,7 +291,7 @@ class AICharacterService {
    */
   private async createAIAction(
     characterId: ID,
-    context: AIDecisionContext,
+    context: ExtendedAIDecisionContext,
     candidate: {
       pattern: AIBehaviorPattern;
       action: AIBehaviorPattern['behaviorRules']['actions'][0];
@@ -343,7 +341,7 @@ class AICharacterService {
    */
   private async generateActionContent(
     characterId: ID,
-    context: AIDecisionContext,
+    context: ExtendedAIDecisionContext,
     actionTemplate: AIBehaviorPattern['behaviorRules']['actions'][0]
   ): Promise<{
     description: string;
@@ -399,7 +397,7 @@ class AICharacterService {
    */
   private buildActionGenerationPrompt(
     character: Character,
-    context: AIDecisionContext,
+    context: ExtendedAIDecisionContext,
     actionTemplate: AIBehaviorPattern['behaviorRules']['actions'][0]
   ): string {
     let personalityInfo = '';
@@ -470,7 +468,7 @@ ${actionTemplate.type}
    */
   private parseActionGenerationResponse(
     response: string,
-    context: AIDecisionContext
+    context: ExtendedAIDecisionContext
   ): {
     description: string;
     target?: ID;
@@ -502,7 +500,7 @@ ${actionTemplate.type}
    */
   private generateFallbackAction(
     actionTemplate: { type: string; weight: number },
-    _context: AIDecisionContext
+    _context: ExtendedAIDecisionContext
   ): {
     description: string;
     target?: ID;
@@ -897,11 +895,18 @@ ${actionTemplate.type}
   async triggerCharacterAction(
     characterId: ID,
     sessionId: ID,
-    context: Partial<AIDecisionContext>
+    context: Partial<ExtendedAIDecisionContext>
   ): Promise<AIAction | null> {
-    const fullContext: AIDecisionContext = {
+    // Create extended context with all detailed information
+    const extendedContext: ExtendedAIDecisionContext = {
       sessionId,
       characterId,
+      currentLocation: context.environmentContext?.location || '不明',
+      availableActions: context.sessionState?.availableActions || [],
+      recentEvents: context.gameContext?.recentEvents || [],
+      partyMembers: context.environmentContext?.presentCharacters || [],
+      timeOfDay: context.sessionState?.timeOfDay || 'morning',
+      urgency: context.gameContext?.urgency || 5,
       sessionState: {
         mode: 'exploration',
         lastActions: [],
@@ -934,7 +939,7 @@ ${actionTemplate.type}
       },
     };
 
-    return await this.decideCharacterAction(characterId, fullContext);
+    return await this.decideCharacterAction(characterId, extendedContext);
   }
 }
 

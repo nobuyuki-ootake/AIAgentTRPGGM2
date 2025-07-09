@@ -25,7 +25,7 @@ interface SessionState {
 }
 
 // SessionStateをTRPGSessionに変換する関数
-function convertToTRPGSession(sessionState: SessionState): TRPGSession {
+function convertToTRPGSession(sessionState: SessionState): TRPGSession & { chatLog: ChatMessage[] } {
   return {
     id: sessionState.id,
     campaignId: sessionState.campaignId,
@@ -45,7 +45,15 @@ function convertToTRPGSession(sessionState: SessionState): TRPGSession {
     isRecordingEnabled: false,
     currentEventId: sessionState.currentEvent?.id,
     completedEvents: sessionState.completedEvents,
-    sessionLog: []
+    sessionLog: sessionState.chatLog.map(msg => ({
+      id: msg.id,
+      timestamp: msg.timestamp,
+      type: 'dialogue' as const,
+      characterId: msg.characterId,
+      content: `${msg.speaker}: ${msg.message}`,
+      metadata: { type: msg.type, speaker: msg.speaker }
+    })),
+    chatLog: sessionState.chatLog
   };
 }
 import { getDatabase, withTransaction } from '../database/database';

@@ -23,6 +23,25 @@ interface WebSocketEvents {
     actionData: unknown;
     timestamp: string;
   };
+  'party-movement-updated': {
+    type: 'proposal-created' | 'vote-cast' | 'movement-executed';
+    sessionId?: ID;
+    proposalId?: ID;
+    proposal?: any;
+    voterId?: ID;
+    choice?: string;
+    consensusReached?: boolean;
+    timestamp: string;
+  };
+  'location-entities-updated': {
+    type: 'entity-status-changed' | 'entities-refreshed' | 'entity-discovered';
+    sessionId: ID;
+    locationId: ID;
+    entityId?: ID;
+    entityIds?: ID[];
+    newStatus?: string;
+    timestamp: string;
+  };
   'gm-notification': GMNotificationEvent;
   'gm-story-progression': {
     type: 'gm_story_progression';
@@ -64,6 +83,8 @@ interface UseWebSocketReturn {
   onGMNotification: (callback: (data: WebSocketEvents['gm-notification']) => void) => void;
   onGMStoryProgression: (callback: (data: WebSocketEvents['gm-story-progression']) => void) => void;
   onNarrativeFeedback: (callback: (data: WebSocketEvents['narrative-feedback']) => void) => void;
+  onPartyMovementUpdated: (callback: (data: WebSocketEvents['party-movement-updated']) => void) => (() => void);
+  onLocationEntitiesUpdated: (callback: (data: WebSocketEvents['location-entities-updated']) => void) => (() => void);
   disconnect: () => void;
 }
 
@@ -234,6 +255,57 @@ export function useWebSocket(): UseWebSocketReturn {
     });
   };
 
+  // パーティ移動更新受信
+  const onPartyMovementUpdated = (callback: (data: WebSocketEvents['party-movement-updated']) => void) => {
+    if (!socketRef.current) {
+      logger.warn('Cannot register party movement listener: WebSocket not connected');
+      return () => {};
+    }
+
+    const eventHandler = (data: WebSocketEvents['party-movement-updated']) => {
+      logger.info(`Received party movement update: ${data.type}`, { 
+        sessionId: data.sessionId, 
+        proposalId: data.proposalId 
+      });
+      callback(data);
+    };
+
+    socketRef.current.on('party-movement-updated', eventHandler);
+    
+    // クリーンアップ関数を返す
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.off('party-movement-updated', eventHandler);
+      }
+    };
+  };
+
+  // 場所エンティティ更新受信
+  const onLocationEntitiesUpdated = (callback: (data: WebSocketEvents['location-entities-updated']) => void) => {
+    if (!socketRef.current) {
+      logger.warn('Cannot register location entities listener: WebSocket not connected');
+      return () => {};
+    }
+
+    const eventHandler = (data: WebSocketEvents['location-entities-updated']) => {
+      logger.info(`Received location entities update: ${data.type}`, { 
+        sessionId: data.sessionId, 
+        locationId: data.locationId,
+        entityId: data.entityId 
+      });
+      callback(data);
+    };
+
+    socketRef.current.on('location-entities-updated', eventHandler);
+    
+    // クリーンアップ関数を返す
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.off('location-entities-updated', eventHandler);
+      }
+    };
+  };
+
   // 手動切断
   const disconnect = () => {
     if (socketRef.current) {
@@ -258,6 +330,8 @@ export function useWebSocket(): UseWebSocketReturn {
     onGMNotification,
     onGMStoryProgression,
     onNarrativeFeedback,
+    onPartyMovementUpdated,
+    onLocationEntitiesUpdated,
     disconnect,
   };
 }

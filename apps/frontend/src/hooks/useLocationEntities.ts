@@ -13,6 +13,7 @@ import {
   updateEntityStatus,
   refreshLocationEntities
 } from '../api/locationEntities';
+import { useWebSocket } from './useWebSocket';
 
 interface UseLocationEntitiesOptions {
   sessionId: ID;
@@ -60,7 +61,7 @@ export const useLocationEntities = (options: UseLocationEntitiesOptions): UseLoc
   const {
     sessionId,
     locationId,
-    autoRefresh = true,
+    autoRefresh = false,
     refreshInterval = 15000,
     sortBy = 'name',
     sortOrder = 'asc',
@@ -78,6 +79,9 @@ export const useLocationEntities = (options: UseLocationEntitiesOptions): UseLoc
   // 前回の場所IDを記録
   const previousLocationIdRef = useRef<ID | null>(null);
   const isFirstLoadRef = useRef(true);
+  
+  // WebSocket接続
+  const { isConnected, joinSession, onLocationEntitiesUpdated } = useWebSocket();
 
   // ==========================================
   // データ取得
@@ -168,23 +172,36 @@ export const useLocationEntities = (options: UseLocationEntitiesOptions): UseLoc
 
   }, [locationId, enableLocationChangeDetection, onLocationChanged, forceRefreshOnLocationChange, fetchEntities]);
 
-  // 初期読み込み
+  // 初期読み込みとWebSocketセッション参加
   useEffect(() => {
     if (isFirstLoadRef.current) {
       fetchEntities();
+      
+      // WebSocketセッション参加
+      if (isConnected) {
+        joinSession(sessionId);
+      }
     }
-  }, [fetchEntities]);
+  }, [fetchEntities, isConnected, sessionId, joinSession]);
 
-  // 自動更新
+  // WebSocketイベント処理 - リアルタイム更新
   useEffect(() => {
-    if (!autoRefresh) return;
+    if (!isConnected) return;
 
-    const interval = setInterval(() => {
-      fetchEntities();
-    }, refreshInterval);
+    const handleLocationEntitiesUpdate = (data: any) => {
+      console.log('Location entities WebSocket update received:', data.type);
+      
+      // 現在の場所に関連する更新の場合のみ処理
+      if (data.sessionId === sessionId && data.locationId === locationId) {
+        fetchEntities();
+      }
+    };
 
-    return () => clearInterval(interval);
-  }, [autoRefresh, refreshInterval, fetchEntities]);
+    const cleanup = onLocationEntitiesUpdated(handleLocationEntitiesUpdate);
+    
+    return cleanup;
+  }, [isConnected, onLocationEntitiesUpdated, fetchEntities, sessionId, locationId]);
+
 
   // ==========================================
   // アクション
