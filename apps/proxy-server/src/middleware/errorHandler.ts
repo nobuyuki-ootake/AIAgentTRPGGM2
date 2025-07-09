@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { APIResponse } from '@ai-agent-trpg/types';
 import { logger } from '../utils/logger';
+import { errorMonitoringService } from '../services/errorMonitoringService';
 
 export interface AppError extends Error {
   statusCode?: number;
@@ -95,14 +96,20 @@ export function errorHandler(
   const statusCode = error.statusCode || 500;
   const code = error.code || 'INTERNAL_SERVER_ERROR';
   
-  // エラーをログに記録（本番環境でのデバッグ用）
-  logger.error(`${req.method} ${req.path} - ${statusCode} ${code}`, {
-    error: error.message,
-    stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
-    details: error.details,
+  // エラーを監視システムに記録
+  const component = determineComponent(req.path);
+  const context = {
+    method: req.method,
+    path: req.path,
     userAgent: req.get('User-Agent'),
     ip: req.ip,
-  });
+    userId: (req as any).user?.id,
+    sessionId: (req as any).sessionId,
+    campaignId: (req as any).campaignId,
+    statusCode
+  };
+  
+  errorMonitoringService.logError(error, component, context);
 
   // API キーを含むエラーメッセージを絶対に返さない
   const sanitizedMessage = sanitizeErrorMessage(error.message);
@@ -129,6 +136,27 @@ export function errorHandler(
   }
 
   res.status(statusCode).json(response);
+}
+
+/**
+ * リクエストパスからコンポーネントを判定
+ */
+function determineComponent(path: string): string {
+  if (path.startsWith('/api/ai-agent')) return 'ai-agent';
+  if (path.startsWith('/api/ai-game-master')) return 'ai-game-master';
+  if (path.startsWith('/api/ai-character')) return 'ai-character';
+  if (path.startsWith('/api/ai-milestone')) return 'ai-milestone';
+  if (path.startsWith('/api/campaigns')) return 'campaigns';
+  if (path.startsWith('/api/characters')) return 'characters';
+  if (path.startsWith('/api/sessions')) return 'sessions';
+  if (path.startsWith('/api/quests')) return 'quests';
+  if (path.startsWith('/api/milestones')) return 'milestones';
+  if (path.startsWith('/api/locations')) return 'locations';
+  if (path.startsWith('/api/entity-pool')) return 'entity-pool';
+  if (path.startsWith('/api/monitoring')) return 'monitoring';
+  if (path.startsWith('/api/logs')) return 'logs';
+  if (path.startsWith('/api/health')) return 'health';
+  return 'unknown';
 }
 
 /**

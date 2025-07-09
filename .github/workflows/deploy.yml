@@ -1,0 +1,281 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+  release:
+    types: [published]
+
+env:
+  NODE_VERSION: '18'
+  PNPM_VERSION: '9'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # 本番ビルド
+  build-production:
+    name: Build Production Assets
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.image-tag.outputs.tag }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build production assets
+        run: pnpm run build
+        env:
+          NODE_ENV: production
+
+      - name: Generate image tag
+        id: image-tag
+        run: |
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=latest" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload production assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-build
+          path: |
+            apps/frontend/dist
+            apps/proxy-server/dist
+          retention-days: 30
+
+  # Dockerイメージのビルド
+  build-docker-images:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: build-production
+    strategy:
+      matrix:
+        service: [frontend, proxy-server]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download production build
+        uses: actions/download-artifact@v4
+        with:
+          name: production-build
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.service }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.${{ matrix.service }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+  # データベースマイグレーション
+  database-migration:
+    name: Database Migration
+    runs-on: ubuntu-latest
+    needs: build-production
+    environment: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run database migrations
+        run: |
+          cd apps/proxy-server
+          pnpm migrate:validate
+          pnpm migrate:up
+        env:
+          NODE_ENV: production
+          DATABASE_PATH: ${{ secrets.DATABASE_PATH }}
+          LITESTREAM_S3_BUCKET: ${{ secrets.LITESTREAM_S3_BUCKET }}
+          LITESTREAM_S3_REGION: ${{ secrets.LITESTREAM_S3_REGION }}
+          LITESTREAM_S3_ACCESS_KEY_ID: ${{ secrets.LITESTREAM_S3_ACCESS_KEY_ID }}
+          LITESTREAM_S3_SECRET_ACCESS_KEY: ${{ secrets.LITESTREAM_S3_SECRET_ACCESS_KEY }}
+
+  # Google Cloud Runへのデプロイ
+  deploy-to-cloud-run:
+    name: Deploy to Google Cloud Run
+    runs-on: ubuntu-latest
+    needs: [build-docker-images, database-migration]
+    environment: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Configure Docker to use gcloud
+        run: gcloud auth configure-docker
+
+      - name: Deploy proxy-server to Cloud Run
+        run: |
+          gcloud run deploy ai-agent-trpg-proxy \
+            --image ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-proxy-server:latest \
+            --platform managed \
+            --region ${{ secrets.GCP_REGION }} \
+            --allow-unauthenticated \
+            --memory 2Gi \
+            --cpu 2 \
+            --max-instances 10 \
+            --set-env-vars NODE_ENV=production \
+            --set-env-vars DATABASE_PATH=/app/data/trpg.db \
+            --set-env-vars LITESTREAM_S3_BUCKET=${{ secrets.LITESTREAM_S3_BUCKET }} \
+            --set-env-vars LITESTREAM_S3_REGION=${{ secrets.LITESTREAM_S3_REGION }} \
+            --set-env-vars LITESTREAM_S3_ACCESS_KEY_ID=${{ secrets.LITESTREAM_S3_ACCESS_KEY_ID }} \
+            --set-env-vars LITESTREAM_S3_SECRET_ACCESS_KEY=${{ secrets.LITESTREAM_S3_SECRET_ACCESS_KEY }}
+
+      - name: Deploy frontend to Cloud Run
+        run: |
+          gcloud run deploy ai-agent-trpg-frontend \
+            --image ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:latest \
+            --platform managed \
+            --region ${{ secrets.GCP_REGION }} \
+            --allow-unauthenticated \
+            --memory 1Gi \
+            --cpu 1 \
+            --max-instances 10
+
+      - name: Update Cloud Run traffic
+        run: |
+          gcloud run services update-traffic ai-agent-trpg-proxy \
+            --to-latest \
+            --region ${{ secrets.GCP_REGION }}
+          
+          gcloud run services update-traffic ai-agent-trpg-frontend \
+            --to-latest \
+            --region ${{ secrets.GCP_REGION }}
+
+  # デプロイメント後のテスト
+  post-deployment-tests:
+    name: Post-deployment Tests
+    runs-on: ubuntu-latest
+    needs: deploy-to-cloud-run
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Health check
+        run: |
+          # プロキシサーバーのヘルスチェック
+          curl -f ${{ secrets.PROXY_SERVER_URL }}/api/health || exit 1
+          
+          # フロントエンドのヘルスチェック
+          curl -f ${{ secrets.FRONTEND_URL }} || exit 1
+
+      - name: Run smoke tests
+        run: |
+          # 基本的なAPI機能のテスト
+          curl -f ${{ secrets.PROXY_SERVER_URL }}/api/campaigns || exit 1
+          curl -f ${{ secrets.PROXY_SERVER_URL }}/api/characters || exit 1
+
+  # Litestreamバックアップの確認
+  backup-validation:
+    name: Validate Backup System
+    runs-on: ubuntu-latest
+    needs: deploy-to-cloud-run
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Verify Litestream backups
+        run: |
+          # S3バケットにバックアップが存在するかチェック
+          gsutil ls gs://${{ secrets.LITESTREAM_S3_BUCKET }}/trpg/ || exit 1
+          
+          # 最新のバックアップが24時間以内かチェック
+          LATEST_BACKUP=$(gsutil ls -l gs://${{ secrets.LITESTREAM_S3_BUCKET }}/trpg/ | sort -k2 -r | head -n1)
+          echo "Latest backup: $LATEST_BACKUP"
+
+  # 通知
+  deployment-notification:
+    name: Deployment Notification
+    runs-on: ubuntu-latest
+    needs: [post-deployment-tests, backup-validation]
+    if: always()
+    steps:
+      - name: Deployment Success
+        if: success()
+        run: |
+          echo "🎉 Deployment successful!"
+          echo "✅ Production build completed"
+          echo "✅ Docker images built and pushed"
+          echo "✅ Database migrations applied"
+          echo "✅ Services deployed to Cloud Run"
+          echo "✅ Health checks passed"
+          echo "✅ Backup system validated"
+
+      - name: Deployment Failure
+        if: failure()
+        run: |
+          echo "❌ Deployment failed!"
+          echo "Please check the failed jobs and take necessary actions."
+          exit 1

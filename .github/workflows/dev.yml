@@ -1,0 +1,227 @@
+name: Development Workflow
+
+on:
+  push:
+    branches: [develop, feature/*]
+  pull_request:
+    branches: [develop]
+
+env:
+  NODE_VERSION: '18'
+  PNPM_VERSION: '9'
+
+jobs:
+  # 開発環境でのクイックチェック
+  quick-check:
+    name: Quick Development Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Quick lint check
+        run: pnpm run lint
+
+      - name: Quick type check
+        run: pnpm run typecheck
+
+      - name: Quick build test
+        run: pnpm run build
+
+  # 開発環境でのテスト
+  development-tests:
+    name: Development Tests
+    runs-on: ubuntu-latest
+    needs: quick-check
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run development tests
+        run: pnpm test
+        env:
+          NODE_ENV: development
+
+  # 開発環境でのマイグレーションテスト
+  migration-test:
+    name: Migration Test
+    runs-on: ubuntu-latest
+    needs: quick-check
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test migrations
+        run: |
+          cd apps/proxy-server
+          pnpm migrate:validate
+          pnpm migrate:up
+          pnpm migrate:status
+        env:
+          NODE_ENV: development
+          DATABASE_PATH: ":memory:"
+
+  # プルリクエストの品質チェック
+  pr-quality-check:
+    name: PR Quality Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check for new dependencies
+        run: |
+          if git diff --name-only origin/develop...HEAD | grep -E "(package\.json|pnpm-lock\.yaml)"; then
+            echo "📦 Dependencies changed"
+            echo "::notice::New dependencies detected. Please ensure they are necessary and secure."
+          fi
+
+      - name: Check for TypeScript errors
+        run: pnpm run typecheck
+
+      - name: Check for linting issues
+        run: pnpm run lint
+
+      - name: Check for test coverage
+        run: |
+          if [ -f "apps/frontend/coverage/lcov.info" ]; then
+            echo "📊 Test coverage report available"
+          else
+            echo "::warning::No test coverage report found"
+          fi
+
+  # 開発環境での統合テスト
+  integration-test:
+    name: Integration Test
+    runs-on: ubuntu-latest
+    needs: [development-tests, migration-test]
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Start development servers
+        run: |
+          ./start-dev.sh --docker &
+          sleep 30
+        env:
+          NODE_ENV: development
+
+      - name: Run basic integration tests
+        run: |
+          # APIエンドポイントのテスト
+          curl -f http://localhost:4001/api/health || exit 1
+          curl -f http://localhost:3000 || exit 1
+
+      - name: Stop development servers
+        run: |
+          pkill -f "node" || true
+          docker-compose down || true
+
+  # 開発環境の結果通知
+  dev-workflow-result:
+    name: Development Workflow Result
+    runs-on: ubuntu-latest
+    needs: [quick-check, development-tests, migration-test, integration-test]
+    if: always()
+    steps:
+      - name: Development Success
+        if: success()
+        run: |
+          echo "🎉 Development workflow completed successfully!"
+          echo "✅ Quick checks passed"
+          echo "✅ Development tests passed"
+          echo "✅ Migration tests passed"
+          echo "✅ Integration tests passed"
+          echo ""
+          echo "Your changes are ready for review! 🚀"
+
+      - name: Development Failure
+        if: failure()
+        run: |
+          echo "❌ Development workflow failed!"
+          echo "Please check the failed jobs and fix the issues before requesting review."
+          echo ""
+          echo "Common issues:"
+          echo "- TypeScript errors"
+          echo "- Linting issues"
+          echo "- Test failures"
+          echo "- Migration issues"
+          exit 1

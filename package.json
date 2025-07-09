@@ -14,6 +14,7 @@
     "build:typescript": "cd packages/types && pnpm build",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "test:e2e": "cd apps/frontend && pnpm playwright test",
     "test:e2e:ui": "cd apps/frontend && pnpm playwright test --ui",
@@ -21,12 +22,28 @@
     "test:ai-enhanced": "cd apps/frontend && pnpm playwright test e2e/ai-enhanced/",
     "storybook": "cd apps/frontend && pnpm storybook",
     "build-storybook": "cd apps/frontend && pnpm build-storybook",
-    "clean": "turbo run clean && rm -rf node_modules"
+    "clean": "turbo run clean && rm -rf node_modules",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "migrate": "cd apps/proxy-server && pnpm migrate",
+    "migrate:up": "cd apps/proxy-server && pnpm migrate:up",
+    "migrate:down": "cd apps/proxy-server && pnpm migrate:down",
+    "migrate:status": "cd apps/proxy-server && pnpm migrate:status",
+    "migrate:validate": "cd apps/proxy-server && pnpm migrate:validate",
+    "litestream:start": "./scripts/litestream-manager.sh start-daemon",
+    "litestream:stop": "./scripts/litestream-manager.sh stop-daemon",
+    "litestream:status": "./scripts/litestream-manager.sh status",
+    "litestream:backup": "./scripts/litestream-manager.sh backup",
+    "litestream:restore": "./scripts/litestream-manager.sh restore",
+    "prepare": "husky install"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^5.57.0",
     "@typescript-eslint/parser": "^5.57.0",
     "eslint": "^8.37.0",
+    "husky": "^9.0.0",
+    "lint-staged": "^15.0.0",
+    "prettier": "^3.0.0",
     "turbo": "^1.10.12",
     "typescript": "^5.0.0"
   },
@@ -34,5 +51,14 @@
     "node": ">=18.0.0",
     "pnpm": ">=8.0.0"
   },
-  "packageManager": "pnpm@8.6.2"
+  "packageManager": "pnpm@8.6.2",
+  "lint-staged": {
+    "*.{js,ts,tsx}": [
+      "prettier --write",
+      "eslint --fix"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write"
+    ]
+  }
 }

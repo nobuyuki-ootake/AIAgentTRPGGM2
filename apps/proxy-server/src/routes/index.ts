@@ -15,6 +15,8 @@ import playerExperienceRouter from './playerExperience';
 import { interactiveEventsRouter } from './interactiveEvents';
 import { entityPoolRouter } from './entityPool';
 import healthRouter from './health';
+import logsRouter from './logs';
+import monitoringRouter from './monitoring';
 
 export const router = Router();
 
@@ -47,6 +49,8 @@ router.use('/interactive-events', interactiveEventsRouter);
 
 // ヘルスチェック・システム状態エンドポイント
 router.use('/health', healthRouter);
+router.use('/logs', logsRouter);
+router.use('/monitoring', monitoringRouter);
 
 // API情報エンドポイント
 router.get('/', (_req, res) => {
@@ -71,6 +75,8 @@ router.get('/', (_req, res) => {
       timeManagement: '/api/time-management',
       approachAnalysis: '/api/approach-analysis',
       interactiveEvents: '/api/interactive-events',
+      logs: '/api/logs',
+      monitoring: '/api/monitoring',
     },
     timestamp: new Date().toISOString(),
   });
