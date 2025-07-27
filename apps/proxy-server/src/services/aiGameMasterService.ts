@@ -1,5 +1,5 @@
 import { Database } from 'better-sqlite3';
-import { ID, Character, Quest, Milestone, SessionDurationConfig, TRPGSession } from '@ai-agent-trpg/types';
+import { ID, Character, Quest, Milestone, SessionDurationConfig, TRPGSession, EntityPool, EntityPoolCollection, CoreEntities, BonusEntities } from '@ai-agent-trpg/types';
 import { getDatabase } from '../database/database';
 import { getAIService } from './aiService';
 import { getSessionService } from './sessionService';
@@ -169,68 +169,7 @@ export interface SessionContext {
   mood: string;
 }
 
-// セッション開始時自動生成システム関連の型定義
-export interface EntityPool {
-  enemies: EntityPoolEnemy[];
-  events: EntityPoolEvent[];
-  npcs: EntityPoolNPC[];
-  items: EntityPoolItem[];
-  quests: EntityPoolQuest[];
-}
-
-export interface EntityPoolEnemy {
-  id: ID;
-  name: string;
-  description: string;
-  level: number;
-  hitPoints: number;
-  abilities: string[];
-  location?: string;
-  theme: string;
-}
-
-export interface EntityPoolEvent {
-  id: ID;
-  title: string;
-  description: string;
-  eventType: 'investigation' | 'social' | 'exploration' | 'puzzle' | 'discovery';
-  difficulty: 'easy' | 'medium' | 'hard';
-  location?: string;
-  theme: string;
-  choices: string[];
-}
-
-export interface EntityPoolNPC {
-  id: ID;
-  name: string;
-  description: string;
-  personality: string;
-  role: string;
-  location?: string;
-  communicationConditions: string[];
-  theme: string;
-}
-
-export interface EntityPoolItem {
-  id: ID;
-  name: string;
-  description: string;
-  itemType: 'key' | 'tool' | 'weapon' | 'consumable';
-  rarity: 'common' | 'uncommon' | 'rare' | 'legendary';
-  obtainMethods: string[];
-  theme: string;
-}
-
-export interface EntityPoolQuest {
-  id: ID;
-  title: string;
-  description: string;
-  questType: 'main' | 'side' | 'personal';
-  difficulty: 'easy' | 'medium' | 'hard';
-  requirements: string[];
-  rewards: string[];
-  theme: string;
-}
+// 共通型定義を使用（packages/types/src/ai-entities/milestones.ts）
 
 export interface SessionInitializationResult {
   milestones: Milestone[];
@@ -394,7 +333,8 @@ export class AIGameMasterService {
       return overview;
     } catch (error) {
       console.error('Failed to generate game overview:', error);
-      return this.generateFallbackOverview(sessionId, campaignId, context);
+      // フォールバックは禁止 - エラーを再スロー
+      throw new Error(`ゲーム概要生成に失敗しました: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -484,7 +424,8 @@ ${context.recentEvents.join('\n')}
       return explanation;
     } catch (error) {
       console.error('Failed to generate task explanation:', error);
-      return this.generateFallbackTaskExplanation(sessionId, taskContext);
+      // フォールバックは禁止 - エラーを再スロー
+      throw new Error(`タスク説明生成に失敗しました: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -595,7 +536,8 @@ ${sessionContext.characters.map(char => `- ${char.name} (${char.characterType})`
       return judgment;
     } catch (error) {
       console.error('Failed to generate result judgment:', error);
-      return this.generateFallbackResultJudgment(sessionId, characterId, actionDescription, checkResult);
+      // フォールバックは禁止 - エラーを再スロー
+      throw new Error(`結果判定生成に失敗しました: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -686,7 +628,8 @@ TRPGゲームマスターとして、プレイヤーの行動結果を劇的で�
       return adjustment;
     } catch (error) {
       console.error('Failed to generate scenario adjustment:', error);
-      return this.generateFallbackScenarioAdjustment(sessionId, trigger);
+      // フォールバックは禁止 - エラーを再スロー
+      throw new Error(`シナリオ調整生成に失敗しました: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -867,102 +810,6 @@ TRPGゲームマスターとして、プレイヤーの行動結果を劇的で�
       adjustment.timestamp,
       adjustment.aiProvider,
     ]);
-  }
-
-  // フォールバック生成メソッド群
-  private generateFallbackOverview(sessionId: ID, campaignId: ID, context: SessionContext): GameOverview {
-    return {
-      id: randomUUID(),
-      sessionId,
-      campaignId,
-      sessionSummary: '冒険は続いています。新たな挑戦があなたたちを待っています。',
-      currentObjectives: ['現在の状況を把握する', '次の行動を決定する'],
-      keyNPCs: [],
-      currentSituation: '現在の状況は安定していますが、注意深く進む必要があります。',
-      atmosphere: '緊張感のある静寂が辺りを包んでいます。',
-      tensions: ['未知への不安'],
-      opportunities: ['新たな発見の可能性'],
-      playerBriefing: 'プレイヤーの皆さん、現在の状況を確認し、次の行動を検討してください。',
-      suggestedActions: ['周囲を調査する', '仲間と相談する'],
-      warningsAndHints: ['慎重に行動することをお勧めします'],
-      generatedAt: new Date().toISOString(),
-      aiProvider: 'fallback',
-      context,
-    };
-  }
-
-  private generateFallbackTaskExplanation(sessionId: ID, taskContext: any): TaskExplanation {
-    return {
-      id: randomUUID(),
-      sessionId,
-      questId: taskContext.questId,
-      milestoneId: taskContext.milestoneId,
-      taskTitle: taskContext.taskTitle || '重要なタスク',
-      taskDescription: taskContext.basicDescription || 'このタスクを完了するために最善を尽くしてください。',
-      objectives: [],
-      backgroundContext: '詳細な背景情報はまだ明らかになっていません。',
-      relevantHistory: [],
-      stakeholders: [],
-      approachSuggestions: ['慎重に計画を立てる', '仲間と協力する'],
-      potentialChallenges: ['未知の困難'],
-      successCriteria: ['目標の達成'],
-      failureConsequences: ['計画の見直しが必要'],
-      atmosphericDetails: '静寂と緊張が漂っています。',
-      sensoryDescriptions: '周囲の音に注意を払ってください。',
-      moodSetting: '集中力が求められる状況です。',
-      difficulty: 'medium',
-      estimatedDuration: 60,
-      generatedAt: new Date().toISOString(),
-      aiProvider: 'fallback',
-    };
-  }
-
-  private generateFallbackResultJudgment(
-    sessionId: ID,
-    characterId: ID,
-    actionDescription: string,
-    checkResult: any
-  ): ResultJudgment {
-    return {
-      id: randomUUID(),
-      sessionId,
-      characterId,
-      actionDescription,
-      outcome: checkResult.outcome,
-      successLevel: checkResult.successLevel,
-      immediateResults: '行動の結果が明らかになりました。',
-      longtermConsequences: [],
-      characterImpact: 'キャラクターに変化が起こりました。',
-      storyProgression: 'ストーリーが進展しました。',
-      dramaticDescription: 'あなたの行動は重要な意味を持ちました。',
-      atmosphericChanges: '周囲の雰囲気が変化しました。',
-      npcReactions: [],
-      newOpportunities: [],
-      emergingChallenges: [],
-      suggestedFollowups: ['次の行動を検討する'],
-      difficulty: checkResult.difficulty,
-      modifiers: checkResult.modifiers,
-      timestamp: new Date().toISOString(),
-      aiProvider: 'fallback',
-    };
-  }
-
-  private generateFallbackScenarioAdjustment(sessionId: ID, trigger: ScenarioAdjustment['trigger']): ScenarioAdjustment {
-    return {
-      id: randomUUID(),
-      sessionId,
-      trigger,
-      analysis: '現在の状況を分析し、必要に応じて調整を行います。',
-      adjustmentType: 'story',
-      adjustments: [],
-      newElements: [],
-      implementationGuide: '状況に応じて柔軟に対応してください。',
-      timingRecommendations: ['適切なタイミングで実装'],
-      playerCommunication: 'プレイヤーと密接にコミュニケーションを取ってください。',
-      confidence: 50,
-      timestamp: new Date().toISOString(),
-      aiProvider: 'fallback',
-    };
   }
 
   // 公開メソッド：データ取得
@@ -1148,9 +995,8 @@ TRPGゲームマスターとして、プレイヤーの行動結果を劇的で�
     } catch (error) {
       console.error('Failed to generate player action response:', error);
       
-      // フォールバック応答
-      const fallbackResponse = this.generateFallbackActionResponse(playerAction);
-      await this.postGMMessageToChat(sessionId, fallbackResponse);
+      // フォールバックは禁止 - エラーを再スロー
+      throw new Error(`プレイヤーアクション応答生成に失敗しました: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -1197,16 +1043,6 @@ ${sessionContext.recentEvents.slice(-3).join('\n')}
 `;
   }
 
-  private generateFallbackActionResponse(playerAction: string): string {
-    const responses = [
-      `あなたの行動により、周囲の状況に変化が生まれました。注意深く周りを観察してみてください。`,
-      `${playerAction}を受けて、新たな可能性が開かれているようです。`,
-      `あなたの決断が物語に影響を与えました。どのような結果をもたらすのでしょうか...`,
-      `興味深い行動ですね。この選択がどのような運命を導くか、見守りましょう。`
-    ];
-    
-    return responses[Math.floor(Math.random() * responses.length)];
-  }
 
   /**
    * イベント開始時の導入シーンを生成してチャットに投稿
@@ -1245,11 +1081,8 @@ ${sessionContext.recentEvents.slice(-3).join('\n')}
     } catch (error) {
       console.error(`❌ イベント導入生成失敗 - Campaign: ${campaignId}, Error:`, error);
       
-      // フォールバック応答
-      const fallbackResponse = this.generateFallbackEventIntroduction(eventType);
-      await this.postGMMessageToChat(sessionId, fallbackResponse);
-      
-      return fallbackResponse;
+      // フォールバックは禁止 - エラーを再スロー
+      throw new Error(`イベント導入生成に失敗しました: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -1295,19 +1128,6 @@ ${characterDescriptions}
 `;
   }
 
-  private generateFallbackEventIntroduction(eventType: string): string {
-    const eventTypeMap: Record<string, string> = {
-      'mystery_investigation': '謎の手がかりが発見されました',
-      'social_encounter': '重要な人物との出会いがありました', 
-      'exploration': '新たな場所への探索が始まります',
-      'combat_encounter': '敵との遭遇が発生しました',
-      'puzzle_challenge': '謎解きの挑戦が待っています'
-    };
-
-    const eventDescription = eventTypeMap[eventType] || `${eventType}イベントが発生しました`;
-    
-    return `${eventDescription}。周囲の状況を注意深く観察し、慎重に行動してください。皆さんはどうしますか？`;
-  }
 
   /**
    * セッション開始時の自動生成システム - メイン処理（進捗通知対応）
@@ -1324,57 +1144,59 @@ ${characterDescriptions}
     try {
       console.log(`🎯 セッション自動初期化開始 - Session: ${sessionId}, Theme: ${campaignTheme}`);
 
-      // 第1層: シナリオ生成フェーズ
+      // 第1層: シナリオ生成フェーズ（概要から詳細へ）
       onProgress?.('scenario', 0, 'シナリオ設定を準備中...');
       
-      onProgress?.('scenario', 33, 'エンティティプール生成中...');
-      const entityPool = await this.generateEntityPool(
-        campaignId,
-        campaignTheme,
-        durationConfig,
-        characters,
-        aiSettings
-      );
-
-      onProgress?.('scenario', 66, 'ゲーム概要生成中...');
+      onProgress?.('scenario', 33, 'ゲーム概要生成中...');
       const gameOverview = await this.generateSessionGameOverview(
         sessionId,
         campaignId,
         campaignTheme,
         characters,
-        [],
-        entityPool,
+        [], // マイルストーンはまだ空
+        null, // エンティティプールはまだ空
         aiSettings
       );
 
-      onProgress?.('scenario', 100, 'シナリオ生成完了');
-
-      // 第2層: マイルストーン生成フェーズ
-      onProgress?.('milestone', 0, 'マイルストーン設計中...');
-      
-      onProgress?.('milestone', 25, 'メインマイルストーン生成中...');
+      onProgress?.('scenario', 66, 'マイルストーン設計中...');
       const milestones = await this.generateMilestones(
         campaignId,
         campaignTheme,
         durationConfig,
-        entityPool,
+        null, // エンティティプールはまだ生成されていない
         characters,
-        aiSettings
+        aiSettings,
+        gameOverview // ゲーム概要を参考にする
       );
 
-      onProgress?.('milestone', 75, 'マイルストーン調整中...');
-      // マイルストーンの調整処理（必要に応じて）
-      
-      onProgress?.('milestone', 100, 'マイルストーン生成完了');
+      onProgress?.('scenario', 100, 'シナリオ生成完了');
 
-      // 第3層: エンティティ生成フェーズ
-      onProgress?.('entity', 0, 'エンティティ統合開始...');
+      // 第2層: エンティティ生成フェーズ（マイルストーンに基づく）
+      onProgress?.('milestone', 0, 'エンティティプール生成準備中...');
       
-      onProgress?.('entity', 25, 'NPC配置調整中...');
-      // NPC配置の調整処理（必要に応じて）
+      onProgress?.('milestone', 25, 'エンティティプール生成中...');
+      const entityPool = await this.generateEntityPool(
+        campaignId,
+        sessionId,
+        campaignTheme,
+        durationConfig,
+        characters,
+        aiSettings,
+        gameOverview, // ゲーム概要を参考にする
+        milestones // マイルストーンを参考にする
+      );
+
+      onProgress?.('milestone', 75, 'エンティティ統合処理中...');
+      // エンティティとマイルストーンの整合性確認（必要に応じて）
       
-      onProgress?.('entity', 50, 'アイテム配置調整中...');
-      // アイテム配置の調整処理（必要に応じて）
+      onProgress?.('milestone', 100, 'エンティティ生成完了');
+
+      // 第3層: セッション統合フェーズ
+      onProgress?.('entity', 0, 'セッション統合開始...');
+      
+      onProgress?.('entity', 25, 'セッション初期化完了処理中...');
+      
+      onProgress?.('entity', 50, 'チャットメッセージ準備中...');
       
       onProgress?.('entity', 75, 'セッション統合処理中...');
       // 結果をチャットに投稿
@@ -1382,7 +1204,7 @@ ${characterDescriptions}
 
       onProgress?.('entity', 100, 'エンティティ生成完了');
 
-      console.log(`✅ セッション自動初期化完了 - ${milestones.length}マイルストーン, ${entityPool.enemies.length}エネミー生成`);
+      console.log(`✅ セッション自動初期化完了 - ${milestones.length}マイルストーン, ${entityPool?.entities?.coreEntities?.enemies?.length || 0}エネミー生成`);
 
       return {
         milestones,
@@ -1404,28 +1226,40 @@ ${characterDescriptions}
    * エンティティプール生成
    */
   private async generateEntityPool(
-    _campaignId: ID,
+    campaignId: ID,
+    sessionId: ID,
     campaignTheme: string,
     durationConfig: SessionDurationConfig,
     characters: Character[],
-    aiSettings: { provider: string; model?: string }
+    aiSettings: { provider: string; model?: string },
+    gameOverview?: GameOverview | null,
+    milestones?: Milestone[] | null
   ): Promise<EntityPool> {
-    const prompt = this.buildEntityPoolPrompt(campaignTheme, durationConfig, characters);
+    const prompt = this.buildEntityPoolPrompt(campaignTheme, durationConfig, characters, gameOverview, milestones);
 
     try {
+      // 環境変数からAPIキーを取得
+      const apiKey = this.getApiKeyForProvider(aiSettings.provider);
+      if (!apiKey) {
+        throw new Error(`API key not found for provider: ${aiSettings.provider}. Please check your environment variables.`);
+      }
+
       const response = await getAIService().chat({
         provider: aiSettings.provider,
+        apiKey: apiKey,
         model: aiSettings.model,
         message: prompt,
         persona: 'game_designer',
       });
 
       // AI応答から構造化データを抽出
-      const entityPool = this.parseEntityPoolFromAI(response.message, campaignTheme);
+      const entityPool = this.parseEntityPoolFromAI(response.message, campaignTheme, campaignId, sessionId);
+      console.log(`✅ AI エンティティプール生成成功: ${entityPool?.entities?.coreEntities?.enemies?.length || 0}エネミー, ${entityPool?.entities?.coreEntities?.npcs?.length || 0}NPC, ${entityPool?.entities?.coreEntities?.items?.length || 0}アイテム`);
       return entityPool;
 
     } catch (error) {
-      console.error('エンティティプール生成失敗:', error);
+      console.error('❌ AI エンティティプール生成失敗:', error);
+      // フォールバックは禁止 - エラーを再スローしてユーザーに通知
       throw new Error(`エンティティプール生成に失敗しました: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -1433,19 +1267,29 @@ ${characterDescriptions}
   private buildEntityPoolPrompt(
     campaignTheme: string,
     durationConfig: SessionDurationConfig,
-    characters: Character[]
+    characters: Character[],
+    gameOverview?: GameOverview | null,
+    milestones?: Milestone[] | null
   ): string {
     const characterLevels = characters.map(c => c.level).filter(l => l > 0);
     const avgLevel = characterLevels.length > 0 ? Math.round(characterLevels.reduce((a, b) => a + b, 0) / characterLevels.length) : 1;
 
+    // ゲーム概要とマイルストーンの情報を活用
+    const overviewContext = gameOverview ? `\n## ゲーム概要\n${gameOverview.playerBriefing}` : '';
+    const milestoneContext = milestones && milestones.length > 0 ? 
+      `\n## マイルストーン目標\n${milestones.map(m => `- ${m.title}: ${m.description}`).join('\n')}` : '';
+
     return `
 TRPGセッション用のエンティティプールを生成してください。
+既に設定されたゲーム概要とマイルストーンに基づいて、一貫性のあるエンティティを生成してください。
 
 ## セッション情報
 - テーマ: ${campaignTheme}
 - 期間: ${durationConfig.totalDays}日間
 - 1日の行動回数: ${durationConfig.actionsPerDay}
 - 総マイルストーン数: ${durationConfig.milestoneCount}
+${overviewContext}
+${milestoneContext}
 - キャラクター平均レベル: ${avgLevel}
 
 ## 生成要件
@@ -1475,7 +1319,7 @@ TRPGセッション用のエンティティプールを生成してください�
 JSONのみを出力してください。`;
   }
 
-  private parseEntityPoolFromAI(aiResponse: string, _theme: string): EntityPool {
+  private parseEntityPoolFromAI(aiResponse: string, _theme: string, campaignId: ID, sessionId: ID): EntityPool {
     try {
       // JSON部分を抽出
       const jsonMatch = aiResponse.match(/```json\s*([\s\S]*?)\s*```/);
@@ -1485,8 +1329,8 @@ JSONのみを出力してください。`;
 
       const parsed = JSON.parse(jsonMatch[1]);
       
-      // IDを追加
-      const entityPool: EntityPool = {
+      // 共通型定義に準拠したEntityPool構造を作成
+      const coreEntities: CoreEntities = {
         enemies: (parsed.enemies || []).map((enemy: any) => ({
           id: randomUUID(),
           ...enemy
@@ -1509,11 +1353,33 @@ JSONのみを出力してください。`;
         }))
       };
 
+      const bonusEntities: BonusEntities = {
+        practicalRewards: [],
+        trophyItems: [],
+        mysteryItems: []
+      };
+
+      const entities: EntityPoolCollection = {
+        coreEntities,
+        bonusEntities
+      };
+
+      const entityPool: EntityPool = {
+        id: randomUUID(),
+        campaignId,
+        sessionId,
+        themeId: randomUUID(), // テーマIDは後で適切に設定
+        entities,
+        generatedAt: new Date().toISOString(),
+        lastUpdated: new Date().toISOString()
+      };
+
       return entityPool;
 
     } catch (error) {
       console.error('AI応答パース失敗:', error);
-      throw error;
+      // フォールバック禁止 - エラーを再スローしてユーザーに通知
+      throw new Error(`エンティティプール生成に失敗しました: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -1524,15 +1390,23 @@ JSONのみを出力してください。`;
     campaignId: ID,
     campaignTheme: string,
     durationConfig: SessionDurationConfig,
-    entityPool: EntityPool,
+    entityPool: EntityPool | null,
     characters: Character[],
-    aiSettings: { provider: string; model?: string }
+    aiSettings: { provider: string; model?: string },
+    gameOverview?: GameOverview | null
   ): Promise<Milestone[]> {
-    const prompt = this.buildMilestonePrompt(campaignTheme, durationConfig, entityPool, characters);
+    const prompt = this.buildMilestonePrompt(campaignTheme, durationConfig, entityPool, characters, gameOverview);
 
     try {
+      // 環境変数からAPIキーを取得
+      const apiKey = this.getApiKeyForProvider(aiSettings.provider);
+      if (!apiKey) {
+        throw new Error(`API key not found for provider: ${aiSettings.provider}. Please check your environment variables.`);
+      }
+
       const response = await getAIService().chat({
         provider: aiSettings.provider,
+        apiKey: apiKey,
         model: aiSettings.model,
         message: prompt,
         persona: 'game_designer',
@@ -1550,14 +1424,17 @@ JSONのみを出力してください。`;
   private buildMilestonePrompt(
     campaignTheme: string,
     durationConfig: SessionDurationConfig,
-    entityPool: EntityPool,
-    _characters: Character[]
+    entityPool: EntityPool | null,
+    _characters: Character[],
+    gameOverview?: GameOverview | null
   ): string {
-    const enemyNames = entityPool.enemies.map(e => e.name).join(', ');
-    const eventTitles = entityPool.events.map(e => e.title).join(', ');
-    const npcNames = entityPool.npcs.map(n => n.name).join(', ');
-    const itemNames = entityPool.items.map(i => i.name).join(', ');
-    const questTitles = entityPool.quests.map(q => q.title).join(', ');
+    // ゲーム概要がある場合は参考にする
+    const overviewContext = gameOverview ? `\n## ゲーム概要参考情報\n- ${gameOverview.playerBriefing}` : '';
+    
+    // エンティティプールは後で生成されるため、この段階では参考情報として使わない
+    const entityContext = entityPool && entityPool.entities && entityPool.entities.coreEntities ? 
+      `\n## 利用可能な要素（参考）\n- エネミー: ${entityPool.entities.coreEntities.enemies?.map((e: any) => e.name).join(', ') || 'なし'}\n- NPC: ${entityPool.entities.coreEntities.npcs?.map((n: any) => n.name).join(', ') || 'なし'}` : 
+      '\n## エンティティ情報\nエンティティプールは後で生成されます。まずはテーマに基づいてマイルストーンを設計してください。';
 
     return `
 ${durationConfig.milestoneCount}個のマイルストーンを生成してください。
@@ -1566,13 +1443,8 @@ ${durationConfig.milestoneCount}個のマイルストーンを生成してくだ
 - テーマ: ${campaignTheme}
 - 期間: ${durationConfig.totalDays}日間
 - マイルストーン数: ${durationConfig.milestoneCount}
-
-## 利用可能なエンティティ
-- エネミー: ${enemyNames}
-- イベント: ${eventTitles}  
-- NPC: ${npcNames}
-- アイテム: ${itemNames}
-- クエスト: ${questTitles}
+${overviewContext}
+${entityContext}
 
 ## マイルストーンタイプ
 1. 特定エネミー討伐
@@ -1657,14 +1529,21 @@ JSONのみを出力してください。`;
     campaignTheme: string,
     characters: Character[],
     milestones: Milestone[],
-    entityPool: EntityPool,
+    entityPool: EntityPool | null,
     aiSettings: { provider: string; model?: string }
   ): Promise<GameOverview> {
     const prompt = this.buildSessionOverviewPrompt(campaignTheme, characters, milestones, entityPool);
 
     try {
+      // 環境変数からAPIキーを取得
+      const apiKey = this.getApiKeyForProvider(aiSettings.provider);
+      if (!apiKey) {
+        throw new Error(`API key not found for provider: ${aiSettings.provider}. Please check your environment variables.`);
+      }
+
       const response = await getAIService().chat({
         provider: aiSettings.provider,
+        apiKey: apiKey,
         model: aiSettings.model,
         message: prompt,
         persona: 'gm_assistant',
@@ -1676,12 +1555,13 @@ JSONのみを出力してください。`;
         campaignId,
         sessionSummary: response.message,
         currentObjectives: milestones.slice(0, 3).map(m => m.title).filter((title): title is string => title !== undefined),
-        keyNPCs: entityPool.npcs.map(npc => ({
-          id: npc.id,
-          name: npc.name,
-          role: npc.role,
-          status: 'available'
-        })),
+        keyNPCs: entityPool && entityPool.entities && entityPool.entities.coreEntities && entityPool.entities.coreEntities.npcs ? 
+          entityPool.entities.coreEntities.npcs.map((npc: any) => ({
+            id: npc.id,
+            name: npc.name,
+            role: npc.role,
+            status: 'available'
+          })) : [],
         currentSituation: '冒険が始まろうとしています。',
         atmosphere: 'わくわくするような期待感に満ちています。',
         tensions: ['未知への不安'],
@@ -1715,11 +1595,16 @@ JSONのみを出力してください。`;
     campaignTheme: string,
     characters: Character[],
     milestones: Milestone[],
-    entityPool: EntityPool
+    entityPool: EntityPool | null
   ): string {
     const characterDescriptions = characters.map(c => 
       `${c.name} (${c.characterClass || '冒険者'} Lv.${c.level})`
     ).join(', ');
+
+    // エンティティプールがnullの場合は基本的な概要生成
+    const entityContext = entityPool && entityPool.entities && entityPool.entities.coreEntities ? 
+      `\n## 利用可能な要素\n- 重要NPC: ${entityPool.entities.coreEntities.npcs?.map((n: any) => n.name).join(', ') || 'なし'}\n- 主要イベント: ${entityPool.entities.coreEntities.events?.map((e: any) => e.title).join(', ') || 'なし'}\n- 重要アイテム: ${entityPool.entities.coreEntities.items?.map((i: any) => i.name).join(', ') || 'なし'}` : 
+      '\n## エンティティ情報\nエンティティプールは後で生成されます。まずはテーマと基本設定に基づいてゲーム概要を生成してください。';
 
     return `
 TRPGセッション開始時のゲーム概要とプレイヤーへの説明を生成してください。
@@ -1730,11 +1615,7 @@ TRPGセッション開始時のゲーム概要とプレイヤーへの説明を�
 
 ## 主要マイルストーン
 ${milestones.map(m => `- ${m.title}: ${m.description}`).join('\n')}
-
-## 利用可能な要素
-- 重要NPC: ${entityPool.npcs.map(n => n.name).join(', ')}
-- 主要イベント: ${entityPool.events.map(e => e.title).join(', ')}
-- 重要アイテム: ${entityPool.items.map(i => i.name).join(', ')}
+${entityContext}
 
 ## 要求事項
 1. **魅力的な世界観の提示**: ${campaignTheme}にふさわしい雰囲気作り
@@ -1756,6 +1637,20 @@ ${milestones.map(m => `- ${m.title}: ${m.description}`).join('\n')}
       console.log(`✅ セッション初期化メッセージをチャットに投稿完了 - Session: ${sessionId}`);
     } catch (error) {
       console.error('❌ セッション初期化メッセージ投稿失敗:', error);
+    }
+  }
+
+  // 環境変数からAPIキーを取得するヘルパーメソッド
+  private getApiKeyForProvider(provider: string): string | undefined {
+    switch (provider) {
+      case 'google':
+        return process.env.GOOGLE_API_KEY;
+      case 'openai':
+        return process.env.OPENAI_API_KEY;
+      case 'anthropic':
+        return process.env.ANTHROPIC_API_KEY;
+      default:
+        return undefined;
     }
   }
 }

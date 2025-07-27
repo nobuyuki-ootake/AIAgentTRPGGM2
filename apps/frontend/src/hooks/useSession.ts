@@ -41,6 +41,7 @@ export const useSession = ({
     leaveSession: wsLeaveSession,
     onCompanionMessage,
     onPlayerAction,
+    onChatMessage,
   } = useWebSocket();
 
   // 初期化フラグ（重複実行防止）
@@ -340,9 +341,27 @@ export const useSession = ({
     }
   }, [currentSession, setCurrentSession, showInfo, showError]);
 
-  // WebSocket仲間メッセージ受信設定
+  // WebSocket仲間メッセージ・チャットメッセージ受信設定
   useEffect(() => {
     if (!currentSession) return;
+
+    // チャットメッセージのリアルタイム更新
+    const chatCleanup = onChatMessage((data) => {
+      console.log('💬 WebSocket: Chat message received:', data.message.sender, data.message.content?.substring(0, 50));
+      
+      // セッション状態を即座に更新（ポーリングを待たない）
+      setCurrentSession(prevSession => {
+        if (!prevSession || prevSession.id !== data.sessionId) return prevSession;
+        
+        // チャットログに新しいメッセージを追加
+        const newChatLog = [...prevSession.chatLog, data.message];
+        
+        return {
+          ...prevSession,
+          chatLog: newChatLog,
+        };
+      });
+    });
 
     onCompanionMessage((data) => {
       // 仲間メッセージをチャットに追加
@@ -360,7 +379,12 @@ export const useSession = ({
       // プレイヤー行動の処理（必要に応じて）
       console.log('Player action received:', data);
     });
-  }, [currentSession, onCompanionMessage, onPlayerAction, setCurrentSession, showInfo]);
+
+    // クリーンアップ関数を実行
+    return () => {
+      if (chatCleanup) chatCleanup();
+    };
+  }, [currentSession, onCompanionMessage, onPlayerAction, onChatMessage, setCurrentSession, showInfo]);
 
   // WebSocket接続状態変化時の処理
   useEffect(() => {

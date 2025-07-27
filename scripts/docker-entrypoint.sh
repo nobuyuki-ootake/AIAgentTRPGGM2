@@ -20,7 +20,13 @@ log_error() {
 
 # 環境変数設定
 export DATABASE_PATH="/app/data/trpg.db"
-export LITESTREAM_CONFIG="/app/litestream.yml"
+
+# 環境に応じてLitestream設定ファイルを選択
+if [[ "${NODE_ENV:-development}" == "production" ]] && [[ -n "${LITESTREAM_S3_BUCKET:-}" ]]; then
+    export LITESTREAM_CONFIG="/app/litestream.yml"
+else
+    export LITESTREAM_CONFIG="/app/litestream-dev.yml"
+fi
 
 # シャットダウンハンドラ
 shutdown_handler() {
@@ -101,6 +107,12 @@ restore_database() {
 
 # Litestreamデーモンの起動
 start_litestream() {
+    # 開発環境ではLitestreamをスキップするオプション
+    if [[ "${SKIP_LITESTREAM:-false}" == "true" ]]; then
+        log_warn "Skipping Litestream startup (SKIP_LITESTREAM=true)"
+        return 0
+    fi
+    
     log_info "Starting Litestream daemon..."
     
     # バックグラウンドでLitestreamを起動
@@ -111,6 +123,12 @@ start_litestream() {
     sleep 2
     if ! ps -p "$LITESTREAM_PID" > /dev/null 2>&1; then
         log_error "Failed to start Litestream daemon"
+        # 開発環境ではLitestreamの失敗を許容
+        if [[ "${NODE_ENV:-development}" == "development" ]]; then
+            log_warn "Continuing without Litestream in development mode"
+            LITESTREAM_PID=""
+            return 0
+        fi
         exit 1
     fi
     
@@ -193,8 +211,8 @@ main() {
     
     # サービスの監視
     while true; do
-        # Litestreamの状態確認
-        if ! ps -p "$LITESTREAM_PID" > /dev/null 2>&1; then
+        # Litestreamの状態確認（起動している場合のみ）
+        if [[ -n "${LITESTREAM_PID:-}" ]] && ! ps -p "$LITESTREAM_PID" > /dev/null 2>&1; then
             log_error "Litestream daemon has stopped"
             exit 1
         fi

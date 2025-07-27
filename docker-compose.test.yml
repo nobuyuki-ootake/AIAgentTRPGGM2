@@ -1,0 +1,245 @@
+# ===================================================================
+# AI Agent TRPG GM - Docker Compose for Testing
+# ===================================================================
+# 
+# Test-specific Docker configuration with:
+# - Isolated test environment
+# - Test database containers
+# - Mock external services
+# - Performance monitoring
+# ===================================================================
+
+version: '3.8'
+
+services:
+  # ===================================================================
+  # Frontend Service (Test)
+  # ===================================================================
+  frontend-test:
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+      target: test
+    container_name: trpg-frontend-test
+    ports:
+      - "3001:3000"
+    environment:
+      - NODE_ENV=test
+      - VITE_API_URL=http://proxy-server-test:5000
+      - VITE_WS_URL=ws://proxy-server-test:5000
+    volumes:
+      - ./apps/frontend/e2e:/app/e2e:ro
+      - ./test-artifacts:/app/test-artifacts
+    depends_on:
+      - proxy-server-test
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ===================================================================
+  # Proxy Server Service (Test)
+  # ===================================================================
+  proxy-server-test:
+    build:
+      context: .
+      dockerfile: apps/proxy-server/Dockerfile
+      target: test
+    container_name: trpg-proxy-server-test
+    ports:
+      - "5001:5000"
+    environment:
+      - NODE_ENV=test
+      - PORT=5000
+      - DATABASE_URL=/app/data/test/trpg-test.db
+      - MASTRA_DATABASE_URL=/app/data/test/mastra-trpg-test.db
+      - CORS_ORIGIN=http://frontend-test:3000
+      - LOG_LEVEL=debug
+      # Test AI Provider Keys (Mock)
+      - OPENAI_API_KEY=test-openai-key
+      - ANTHROPIC_API_KEY=test-anthropic-key
+      - GOOGLE_AI_API_KEY=test-google-key
+      - AI_PROVIDER_MOCK_MODE=true
+    volumes:
+      - ./apps/proxy-server/data:/app/data
+      - ./test-logs:/app/logs
+      - ./test-artifacts:/app/test-artifacts
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ===================================================================
+  # Test Database Service
+  # ===================================================================
+  test-db:
+    image: alpine:latest
+    container_name: trpg-test-db
+    command: >
+      sh -c "
+        apk add --no-cache sqlite &&
+        mkdir -p /data/test &&
+        touch /data/test/trpg-test.db &&
+        tail -f /dev/null
+      "
+    volumes:
+      - test-db-data:/data
+    networks:
+      - test-network
+
+  # ===================================================================
+  # Mock AI Services (for testing without real API calls)
+  # ===================================================================
+  mock-ai-service:
+    image: node:18-alpine
+    container_name: trpg-mock-ai
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=test
+    command: >
+      sh -c "
+        npm install -g json-server &&
+        echo '{
+          \"openai\": {
+            \"completions\": {
+              \"choices\": [{
+                \"message\": {
+                  \"content\": \"This is a mock AI response for testing.\"
+                }
+              }]
+            }
+          },
+          \"anthropic\": {
+            \"content\": [{
+              \"text\": \"This is a mock Claude response for testing.\"
+            }]
+          },
+          \"google\": {
+            \"candidates\": [{
+              \"content\": {
+                \"parts\": [{
+                  \"text\": \"This is a mock Gemini response for testing.\"
+                }]
+              }
+            }]
+          }
+        }' > /tmp/mock-responses.json &&
+        json-server --host 0.0.0.0 --port 8080 /tmp/mock-responses.json
+      "
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ===================================================================
+  # Test Redis (for session management testing)
+  # ===================================================================
+  test-redis:
+    image: redis:7-alpine
+    container_name: trpg-test-redis
+    ports:
+      - "6380:6379"
+    command: redis-server --appendonly yes --appendfsync everysec
+    volumes:
+      - test-redis-data:/data
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ===================================================================
+  # Performance Monitor (for test performance tracking)
+  # ===================================================================
+  performance-monitor:
+    image: prom/prometheus:latest
+    container_name: trpg-test-monitor
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./test-config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - test-metrics-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=1h'
+      - '--web.enable-lifecycle'
+    networks:
+      - test-network
+
+  # ===================================================================
+  # Test File Storage (mock GCS)
+  # ===================================================================
+  test-storage:
+    image: fsouza/fake-gcs-server:latest
+    container_name: trpg-test-storage
+    ports:
+      - "4443:4443"
+    command: ["-scheme", "http", "-host", "0.0.0.0", "-port", "4443"]
+    volumes:
+      - test-storage-data:/data
+    networks:
+      - test-network
+
+  # ===================================================================
+  # Playwright Test Runner
+  # ===================================================================
+  playwright-runner:
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile.playwright
+    container_name: trpg-playwright-runner
+    environment:
+      - NODE_ENV=test
+      - PLAYWRIGHT_BASE_URL=http://frontend-test:3000
+      - PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=false
+    volumes:
+      - ./apps/frontend/e2e:/app/e2e
+      - ./apps/frontend/playwright.config.ts:/app/playwright.config.ts
+      - ./test-artifacts:/app/test-artifacts
+    depends_on:
+      - frontend-test
+      - proxy-server-test
+    networks:
+      - test-network
+    profiles:
+      - e2e
+
+# ===================================================================
+# Networks
+# ===================================================================
+networks:
+  test-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# ===================================================================
+# Volumes
+# ===================================================================
+volumes:
+  test-db-data:
+    driver: local
+  test-redis-data:
+    driver: local
+  test-metrics-data:
+    driver: local
+  test-storage-data:
+    driver: local

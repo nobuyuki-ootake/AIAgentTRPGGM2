@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
 import { APIResponse } from '@ai-agent-trpg/types';
-import { logger } from '../utils/logger';
 import { errorMonitoringService } from '../services/errorMonitoringService';
 
 export interface AppError extends Error {
@@ -94,7 +93,6 @@ export function errorHandler(
   _next: NextFunction
 ): void {
   const statusCode = error.statusCode || 500;
-  const code = error.code || 'INTERNAL_SERVER_ERROR';
   
   // エラーを監視システムに記録
   const component = determineComponent(req.path);

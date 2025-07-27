@@ -360,6 +360,12 @@ export const SessionInterface: React.FC<SessionInterfaceProps> = ({
       });
       
       console.log('🎯 セッション自動初期化開始...');
+      console.log('🔍 Characters debug:', {
+        characters,
+        characterCount: characters.length,
+        characterIds: characters.map(c => c.id),
+        firstCharacter: characters[0]
+      });
       const result = await aiGameMasterAPI.initializeSessionWithDefaults(
         session.id,
         session.campaignId,
@@ -368,54 +374,75 @@ export const SessionInterface: React.FC<SessionInterfaceProps> = ({
         'クラシックファンタジー' // デフォルトテーマ
       );
       
-      // 4. エンティティプール生成完了
-      sessionInitialization.updateStage('entities', {
-        details: `${result.entityPool.enemies.length}体のエネミー、${result.entityPool.npcs.length}人のNPC、${result.entityPool.items.length}個のアイテムを生成完了`,
+      console.log('🔍 API Response result:', result);
+      
+      // 4. ゲーム概要生成段階
+      sessionInitialization.updateStage('overview', {
+        details: 'セッション導入シーンを準備完了',
         progress: 100,
       });
       sessionInitialization.nextStage();
       
       // 5. マイルストーン生成段階
+      const milestoneCount = result?.milestones?.length || 0;
       sessionInitialization.updateStage('milestones', {
-        details: `${result.milestones.length}個のマイルストーンを生成完了`,
+        details: `${milestoneCount}個のマイルストーンを生成完了`,
         progress: 100,
       });
       sessionInitialization.nextStage();
       
-      // 6. ゲーム概要生成段階
-      sessionInitialization.updateStage('overview', {
-        details: 'セッション導入シーンを準備完了',
+      // 6. エンティティプール生成完了（null安全性チェック付き）
+      const entities = result?.entityPool?.entities?.coreEntities;
+      const enemyCount = entities?.enemies?.length || 0;
+      const npcCount = entities?.npcs?.length || 0;
+      const itemCount = entities?.items?.length || 0;
+      
+      console.log('🔍 Entity counts:', { enemyCount, npcCount, itemCount });
+      
+      sessionInitialization.updateStage('entities', {
+        details: `${enemyCount}体のエネミー、${npcCount}人のNPC、${itemCount}個のアイテムを生成完了`,
         progress: 100,
       });
       
       setInitializationResult(result);
       console.log('✅ セッション自動初期化完了:', result);
       
-      // 4. AI GM制御を自動開始
+      // 4. 初期化完了をマーク（AIチェーンより前に）
+      sessionInitialization.completeInitialization();
+      
+      // 5. AI GM制御を自動開始
       setIsAIControlActive(true);
       console.log('🤖 AI GM制御システム開始...');
       
-      // 5. 初回AIチェーンを実行
-      const initialMessage = `セッションが開始されました。冒険を始めましょう！`;
-      const chainResponse = await aiAgentAPI.triggerChain({
-        sessionId: session.id,
-        playerMessage: initialMessage,
-        currentLocationId: initialLocation,
-        participants: characters.map(c => c.id),
-        triggerType: 'session_start',
-        context: {
-          sessionConfig: config,
-          partySize: characters.length,
-          timeOfDay: 'morning',
-          weather: 'clear',
-          dangerLevel: 20
-        }
-      });
-      
-      console.log('🎭 AI GM初回応答:', chainResponse);
-      
-      // 7. 初期化完了
-      sessionInitialization.completeInitialization();
+      // 6. 初回AIチェーンを実行（個別のエラーハンドリング）
+      let chainResponse = null;
+      try {
+        const initialMessage = `セッションが開始されました。冒険を始めましょう！`;
+        chainResponse = await aiAgentAPI.triggerChain({
+          sessionId: session.id,
+          playerMessage: initialMessage,
+          currentLocationId: initialLocation,
+          participants: characters.map(c => c.id),
+          triggerType: 'session_start',
+          context: {
+            sessionConfig: config,
+            partySize: characters.length,
+            timeOfDay: 'morning',
+            weather: 'clear',
+            dangerLevel: 20
+          }
+        });
+        
+        console.log('🎭 AI GM初回応答:', chainResponse);
+      } catch (chainError) {
+        console.warn('⚠️ 初回AIチェーンエラー（セッション初期化は成功）:', chainError);
+        
+        // AIチェーンエラーをユーザーに通知（初期化は成功済み）
+        onSendMessage(
+          `⚠️ AI GM制御の開始に失敗しましたが、セッション初期化は完了しています。API設定を確認してから手動でゲームを進めてください。`,
+          'ooc'
+        );
+      }
       
       // 8. 成功メッセージを表示
       onSendMessage(
@@ -423,11 +450,13 @@ export const SessionInterface: React.FC<SessionInterfaceProps> = ({
         'ooc'
       );
       
-      // 9. AI GMからの初回メッセージを表示
-      onSendMessage(chainResponse.gmResponse.message, 'ic');
+      // 9. AI GMからの初回メッセージを表示（成功時のみ）
+      if (chainResponse && chainResponse.gmResponse && chainResponse.gmResponse.message) {
+        onSendMessage(chainResponse.gmResponse.message, 'ic');
+      }
       
-      // 10. 利用可能なエンティティ情報を表示
-      if (chainResponse.contextAnalysis.availableEntities.length > 0) {
+      // 10. 利用可能なエンティティ情報を表示（成功時のみ）
+      if (chainResponse && chainResponse.contextAnalysis && chainResponse.contextAnalysis.availableEntities.length > 0) {
         const entitySummary = chainResponse.contextAnalysis.availableEntities
           .slice(0, 3)
           .map(e => e.name)
@@ -773,7 +802,17 @@ ${specificPrompt}
           </Box>
           
           <Stack direction="row" spacing={1}>
-            {session.status === 'preparing' && (
+            {(() => {
+              const shouldShow = session.status === 'preparing' || session.status === 'completed' || (sessionInitialization.isInitialized && !isAIControlActive);
+              console.log('🔍 Button Display Logic:', {
+                sessionStatus: session.status,
+                isInitialized: sessionInitialization.isInitialized,
+                isAIControlActive,
+                shouldShow,
+                isInitializing: sessionInitialization.isInitializing
+              });
+              return shouldShow;
+            })() && (
               <Button
                 variant="contained"
                 startIcon={<PlayArrowRounded />}

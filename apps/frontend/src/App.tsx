@@ -17,7 +17,6 @@ const HomePage = React.lazy(() => import('@/pages/HomePage'));
 const CampaignSetupPage = React.lazy(() => import('@/pages/CampaignSetupPage'));
 const CharacterManagementPage = React.lazy(() => import('@/pages/CharacterManagementPage'));
 const LocationManagementPage = React.lazy(() => import('@/pages/LocationManagementPage'));
-const TimelinePage = React.lazy(() => import('@/pages/TimelinePage'));
 const TRPGSessionPage = React.lazy(() => import('@/pages/TRPGSessionPage'));
 const PlayerCharacterSelectPage = React.lazy(() => import('@/pages/PlayerCharacterSelectPage'));
 const ScenarioEditorPage = React.lazy(() => import('@/pages/ScenarioEditorPage'));
@@ -45,7 +44,6 @@ function App() {
                         <Route path="/campaign/:id/setup" element={<CampaignSetupPage />} />
                         <Route path="/campaign/:id/characters" element={<CharacterManagementPage />} />
                         <Route path="/campaign/:id/locations" element={<LocationManagementPage />} />
-                        <Route path="/campaign/:id/timeline" element={<TimelinePage />} />
                         <Route path="/campaign/:id/scenario-editor" element={<ScenarioEditorPage />} />
                         <Route path="/campaign/:id/session" element={<TRPGSessionPage />} />
                         <Route path="/campaign/:id/session/:sessionId" element={<TRPGSessionPage />} />

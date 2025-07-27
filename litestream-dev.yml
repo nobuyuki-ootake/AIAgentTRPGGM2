@@ -1,0 +1,20 @@
+dbs:
+  - path: /app/data/trpg.db
+    replicas:
+      - type: file
+        path: /app/backup/trpg.db
+        sync-interval: 1s
+        retention: 72h
+        snapshot-interval: 1h
+  - path: /app/mastra-trpg.db
+    replicas:
+      - type: file
+        path: /app/backup/mastra-trpg.db
+        sync-interval: 1s
+        retention: 72h
+        snapshot-interval: 1h
+
+# Global settings
+log-level: info
+checkpoint-interval: 10s
+wal-timeout: 5s

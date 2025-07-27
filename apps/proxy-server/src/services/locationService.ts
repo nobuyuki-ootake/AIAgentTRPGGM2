@@ -6,7 +6,7 @@ import {
   ID,
   PaginatedResponse 
 } from '@ai-agent-trpg/types';
-import { database } from '../database/database';
+import { getDatabase } from '../database/database';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface CreateLocationData {
@@ -74,14 +74,15 @@ class LocationService {
 
     // 総数取得
     const countSql = sql.replace('SELECT *', 'SELECT COUNT(*) as count');
-    const countResult = database.prepare(countSql).get(...params) as { count: number };
+    const db = getDatabase();
+    const countResult = db.prepare(countSql).get(...params) as { count: number };
     const totalCount = countResult.count;
 
     // データ取得
     sql += ' ORDER BY name ASC LIMIT ? OFFSET ?';
     params.push(limit, offset);
 
-    const rows = database.prepare(sql).all(...params) as any[];
+    const rows = db.prepare(sql).all(...params) as any[];
     const locations = rows.map(this.rowToLocation);
 
     return {
@@ -96,7 +97,8 @@ class LocationService {
   }
 
   async getLocationById(id: ID): Promise<Location | null> {
-    const row = database.prepare('SELECT * FROM locations WHERE id = ?').get(id) as any;
+    const db = getDatabase();
+    const row = db.prepare('SELECT * FROM locations WHERE id = ?').get(id) as any;
     return row ? this.rowToLocation(row) : null;
   }
 
@@ -122,7 +124,8 @@ class LocationService {
       imageUrl: data.imageUrl,
     };
 
-    database.prepare(`
+    const db = getDatabase();
+    db.prepare(`
       INSERT INTO locations (
         id, name, description, type, parent_location_id, child_location_ids,
         coordinates, climate, terrain, npcs, items, events,
@@ -161,7 +164,8 @@ class LocationService {
       ...updates,
     };
 
-    database.prepare(`
+    const db = getDatabase();
+    db.prepare(`
       UPDATE locations SET
         name = ?, description = ?, type = ?, parent_location_id = ?,
         child_location_ids = ?, coordinates = ?, climate = ?, terrain = ?,
@@ -218,7 +222,8 @@ class LocationService {
     };
 
     // 移動記録を保存
-    database.prepare(`
+    const db = getDatabase();
+    db.prepare(`
       INSERT INTO location_movements (
         id, character_id, from_location_id, to_location_id, timestamp,
         estimated_duration, movement_type, transport_method, status,
@@ -267,7 +272,8 @@ class LocationService {
       timestamp: now,
     };
 
-    database.prepare(`
+    const db = getDatabase();
+    db.prepare(`
       INSERT INTO location_interactions (
         location_id, character_id, interaction_type, result, timestamp
       ) VALUES (?, ?, ?, ?, ?)
@@ -287,7 +293,8 @@ class LocationService {
   // ==========================================
 
   private async getCharacterById(characterId: ID): Promise<Character | null> {
-    const row = database.prepare('SELECT * FROM characters WHERE id = ?').get(characterId) as any;
+    const db = getDatabase();
+    const row = db.prepare('SELECT * FROM characters WHERE id = ?').get(characterId) as any;
     if (!row) return null;
 
     return {
@@ -298,7 +305,8 @@ class LocationService {
   }
 
   private async updateCharacterLocation(characterId: ID, locationId: ID): Promise<void> {
-    database.prepare(`
+    const db = getDatabase();
+    db.prepare(`
       UPDATE characters 
       SET current_location_id = ?, updated_at = ?
       WHERE id = ?

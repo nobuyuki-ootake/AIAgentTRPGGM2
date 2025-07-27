@@ -61,7 +61,7 @@ class CampaignService {
       };
       
     } catch (error) {
-      logger.error('Failed to get campaigns:', error);
+      logger.error('Failed to get campaigns:', { error });
       throw new DatabaseError('Failed to retrieve campaigns', { error });
     }
   }
@@ -79,7 +79,7 @@ class CampaignService {
       return this.mapRowToCampaign(row);
       
     } catch (error) {
-      logger.error(`Failed to get campaign ${id}:`, error);
+      logger.error(`Failed to get campaign ${id}:`, { error, campaignId: id });
       throw new DatabaseError('Failed to retrieve campaign', { error, campaignId: id });
     }
   }
@@ -185,11 +185,11 @@ class CampaignService {
           campaign.totalPlayTime
         );
 
-        logger.info(`Campaign created: ${campaign.id} - ${campaign.name}`);
+        logger.info(`Campaign created: ${campaign.id} - ${campaign.name}`, { campaignId: campaign.id, campaignName: campaign.name });
         return campaign;
         
       } catch (error) {
-        logger.error('Failed to create campaign:', error);
+        logger.error('Failed to create campaign:', { error });
         throw new DatabaseError('Failed to create campaign', { error });
       }
     });
@@ -244,11 +244,11 @@ class CampaignService {
         id
       );
 
-      logger.info(`Campaign updated: ${id}`);
+      logger.info(`Campaign updated: ${id}`, { campaignId: id });
       return updatedCampaign;
       
     } catch (error) {
-      logger.error(`Failed to update campaign ${id}:`, error);
+      logger.error(`Failed to update campaign ${id}:`, { error, campaignId: id });
       throw new DatabaseError('Failed to update campaign', { error, campaignId: id });
     }
   }
@@ -273,11 +273,11 @@ class CampaignService {
         return false;
       }
       
-      logger.info(`Campaign deleted: ${id}`);
+      logger.info(`Campaign deleted: ${id}`, { campaignId: id });
       return true;
       
     } catch (error) {
-      logger.error(`Failed to delete campaign ${id}:`, error);
+      logger.error(`Failed to delete campaign ${id}:`, { error, campaignId: id });
       throw new DatabaseError('Failed to delete campaign', { error, campaignId: id });
     }
   }

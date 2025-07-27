@@ -72,8 +72,10 @@ const TRPGSessionPage: React.FC = () => {
     }
   }, [selectedPlayerCharacter, playerCharacter, setPlayerCharacter]);
 
-  // プレイヤーモードかどうかを判定（player-selectから遷移した場合も含む）
-  const isPlayerMode = appMode === 'user' || effectivePlayerCharacter !== null;
+  // プレイヤーモードかどうかを判定
+  // GMモード（developer）ではキャラクター選択に関係なくGMモード
+  // ユーザーモード（user）では常にプレイヤーモード
+  const isPlayerMode = appMode === 'user';
   
   // 実際に使用するキャンペーンIDを決定
   // 開発者モード: /campaign/:id/session/:sessionId → id
@@ -245,11 +247,12 @@ const TRPGSessionPage: React.FC = () => {
     isPlayerMode,
     hasEffectivePlayerCharacter: !!effectivePlayerCharacter,
     loading,
-    willShowCharacterError: isPlayerMode && !effectivePlayerCharacter && !loading
+    willShowCharacterError: appMode === 'user' && !effectivePlayerCharacter && !loading
   });
   
-  // プレイヤーモードでプレイヤーキャラクターが選択されていない場合
-  if (isPlayerMode && !effectivePlayerCharacter && !loading) {
+  // プレイヤーモード（ユーザーモード）でプレイヤーキャラクターが選択されていない場合のみエラー
+  // GMモード（開発者モード）ではキャラクター選択は必須ではない
+  if (appMode === 'user' && !effectivePlayerCharacter && !loading) {
     console.log('🚨 ERROR DISPLAY TRIGGERED: Player character not selected - showing error page');
     console.error('❌ プレイヤーキャラクターが選択されていません');
     console.error('❌ playerCharacter:', playerCharacter);
@@ -264,7 +267,7 @@ const TRPGSessionPage: React.FC = () => {
             プレイヤーキャラクターが選択されていません
           </Typography>
           <Typography variant="body2" sx={{ mb: 2 }}>
-            セッションを開始するには、プレイヤーキャラクターを選択する必要があります。
+            プレイヤーモードでセッションを開始するには、プレイヤーキャラクターを選択する必要があります。
           </Typography>
           <Box sx={{ mt: 2 }}>
             <Button
@@ -279,7 +282,8 @@ const TRPGSessionPage: React.FC = () => {
           <Typography variant="body2">
             <strong>デバッグ情報:</strong><br />
             • Campaign ID: {actualCampaignId}<br />
-            • Player Mode: {isPlayerMode ? 'はい' : 'いいえ'}<br />
+            • App Mode: {appMode}<br />
+            • Player Mode Required: {appMode === 'user' ? 'はい' : 'いいえ'}<br />
             • Recoil Player Character: {playerCharacter ? (playerCharacter as any).name || '名前不明' : 'なし'}<br />
             • Navigation Player Character: {selectedPlayerCharacter && typeof selectedPlayerCharacter === 'object' && 'name' in selectedPlayerCharacter ? selectedPlayerCharacter.name : 'なし'}<br />
             • Current URL: {location.pathname}
@@ -308,13 +312,13 @@ const TRPGSessionPage: React.FC = () => {
     condition1_campaignIssue: !currentCampaign || currentCampaign.id !== actualCampaignId,
     condition2_notLoading: !loading,
     condition2b_notCampaignLoading: !campaignLoading,
-    condition3_notCharacterError: !(isPlayerMode && !effectivePlayerCharacter),
+    condition3_notCharacterError: !(appMode === 'user' && !effectivePlayerCharacter),
     
     // Final result
     willRedirectToCampaignSetup: ((!currentCampaign || currentCampaign.id !== actualCampaignId) && 
                                   !loading && 
                                   !campaignLoading &&
-                                  !(isPlayerMode && !effectivePlayerCharacter))
+                                  !(appMode === 'user' && !effectivePlayerCharacter))
   });
   
   // キャンペーンが読み込まれていない場合のリダイレクト
@@ -322,14 +326,15 @@ const TRPGSessionPage: React.FC = () => {
   if ((!currentCampaign || currentCampaign.id !== actualCampaignId) && 
       !loading && 
       !campaignLoading &&
-      !(isPlayerMode && !effectivePlayerCharacter)) {
+      !(appMode === 'user' && !effectivePlayerCharacter)) {
     console.log('🚨 REDIRECT TRIGGERED: Campaign not loaded or ID mismatch');
     console.error('❌ キャンペーンが読み込まれていません');
     console.error('❌ currentCampaign:', currentCampaign);
     console.error('❌ actualCampaignId:', actualCampaignId);
+    console.error('❌ appMode:', appMode);
     console.error('❌ isPlayerMode:', isPlayerMode);
     
-    const redirectPath = isPlayerMode 
+    const redirectPath = appMode === 'user'
       ? `/campaign/${actualCampaignId}/player-select`
       : `/campaign/${actualCampaignId}/setup`;
     console.log('🚨 REDIRECTING TO:', redirectPath);

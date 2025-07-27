@@ -38,8 +38,20 @@ logs/
 .env.local
 .env.production
 .env.development
+.env.staging
+.env.test
 .envrc.local
 .direnv/
+
+# Security files
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+keys/
+ssl/
 
 # IDE and editor files
 .vscode/

@@ -71,6 +71,11 @@ interface WebSocketEvents {
       isDetailedFeedback: boolean;
     };
   };
+  'chat-message': {
+    sessionId: ID;
+    message: ChatMessage;
+    timestamp: string;
+  };
 }
 
 interface UseWebSocketReturn {
@@ -83,6 +88,7 @@ interface UseWebSocketReturn {
   onGMNotification: (callback: (data: WebSocketEvents['gm-notification']) => void) => void;
   onGMStoryProgression: (callback: (data: WebSocketEvents['gm-story-progression']) => void) => void;
   onNarrativeFeedback: (callback: (data: WebSocketEvents['narrative-feedback']) => void) => void;
+  onChatMessage: (callback: (data: WebSocketEvents['chat-message']) => void) => (() => void);
   onPartyMovementUpdated: (callback: (data: WebSocketEvents['party-movement-updated']) => void) => (() => void);
   onLocationEntitiesUpdated: (callback: (data: WebSocketEvents['location-entities-updated']) => void) => (() => void);
   disconnect: () => void;
@@ -255,6 +261,28 @@ export function useWebSocket(): UseWebSocketReturn {
     });
   };
 
+  // チャットメッセージ受信
+  const onChatMessage = (callback: (data: WebSocketEvents['chat-message']) => void) => {
+    if (!socketRef.current) {
+      logger.warn('Cannot register chat message listener: WebSocket not connected');
+      return () => {};
+    }
+
+    const eventHandler = (data: WebSocketEvents['chat-message']) => {
+      logger.info('Received chat message:', data.message.sender, data.message.content?.substring(0, 50));
+      callback(data);
+    };
+
+    socketRef.current.on('chat-message', eventHandler);
+    
+    // クリーンアップ関数を返す
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.off('chat-message', eventHandler);
+      }
+    };
+  };
+
   // パーティ移動更新受信
   const onPartyMovementUpdated = (callback: (data: WebSocketEvents['party-movement-updated']) => void) => {
     if (!socketRef.current) {
@@ -330,6 +358,7 @@ export function useWebSocket(): UseWebSocketReturn {
     onGMNotification,
     onGMStoryProgression,
     onNarrativeFeedback,
+    onChatMessage,
     onPartyMovementUpdated,
     onLocationEntitiesUpdated,
     disconnect,

@@ -1,0 +1,9 @@
+{
+  "extends": "./apps/proxy-server/tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@ai-agent-trpg/types": ["packages/types/src"]
+    }
+  }
+}

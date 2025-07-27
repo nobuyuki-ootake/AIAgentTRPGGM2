@@ -215,13 +215,34 @@ interface PlayerActionResponseRequest {
   model?: string;
 }
 
-// セッション初期化関連の型定義
-interface EntityPool {
+// セッション初期化関連の型定義（バックエンドと一致させる）
+interface EntityPoolCollection {
+  coreEntities: CoreEntityCollection;
+  bonusEntities?: any;
+  // 後方互換性のための直接エンティティアクセス（オプション）
+  enemies?: EntityPoolEnemy[];
+  events?: EntityPoolEvent[];
+  npcs?: EntityPoolNPC[];
+  items?: EntityPoolItem[];
+  quests?: EntityPoolQuest[];
+}
+
+interface CoreEntityCollection {
   enemies: EntityPoolEnemy[];
   events: EntityPoolEvent[];
   npcs: EntityPoolNPC[];
   items: EntityPoolItem[];
   quests: EntityPoolQuest[];
+}
+
+interface EntityPool {
+  id: ID;
+  campaignId: ID;
+  sessionId: ID;
+  themeId?: ID;
+  entities: EntityPoolCollection;
+  generatedAt: string;
+  lastUpdated: string;
 }
 
 interface EntityPoolEnemy {
@@ -597,7 +618,29 @@ export const aiGameMasterAPI = {
       timestamp: string;
     }>('/ai-game-master/initialize-session', request);
 
-    return response.data;
+    console.log('🔍 Initialize session raw response:', response);
+    console.log('🔍 Response structure check:', {
+      hasResponse: !!response,
+      hasData: !!response?.data,
+      hasSuccess: !!response?.success,
+      responseKeys: response ? Object.keys(response) : [],
+      dataKeys: response?.data ? Object.keys(response.data) : []
+    });
+
+    // レスポンス構造をチェックして正しいデータを返す
+    if (response && response.data && response.success) {
+      console.log('✅ Using response.data structure');
+      return response.data;
+    } else if (response && response.data) {
+      console.log('✅ Using response.data as SessionInitializationResult');
+      return response.data as SessionInitializationResult;
+    } else if (response) {
+      console.log('✅ Using response as SessionInitializationResult');
+      return response as unknown as SessionInitializationResult;
+    } else {
+      console.error('❌ Invalid response structure:', response);
+      throw new Error('Invalid response structure from initialize-session API');
+    }
   },
 
   /**

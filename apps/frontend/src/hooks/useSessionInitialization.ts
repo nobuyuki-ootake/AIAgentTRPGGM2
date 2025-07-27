@@ -17,9 +17,9 @@ export interface UseSessionInitializationReturn {
 
 const INITIAL_STAGES: InitializationStage[] = [
   {
-    id: 'entities',
-    title: '🎯 エンティティプール生成',
-    description: 'エネミー、NPC、アイテム、イベントを生成しています...',
+    id: 'overview',
+    title: '📜 ゲーム概要生成',
+    description: 'セッションの状況と導入シーンを準備しています...',
     status: 'pending',
     progress: 0,
   },
@@ -31,9 +31,9 @@ const INITIAL_STAGES: InitializationStage[] = [
     progress: 0,
   },
   {
-    id: 'overview',
-    title: '📜 ゲーム概要生成',
-    description: 'セッションの状況と導入シーンを準備しています...',
+    id: 'entities',
+    title: '🎯 エンティティプール生成',
+    description: 'エネミー、NPC、アイテム、イベントを生成しています...',
     status: 'pending',
     progress: 0,
   },

@@ -39,12 +39,6 @@ class ErrorMonitoringService {
   private errors: ErrorEvent[] = [];
   private errorPatterns: ErrorPattern[] = [];
   private maxErrorHistory = 1000;
-  private alertThresholds = {
-    low: 10,
-    medium: 5,
-    high: 3,
-    critical: 1
-  };
 
   constructor() {
     this.initializeErrorPatterns();
@@ -169,8 +163,9 @@ class ErrorMonitoringService {
     logger.error('Error pattern detected', {
       component: 'error-monitoring',
       pattern: pattern.type,
-      severity: pattern.severity
-    }, alert);
+      severity: pattern.severity,
+      alert
+    });
 
     // Here you could integrate with external alerting services
     // like Slack, PagerDuty, etc.
@@ -208,8 +203,7 @@ class ErrorMonitoringService {
       severity: errorEvent.severity,
       userId: errorEvent.userId,
       sessionId: errorEvent.sessionId,
-      campaignId: errorEvent.campaignId
-    }, {
+      campaignId: errorEvent.campaignId,
       stack: errorEvent.stack,
       context: errorEvent.context
     });

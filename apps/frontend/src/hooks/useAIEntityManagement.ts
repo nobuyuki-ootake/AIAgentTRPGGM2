@@ -447,8 +447,9 @@ export const useAIEntityManagement = (options: UseAIEntityManagementOptions = {}
     clearCache();
     await Promise.all([
       fetchAvailableEntities(undefined, false),
-      fetchSessionRecommendations(false),
-      fetchEngineStats(false)
+      // プレイヤーモードでは推奨機能・統計情報は不要（WebSocket経由でGMから情報提供）
+      // fetchSessionRecommendations(false),
+      // fetchEngineStats(false)
     ]);
   }, [clearCache, fetchAvailableEntities, fetchSessionRecommendations, fetchEngineStats]);
 
@@ -475,8 +476,9 @@ export const useAIEntityManagement = (options: UseAIEntityManagementOptions = {}
   useEffect(() => {
     if (gameContext) {
       fetchAvailableEntities();
-      fetchSessionRecommendations();
-      fetchEngineStats();
+      // プレイヤーモードでは推奨機能・統計情報は不要（WebSocket経由でGMから情報提供）
+      // fetchSessionRecommendations();
+      // fetchEngineStats();
     }
   }, [gameContext, fetchAvailableEntities, fetchSessionRecommendations, fetchEngineStats]);
 

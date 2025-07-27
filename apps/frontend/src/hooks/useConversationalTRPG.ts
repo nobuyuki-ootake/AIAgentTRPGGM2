@@ -87,7 +87,8 @@ export const useConversationalTRPG = (
           mood: 'neutral'
         };
 
-        await aiGameMasterAPI.generatePlayerActionResponse({
+        console.log('🎭 AI GM応答生成開始...');
+        const gmResponse = await aiGameMasterAPI.generatePlayerActionResponse({
           sessionId,
           playerCharacterId: playerCharacter.id,
           playerAction: message,
@@ -95,6 +96,13 @@ export const useConversationalTRPG = (
           provider: aiProvider,
           model: aiModel,
         });
+        
+        console.log('🎭 AI GM応答:', gmResponse);
+        
+        // AI GMの応答が成功した場合
+        if (gmResponse && gmResponse.success) {
+          console.log('✅ AI GM応答生成成功 - WebSocketでリアルタイム更新されます');
+        }
       }
     } catch (error) {
       console.error('Failed to process player message:', error);

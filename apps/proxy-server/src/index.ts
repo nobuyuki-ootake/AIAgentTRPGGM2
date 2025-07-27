@@ -23,7 +23,7 @@ async function startServer(): Promise<void> {
       await initializeMastra();
       logger.info('Mastra AI Agent System initialized successfully');
     } catch (mastraError) {
-      logger.warn('Mastra initialization failed, continuing without AI Agents:', mastraError);
+      logger.warn('Mastra initialization failed, continuing without AI Agents:', { error: mastraError });
       logger.warn('AI Agent features will be unavailable until configuration is fixed');
     }
 
@@ -122,10 +122,10 @@ async function startServer(): Promise<void> {
     process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
   } catch (error) {
-    logger.error('Failed to start server:', error);
+    logger.error('Failed to start server:', { error });
     if (error instanceof Error) {
-      logger.error('Error message:', error.message);
-      logger.error('Error stack:', error.stack);
+      logger.error('Error message:', { message: error.message });
+      logger.error('Error stack:', { stack: error.stack });
     }
     process.exit(1);
   }
@@ -133,17 +133,17 @@ async function startServer(): Promise<void> {
 
 // 未キャッチ例外のハンドリング
 process.on('uncaughtException', (error) => {
-  logger.error('Uncaught Exception:', error);
+  logger.error('Uncaught Exception:', { error });
   process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  logger.error('Unhandled Rejection at:', { promise, reason });
   process.exit(1);
 });
 
 // サーバー起動
 startServer().catch((error) => {
-  logger.error('Failed to start server:', error);
+  logger.error('Failed to start server:', { error });
   process.exit(1);
 });// EntityPool types fixed Sun Jul  6 13:44:51 JST 2025

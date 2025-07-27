@@ -39,12 +39,12 @@ export async function initializeDatabase(): Promise<void> {
     
     logger.info('Database initialized successfully');
   } catch (error) {
-    logger.error('Failed to initialize database:', error);
+    logger.error('Failed to initialize database:', { error });
     if (error instanceof Error) {
-      logger.error('Error message:', error.message);
-      logger.error('Error stack:', error.stack);
+      logger.error('Error message:', { message: error.message });
+      logger.error('Error stack:', { stack: error.stack });
     } else {
-      logger.error('Error details:', error);
+      logger.error('Error details:', { error });
     }
     throw new DatabaseError('Failed to initialize database', { error });
   }

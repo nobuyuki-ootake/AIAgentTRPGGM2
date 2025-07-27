@@ -6,16 +6,16 @@ import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 
 import { router } from './routes';
-import { mastraAgentRouter } from './routes/mastraAgent';
-import aiEntityManagementRouter from './routes/aiEntityManagement';
-import { gmTacticsControlRouter } from './routes/gmTacticsControl';
-import { characterAISettingsRouter } from './routes/characterAISettings';
-import partyMovementRouter from './routes/partyMovement';
+// import { mastraAgentRouter } from './routes/mastraAgent';
+import { aiEntityManagementRouter } from './routes/aiEntityManagement';
+// import { gmTacticsControlRouter } from './routes/gmTacticsControl';
+// import { characterAISettingsRouter } from './routes/characterAISettings';
+// import partyMovementRouter from './routes/partyMovement';
 import aiAgentMonitoringRouter from './routes/aiAgentMonitoring';
-import explorationActionsRouter from './routes/explorationActions';
-import mixedVotingRouter from './routes/mixedVoting';
-import locationEntitiesRouter from './routes/locationEntities';
-import milestoneManagementRouter from './routes/milestoneManagement';
+// import explorationActionsRouter from './routes/explorationActions';
+// import mixedVotingRouter from './routes/mixedVoting';
+// import locationEntitiesRouter from './routes/locationEntities';
+// import milestoneManagementRouter from './routes/milestoneManagement';
 import { errorHandler } from './middleware/errorHandler';
 import { notFoundHandler } from './middleware/notFoundHandler';
 import { logger } from './utils/logger';
@@ -79,20 +79,20 @@ export function createApp(): express.Application {
   });
 
   // Mastra Agent専用のレート制限 (高品質な応答のため少し余裕を持たせる)
-  const mastraLimiter = rateLimit({
-    windowMs: process.env.NODE_ENV === 'development' ? 1 * 60 * 1000 : 10 * 60 * 1000, // 開発環境では1分、本番では10分
-    max: process.env.NODE_ENV === 'development' ? 100 : 15, // 開発環境では100、本番では15
-    message: {
-      error: 'Too many Mastra Agent requests from this IP, please try again later.',
-      retryAfter: process.env.NODE_ENV === 'development' ? '1 minute' : '10 minutes'
-    },
-    standardHeaders: true,
-    legacyHeaders: false,
-  });
+  // const mastraLimiter = rateLimit({
+  //   windowMs: process.env.NODE_ENV === 'development' ? 1 * 60 * 1000 : 10 * 60 * 1000, // 開発環境では1分、本番では10分
+  //   max: process.env.NODE_ENV === 'development' ? 100 : 15, // 開発環境では100、本番では15
+  //   message: {
+  //     error: 'Too many Mastra Agent requests from this IP, please try again later.',
+  //     retryAfter: process.env.NODE_ENV === 'development' ? '1 minute' : '10 minutes'
+  //   },
+  //   standardHeaders: true,
+  //   legacyHeaders: false,
+  // });
 
   app.use(limiter);
   app.use('/api/ai-agent', aiLimiter);
-  app.use('/api/mastra-agent', mastraLimiter);
+  // app.use('/api/mastra-agent', mastraLimiter);
   app.use('/api/ai-entity', aiLimiter); // AI Entity Management uses same rate limiting as AI endpoints
 
   // Logging
@@ -125,34 +125,34 @@ export function createApp(): express.Application {
   app.use('/api', router);
   
   // Mastra Agent routes
-  app.use('/api/mastra-agent', mastraAgentRouter);
+  // app.use('/api/mastra-agent', mastraAgentRouter);
   
   // AI Entity Management routes
   app.use('/api/ai-entity', aiEntityManagementRouter);
   
   // GM Tactics Control routes
-  app.use('/api/gm-tactics', gmTacticsControlRouter);
+  // app.use('/api/gm-tactics', gmTacticsControlRouter);
   
   // Party Movement routes
-  app.use('/api/party-movement', partyMovementRouter);
+  // app.use('/api/party-movement', partyMovementRouter);
   
   // AI Agent Monitoring routes
   app.use('/api/ai-monitoring', aiAgentMonitoringRouter);
   
   // Exploration Actions routes
-  app.use('/api/exploration', explorationActionsRouter);
+  // app.use('/api/exploration', explorationActionsRouter);
   
   // Mixed Voting routes
-  app.use('/api/mixed-voting', mixedVotingRouter);
+  // app.use('/api/mixed-voting', mixedVotingRouter);
   
   // Location Entities routes
-  app.use('/api/location-entities', locationEntitiesRouter);
+  // app.use('/api/location-entities', locationEntitiesRouter);
   
   // Character AI Settings routes
-  app.use('/api/character-ai', characterAISettingsRouter);
+  // app.use('/api/character-ai', characterAISettingsRouter);
   
   // Milestone Management routes
-  app.use('/api/milestone-management', milestoneManagementRouter);
+  // app.use('/api/milestone-management', milestoneManagementRouter);
 
   // Error handling middleware (must be last)
   app.use(notFoundHandler);
