@@ -5,7 +5,7 @@
  * Integration tests for AI Game Master service with mocked AI providers
  */
 
-import { describe, test, expect, beforeEach, jest } from '@jest/globals';
+
 import type { Database } from 'better-sqlite3';
 import { 
   TestDataFactory,
