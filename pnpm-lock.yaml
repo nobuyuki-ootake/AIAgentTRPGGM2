@@ -340,6 +340,9 @@ importers:
       '@types/jest':
         specifier: ^29.5.0
         version: 29.5.0
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.0.0
       '@typescript-eslint/eslint-plugin':
         specifier: ^5.57.0
         version: 5.57.0(@typescript-eslint/parser@5.57.0)(eslint@8.37.0)(typescript@5.0.2)

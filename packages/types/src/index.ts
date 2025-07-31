@@ -35,6 +35,12 @@ export * from './milestone-progress';
 // GM通知システム
 export * from './gm-notifications';
 
+// ユーティリティ関数
+export * from './utils/data-transformation';
+export * from './utils/trpg-advanced-math';
+export * from './utils/security';
+export * from './utils/performance';
+
 // 互換性のための型エイリアス
 export type { Character, TRPGCharacter, NPCCharacter, EnemyCharacter } from './character';
 export type { TRPGCampaign, Quest, Location } from './location';
