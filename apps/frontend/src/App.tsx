@@ -9,6 +9,7 @@ import { AppTheme } from '@/components/theme/AppTheme';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { LoadingScreen } from '@/components/common/LoadingScreen';
 import { NotificationProvider } from '@/components/common/NotificationProvider';
+import { GMNotificationProvider } from '@/components/gm/GMNotificationProvider';
 import { AppLayout } from '@/components/layout/AppLayout';
 
 // ページコンポーネント（Lazy Loading）
@@ -16,7 +17,6 @@ const HomePage = React.lazy(() => import('@/pages/HomePage'));
 const CampaignSetupPage = React.lazy(() => import('@/pages/CampaignSetupPage'));
 const CharacterManagementPage = React.lazy(() => import('@/pages/CharacterManagementPage'));
 const LocationManagementPage = React.lazy(() => import('@/pages/LocationManagementPage'));
-const TimelinePage = React.lazy(() => import('@/pages/TimelinePage'));
 const TRPGSessionPage = React.lazy(() => import('@/pages/TRPGSessionPage'));
 const PlayerCharacterSelectPage = React.lazy(() => import('@/pages/PlayerCharacterSelectPage'));
 const ScenarioEditorPage = React.lazy(() => import('@/pages/ScenarioEditorPage'));
@@ -30,8 +30,9 @@ function App() {
           <AppTheme>
             <CssBaseline />
             <NotificationProvider>
-              <Router>
-                <AppLayout>
+              <GMNotificationProvider>
+                <Router>
+                  <AppLayout>
                   <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
                     <Suspense fallback={<LoadingScreen />}>
                       <Routes>
@@ -43,7 +44,6 @@ function App() {
                         <Route path="/campaign/:id/setup" element={<CampaignSetupPage />} />
                         <Route path="/campaign/:id/characters" element={<CharacterManagementPage />} />
                         <Route path="/campaign/:id/locations" element={<LocationManagementPage />} />
-                        <Route path="/campaign/:id/timeline" element={<TimelinePage />} />
                         <Route path="/campaign/:id/scenario-editor" element={<ScenarioEditorPage />} />
                         <Route path="/campaign/:id/session" element={<TRPGSessionPage />} />
                         <Route path="/campaign/:id/session/:sessionId" element={<TRPGSessionPage />} />
@@ -61,8 +61,9 @@ function App() {
                       </Routes>
                     </Suspense>
                   </Box>
-                </AppLayout>
-              </Router>
+                  </AppLayout>
+                </Router>
+              </GMNotificationProvider>
             </NotificationProvider>
           </AppTheme>
         </LocalizationProvider>

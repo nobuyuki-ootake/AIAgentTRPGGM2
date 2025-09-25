@@ -154,26 +154,9 @@ export const useAICharacterControl = ({
       clearInterval(intervalRef.current);
     }
 
-    intervalRef.current = setInterval(async () => {
-      if (isActive && sessionState?.status === 'active') {
-        const context: Partial<AIDecisionContext> = {
-          sessionState: {
-            mode: sessionState.mode,
-            round: sessionState.combat?.round,
-            turn: sessionState.combat?.currentTurn,
-            activeEvent: sessionState.currentEvent,
-            lastActions: recentActions.slice(0, 5),
-          },
-          environmentContext: {
-            presentCharacters: characters.map(c => c.id),
-            location: '現在の場所', // 実際の場所データに置き換え
-          },
-        };
-
-        await triggerAllAICharacterActions(context);
-      }
-    }, intervalMs);
-  }, [isActive, sessionState, recentActions, characters, triggerAllAICharacterActions]);
+    // AIキャラクター制御は廃止 - WebSocketによるイベント駆動型に変更
+    console.warn('⚠️ Auto-execution is deprecated. Use WebSocket event-driven AI character control instead.');
+  }, []);
 
   const stopAutoExecution = useCallback(() => {
     if (intervalRef.current) {

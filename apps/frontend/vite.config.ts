@@ -27,8 +27,8 @@ export default defineConfig({
     force: true,
     proxy: {
       '/api': {
-        // Docker環境では直接サービス名を使用
-        target: 'http://aiagenttrpggm-proxy-server-dev-1:4001',
+        // Docker環境では適切なサービス名を使用
+        target: 'http://proxy-server-dev:4001',
         changeOrigin: true,
         secure: false,
         ws: true,
@@ -70,5 +70,9 @@ export default defineConfig({
       '@mui/icons-material',
       'recoil',
     ],
+  },
+  define: {
+    // For Vitest compatibility
+    global: 'globalThis',
   },
 });

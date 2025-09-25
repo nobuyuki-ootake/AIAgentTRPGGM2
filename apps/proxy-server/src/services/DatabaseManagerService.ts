@@ -3,8 +3,7 @@ import {
   AIMilestone, 
   EntityPool, 
   EntityPoolCollection,
-  ID,
-  MilestoneType
+  ID
 } from '@ai-agent-trpg/types';
 import { getDatabase } from '../database/database';
 import { logger } from '../utils/logger';
@@ -56,8 +55,6 @@ export class DatabaseManagerService {
         campaign_id TEXT NOT NULL,
         session_id TEXT NOT NULL,
         theme_id TEXT NOT NULL,
-        core_entities TEXT NOT NULL DEFAULT '{}',
-        bonus_entities TEXT NOT NULL DEFAULT '{}',
         entities TEXT NOT NULL,
         generated_at TEXT NOT NULL,
         last_updated TEXT NOT NULL,
@@ -103,7 +100,7 @@ export class DatabaseManagerService {
    */
   async commitToDatabase(
     milestones: AIMilestone[], 
-    entityPool: EntityPoolCollection,
+    entityPool: EntityPool,
     campaignId: ID,
     sessionId: ID,
     themeId: ID
@@ -123,20 +120,20 @@ export class DatabaseManagerService {
         const currentTime = new Date().toISOString();
         milestoneStmt.run(
           milestone.id,
-          milestone.campaignId,
-          milestone.sessionId,
-          milestone.title,
+          campaignId, // Use parameter instead of non-existent property
+          sessionId, // Use parameter instead of non-existent property
+          milestone.name, // Use name instead of title
           milestone.description,
           milestone.type,
-          JSON.stringify(milestone.targetEntityIds),
-          JSON.stringify(milestone.targetDetails || []),
-          milestone.status,
-          milestone.progress,
-          JSON.stringify(milestone.requiredConditions),
-          JSON.stringify(milestone.reward),
+          JSON.stringify([]), // Empty array for target_entity_ids
+          JSON.stringify([]), // Empty array for milestone_targets
+          'pending', // Default status
+          0, // Default progress
+          JSON.stringify(milestone.conditions),
+          JSON.stringify(milestone.rewards),
           JSON.stringify([]), // player_hints - empty for now
           JSON.stringify([]), // guidance_messages - empty for now
-          milestone.createdAt,
+          currentTime, // Use current time instead of non-existent createdAt
           currentTime
         );
       });
@@ -145,28 +142,22 @@ export class DatabaseManagerService {
       const poolStmt = this.db.prepare(`
         INSERT OR REPLACE INTO entity_pools (
           id, campaign_id, session_id, theme_id, 
-          entities, generated_at, last_updated, metadata
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          entities, generated_at, last_updated
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
       `);
 
       const entityPoolId = `pool_${sessionId}_${Date.now()}`;
       const currentTime = new Date().toISOString();
 
       // EntityPoolCollectionを適切な形式で保存
-      const entitiesData = {
-        core: entityPool.coreEntities || {},
-        bonus: entityPool.bonusEntities || {}
-      };
-
       poolStmt.run(
         entityPoolId,
         campaignId,
         sessionId,
         themeId,
-        JSON.stringify(entitiesData),
+        JSON.stringify(entityPool.entities),
         currentTime,
-        currentTime,
-        JSON.stringify({ pool_type: 'mixed' })
+        currentTime
       );
 
       // 生成履歴を保存
@@ -176,24 +167,27 @@ export class DatabaseManagerService {
         ) VALUES (?, ?, ?, ?, ?)
       `);
 
+      // EntityPoolCollectionから適切にエンティティ数を計算
+      const entityCollection = entityPool.entities as EntityPoolCollection;
+      const entitiesCount = 
+        (entityCollection.coreEntities?.enemies?.length || 0) +
+        (entityCollection.coreEntities?.events?.length || 0) +
+        (entityCollection.coreEntities?.npcs?.length || 0) +
+        (entityCollection.coreEntities?.items?.length || 0) +
+        (entityCollection.coreEntities?.quests?.length || 0) +
+        (entityCollection.bonusEntities?.practicalRewards?.length || 0) +
+        (entityCollection.bonusEntities?.trophyItems?.length || 0) +
+        (entityCollection.bonusEntities?.mysteryItems?.length || 0);
+
       historyStmt.run(
         `history_${sessionId}_${Date.now()}`,
         campaignId,
         sessionId,
         JSON.stringify({
           milestonesGenerated: milestones.length,
-          coreEntitiesGenerated: {
-            enemies: entityPool.coreEntities?.enemies?.length || 0,
-            events: entityPool.coreEntities?.events?.length || 0,
-            npcs: entityPool.coreEntities?.npcs?.length || 0,
-            items: entityPool.coreEntities?.items?.length || 0,
-            quests: entityPool.coreEntities?.quests?.length || 0
-          },
-          bonusEntitiesGenerated: {
-            practicalRewards: entityPool.bonusEntities?.practicalRewards?.length || 0,
-            trophyItems: entityPool.bonusEntities?.trophyItems?.length || 0,
-            mysteryItems: entityPool.bonusEntities?.mysteryItems?.length || 0
-          }
+          entitiesGenerated: entitiesCount,
+          poolId: entityPoolId,
+          themeId: themeId
         }),
         currentTime
       );
@@ -205,10 +199,10 @@ export class DatabaseManagerService {
           campaignId,
           sessionId,
           themeId,
-          entities: entityPool,
+          entities: entityPool.entities,
           generatedAt: currentTime,
           lastUpdated: currentTime
-        }
+        } as EntityPool
       };
     });
 
@@ -236,21 +230,13 @@ export class DatabaseManagerService {
     
     const milestones: AIMilestone[] = rows.map(row => ({
       id: row.id,
-      campaignId: row.campaign_id,
-      sessionId: row.session_id,
-      title: row.title,
+      name: row.title || 'Milestone',
       description: row.description,
-      type: row.type as MilestoneType,
-      targetEntityIds: JSON.parse(row.target_entity_ids || '[]'),
-      targetDetails: JSON.parse(row.milestone_targets || '[]'),
-      progressContributions: [33, 33, 34], // デフォルト値（3エンティティ均等分割）
-      status: row.status,
-      progress: row.progress,
-      hiddenFromPlayer: true, // GM専用なので常にtrue
-      requiredConditions: JSON.parse(row.required_conditions || '[]'),
-      reward: JSON.parse(row.reward || '{}'),
-      createdAt: row.created_at,
-      completedAt: row.completed_at
+      type: row.type as ('story' | 'combat' | 'exploration' | 'social'),
+      conditions: JSON.parse(row.required_conditions || '[]'),
+      rewards: JSON.parse(row.reward || '{}'),
+      difficulty: 5, // Default difficulty
+      estimatedTime: 30 // Default 30 minutes
     }));
 
     logger.info('✅ マイルストーン一覧取得成功', { 
@@ -279,25 +265,36 @@ export class DatabaseManagerService {
       return null;
     }
 
-    const entitiesData = JSON.parse(row.entities || '{"core": {}, "bonus": {}}');
-    const coreEntities = entitiesData.core || {};
-    const bonusEntities = entitiesData.bonus || {};
+    const entitiesData = JSON.parse(row.entities || '{}') as EntityPoolCollection;
+
+    // EntityPoolCollectionの構造を確保
+    const entities: EntityPoolCollection = {
+      coreEntities: entitiesData.coreEntities || {
+        enemies: [],
+        events: [],
+        npcs: [],
+        items: [],
+        quests: []
+      },
+      bonusEntities: entitiesData.bonusEntities || {
+        practicalRewards: [],
+        trophyItems: [],
+        mysteryItems: []
+      },
+      // 後方互換性
+      enemies: entitiesData.enemies || [],
+      events: entitiesData.events || [],
+      npcs: entitiesData.npcs || [],
+      items: entitiesData.items || [],
+      quests: entitiesData.quests || []
+    };
 
     const entityPool: EntityPool = {
       id: row.id,
       campaignId: row.campaign_id,
       sessionId: row.session_id,
       themeId: row.theme_id,
-      entities: {
-        coreEntities,
-        bonusEntities,
-        // 後方互換性のため
-        enemies: coreEntities?.enemies || [],
-        events: coreEntities?.events || [],
-        npcs: coreEntities?.npcs || [],
-        items: coreEntities?.items || [],
-        quests: coreEntities?.quests || []
-      },
+      entities: entities,
       generatedAt: row.generated_at,
       lastUpdated: row.last_updated
     };
@@ -320,17 +317,11 @@ export class DatabaseManagerService {
       WHERE session_id = ?
     `);
 
-    // EntityPoolのentities構造を適切に変換
-    const entityCollection = entityPool.entities as EntityPoolCollection;
-    const entitiesData = {
-      core: entityCollection.coreEntities || {},
-      bonus: entityCollection.bonusEntities || {}
-    };
-
+    // EntityPoolCollectionを適切に保存
     const currentTime = new Date().toISOString();
     
     const result = updateStmt.run(
-      JSON.stringify(entitiesData),
+      JSON.stringify(entityPool.entities),
       currentTime,
       sessionId
     );

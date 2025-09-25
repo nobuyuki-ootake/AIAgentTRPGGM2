@@ -88,7 +88,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    if (!milestoneData.title || !milestoneData.description) {
+    if (!('title' in milestoneData) || !milestoneData.title || !('description' in milestoneData) || !milestoneData.description) {
       res.status(400).json({
         error: 'Title and description are required'
       });

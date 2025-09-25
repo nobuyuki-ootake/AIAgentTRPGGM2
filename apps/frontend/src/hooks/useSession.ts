@@ -22,7 +22,7 @@ export interface UseSessionOptions {
 export const useSession = ({ 
   sessionId, 
   campaignId, 
-  pollingInterval = 3000, 
+  pollingInterval = 10000, // 増加: 3秒 → 10秒
   isPlayerMode = false, 
   playerCharacter, 
 }: UseSessionOptions) => {
@@ -41,11 +41,17 @@ export const useSession = ({
     leaveSession: wsLeaveSession,
     onCompanionMessage,
     onPlayerAction,
+    onChatMessage,
   } = useWebSocket();
 
   // 初期化フラグ（重複実行防止）
   const initializingRef = useRef(false);
   const initializedRef = useRef(false);
+  
+  // ポーリング制御
+  const pollingActiveRef = useRef(false);
+  const failureCountRef = useRef(0);
+  const maxFailures = 3; // 3回失敗したらポーリング一時停止
 
   // セッション作成または読み込み
   const initializeSession = useCallback(async () => {
@@ -79,10 +85,11 @@ export const useSession = ({
         wsJoinSession(session.id);
       }
 
-      // ポーリング開始
-      if (session.status === 'active') {
-        startPolling(session.id);
-      }
+      // ポーリング開始（一時的に無効化）
+      // if (session.status === 'active') {
+      //   startPolling(session.id);
+      // }
+      console.log('🚫 Session polling temporarily disabled to reduce server load');
       
     } catch (err) {
       const message = err instanceof Error ? err.message : 'セッションの初期化に失敗しました';
@@ -98,20 +105,44 @@ export const useSession = ({
 
   // セッション状態のポーリング
   const startPolling = useCallback((sessionId: string) => {
+    // 既にポーリングが動作中の場合は重複開始を防ぐ
+    if (pollingActiveRef.current) {
+      console.log('⚠️ Polling already active, skipping duplicate start');
+      return;
+    }
+    
+    // 失敗回数が多い場合はポーリングを停止
+    if (failureCountRef.current >= maxFailures) {
+      console.log(`⚠️ Too many polling failures (${failureCountRef.current}), skipping polling`);
+      return;
+    }
+
     if (stopPollingRef.current) {
       stopPollingRef.current();
     }
+
+    pollingActiveRef.current = true;
+    console.log(`📡 Starting session polling (interval: ${pollingInterval}ms)`);
 
     sessionAPI.pollSession(
       sessionId,
       (updatedSession) => {
         setCurrentSession(updatedSession);
+        failureCountRef.current = 0; // リセット on success
       },
       pollingInterval,
     ).then(stopFunction => {
       stopPollingRef.current = stopFunction;
+    }).catch(error => {
+      console.error('❌ Polling setup failed:', error);
+      failureCountRef.current++;
+      pollingActiveRef.current = false;
+      
+      if (failureCountRef.current >= maxFailures) {
+        console.log(`🚫 Polling disabled due to ${maxFailures} consecutive failures`);
+      }
     });
-  }, [pollingInterval, setCurrentSession]);
+  }, [pollingInterval, setCurrentSession, maxFailures]);
 
   // セッション開始
   const startSession = useCallback(async (config?: SessionDurationConfig) => {
@@ -121,7 +152,8 @@ export const useSession = ({
       const updatedSession = await sessionAPI.updateSessionStatus(currentSession.id, 'active', config);
       setCurrentSession(updatedSession);
       showSuccess('セッションを開始しました');
-      startPolling(updatedSession.id);
+      // startPolling(updatedSession.id); // 一時的に無効化
+      console.log('🚫 Session start polling temporarily disabled');
       
       // プレイヤーモードの場合、自動的にAIゲーム概要を生成
       if (isPlayerMode) {
@@ -175,9 +207,13 @@ export const useSession = ({
       setCurrentSession(updatedSession);
       showInfo('セッションを終了しました');
       
+      // ポーリングを確実に停止
       if (stopPollingRef.current) {
         stopPollingRef.current();
+        stopPollingRef.current = null;
       }
+      pollingActiveRef.current = false;
+      console.log('📡 Polling stopped (session ended)');
     } catch (err) {
       showError('セッションの終了に失敗しました');
     }
@@ -305,9 +341,27 @@ export const useSession = ({
     }
   }, [currentSession, setCurrentSession, showInfo, showError]);
 
-  // WebSocket仲間メッセージ受信設定
+  // WebSocket仲間メッセージ・チャットメッセージ受信設定
   useEffect(() => {
     if (!currentSession) return;
+
+    // チャットメッセージのリアルタイム更新
+    const chatCleanup = onChatMessage((data) => {
+      console.log('💬 WebSocket: Chat message received:', data.message.sender, data.message.content?.substring(0, 50));
+      
+      // セッション状態を即座に更新（ポーリングを待たない）
+      setCurrentSession(prevSession => {
+        if (!prevSession || prevSession.id !== data.sessionId) return prevSession;
+        
+        // チャットログに新しいメッセージを追加
+        const newChatLog = [...prevSession.chatLog, data.message];
+        
+        return {
+          ...prevSession,
+          chatLog: newChatLog,
+        };
+      });
+    });
 
     onCompanionMessage((data) => {
       // 仲間メッセージをチャットに追加
@@ -325,7 +379,12 @@ export const useSession = ({
       // プレイヤー行動の処理（必要に応じて）
       console.log('Player action received:', data);
     });
-  }, [currentSession, onCompanionMessage, onPlayerAction, setCurrentSession, showInfo]);
+
+    // クリーンアップ関数を実行
+    return () => {
+      if (chatCleanup) chatCleanup();
+    };
+  }, [currentSession, onCompanionMessage, onPlayerAction, onChatMessage, setCurrentSession, showInfo]);
 
   // WebSocket接続状態変化時の処理
   useEffect(() => {
@@ -337,12 +396,19 @@ export const useSession = ({
   // クリーンアップ
   useEffect(() => {
     return () => {
+      // ポーリングを確実に停止
       if (stopPollingRef.current) {
         stopPollingRef.current();
+        stopPollingRef.current = null;
       }
+      pollingActiveRef.current = false;
+      
+      // WebSocketセッションから離脱
       if (currentSession?.id) {
         wsLeaveSession(currentSession.id);
       }
+      
+      console.log('🧹 useSession cleanup completed');
     };
   }, [currentSession?.id, wsLeaveSession]);
 

@@ -1,0 +1,42 @@
+dbs:
+  - path: /app/data/trpg.db
+    replicas:
+      - type: file
+        path: /app/backup/trpg.db
+        sync-interval: 1s
+        retention: 72h
+        snapshot-interval: 1h
+      - type: s3
+        bucket: ${LITESTREAM_S3_BUCKET}
+        path: trpg/
+        region: ${LITESTREAM_S3_REGION}
+        endpoint: ${LITESTREAM_S3_ENDPOINT}
+        access-key-id: ${LITESTREAM_S3_ACCESS_KEY_ID}
+        secret-access-key: ${LITESTREAM_S3_SECRET_ACCESS_KEY}
+        sync-interval: 10s
+        retention: 7d
+        snapshot-interval: 1h
+        force-path-style: true
+  - path: /app/mastra-trpg.db
+    replicas:
+      - type: file
+        path: /app/backup/mastra-trpg.db
+        sync-interval: 1s
+        retention: 72h
+        snapshot-interval: 1h
+      - type: s3
+        bucket: ${LITESTREAM_S3_BUCKET}
+        path: mastra/
+        region: ${LITESTREAM_S3_REGION}
+        endpoint: ${LITESTREAM_S3_ENDPOINT}
+        access-key-id: ${LITESTREAM_S3_ACCESS_KEY_ID}
+        secret-access-key: ${LITESTREAM_S3_SECRET_ACCESS_KEY}
+        sync-interval: 10s
+        retention: 7d
+        snapshot-interval: 1h
+        force-path-style: true
+
+# Global settings
+log-level: info
+checkpoint-interval: 10s
+wal-timeout: 5s

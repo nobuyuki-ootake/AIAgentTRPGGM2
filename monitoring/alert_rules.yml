@@ -1,0 +1,102 @@
+groups:
+  - name: ai-trpg-alerts
+    rules:
+      # サービスの可用性
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.instance }} is down"
+          description: "{{ $labels.instance }} of job {{ $labels.job }} has been down for more than 1 minute."
+
+      # 高CPU使用率
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (rate(process_cpu_seconds_total[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is above 80% for more than 5 minutes."
+
+      # 高メモリ使用率
+      - alert: HighMemoryUsage
+        expr: (process_resident_memory_bytes / process_virtual_memory_max_bytes) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage is above 80% for more than 5 minutes."
+
+      # API応答時間
+      - alert: HighAPIResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API response time"
+          description: "95th percentile response time is above 2 seconds for more than 5 minutes."
+
+      # データベース接続エラー
+      - alert: DatabaseConnectionError
+        expr: increase(database_connection_errors_total[5m]) > 10
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database connection errors"
+          description: "More than 10 database connection errors in the last 5 minutes."
+
+      # AI API エラー率
+      - alert: HighAIAPIErrorRate
+        expr: (rate(ai_api_errors_total[5m]) / rate(ai_api_requests_total[5m])) * 100 > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High AI API error rate"
+          description: "AI API error rate is above 10% for more than 5 minutes."
+
+      # WebSocket接続数
+      - alert: HighWebSocketConnections
+        expr: websocket_active_connections > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High WebSocket connections"
+          description: "More than 100 active WebSocket connections."
+
+      # ディスク使用量
+      - alert: HighDiskUsage
+        expr: (node_filesystem_size_bytes{fstype!="tmpfs"} - node_filesystem_avail_bytes{fstype!="tmpfs"}) / node_filesystem_size_bytes{fstype!="tmpfs"} * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High disk usage on {{ $labels.instance }}"
+          description: "Disk usage is above 80% for more than 5 minutes."
+
+      # Litestream バックアップ失敗
+      - alert: LitestreamBackupFailure
+        expr: increase(litestream_backup_errors_total[1h]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Litestream backup failure"
+          description: "Litestream backup has failed in the last hour."
+
+      # Redis接続エラー
+      - alert: RedisConnectionError
+        expr: redis_connected_clients == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis connection error"
+          description: "No Redis clients connected for more than 2 minutes."

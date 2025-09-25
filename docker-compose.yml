@@ -2,7 +2,7 @@ services:
   proxy-server-dev:
     build:
       context: .
-      dockerfile: Dockerfile.proxy-server
+      dockerfile: Dockerfile.proxy-server.dev
     container_name: aiagenttrpggm-proxy-server-dev-1
     volumes:
       - ./apps/proxy-server/src:/app/apps/proxy-server/src
@@ -33,6 +33,7 @@ services:
     environment:
       - NODE_ENV=development
       - DOCKER_ENV=true
+      - BACKEND_URL=http://proxy-server-dev:4001  # サービス名を使用
     depends_on:
       - proxy-server-dev
     networks:

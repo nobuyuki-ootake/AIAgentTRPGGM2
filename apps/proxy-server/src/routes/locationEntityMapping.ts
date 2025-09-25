@@ -1,9 +1,9 @@
 import { Router, Request, Response } from 'express';
-import { LocationEntityMapping } from '@ai-agent-trpg/types';
 import { 
   getLocationEntityMappingService, 
   EntityReference, 
-  ExplorationResult 
+  ExplorationResult,
+  DatabaseLocationEntityMapping
 } from '../services/locationEntityMappingService';
 import { logger } from '../utils/logger';
 import { ValidationError } from '../middleware/errorHandler';
@@ -283,7 +283,7 @@ router.get('/session/:sessionId/all-mappings', async (req: Request, res: Respons
     // 現在は簡易実装として、特定場所のマッピングのみ対応
     if (locationId && typeof locationId === 'string') {
       const service = getLocationEntityMappingService();
-      const mappings: LocationEntityMapping[] = await service.getMappingsByLocation(locationId, sessionId);
+      const mappings: DatabaseLocationEntityMapping[] = await service.getMappingsByLocation(locationId, sessionId);
 
       // 追加フィルタリング
       let filteredMappings = mappings;

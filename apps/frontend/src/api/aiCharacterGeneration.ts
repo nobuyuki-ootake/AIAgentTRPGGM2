@@ -76,6 +76,12 @@ export const generateCharacterConcepts = async (
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
+      console.error('AI Character Generation API Error:', {
+        status: response.status,
+        statusText: response.statusText,
+        url: response.url,
+        errorData
+      });
       throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
     }
 
@@ -88,7 +94,7 @@ export const generateCharacterConcepts = async (
     return data.concepts;
   } catch (error) {
     console.error('Failed to generate character concepts:', error);
-    throw error;
+    throw new Error(`Failed to generate character concepts: ${error instanceof Error ? error.message : String(error)}`);
   }
 };
 

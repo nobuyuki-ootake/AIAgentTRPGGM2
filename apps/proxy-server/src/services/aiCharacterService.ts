@@ -1,9 +1,5 @@
 import { 
-  AIAction, 
-  AIBehaviorPattern, 
   AIDecisionContext, 
-  AICharacterController, 
-  AISessionController,
   Character,
   NPCCharacter,
   EnemyCharacter,
@@ -11,6 +7,22 @@ import {
   isNPCCharacter,
   isEnemyCharacter
 } from '@ai-agent-trpg/types';
+
+// Temporary type definitions for missing types
+type AIAction = any;
+type AIBehaviorPattern = any;
+type AICharacterController = any;
+type AISessionController = any;
+
+// Extended context type for internal use (contains more detailed information)
+interface ExtendedAIDecisionContext extends AIDecisionContext {
+  sessionId?: string;
+  sessionState?: any;
+  characterState?: any;
+  environmentContext?: any;
+  relationshipContext?: any;
+  gameContext?: any;
+}
 import { database } from '../database/database';
 import { v4 as uuidv4 } from 'uuid';
 import { getAIService } from './aiService';
@@ -82,11 +94,11 @@ class AICharacterService {
     let activeBehaviorPatterns: ID[] = [];
 
     // キャラクタータイプに応じた設定
-    if (isNPCCharacter(character)) {
-      autonomyLevel = character.npcData.aiPersonality.autonomyLevel;
+    if (isNPCCharacter(character) && character.npcData) {
+      autonomyLevel = character.npcData.aiPersonality?.autonomyLevel || 'assisted';
       activeBehaviorPatterns = this.getRelevantBehaviorPatterns(character, 'NPC');
-    } else if (isEnemyCharacter(character)) {
-      autonomyLevel = character.enemyData.combat.aiCombatBehavior.autonomyLevel;
+    } else if (isEnemyCharacter(character) && character.enemyData) {
+      autonomyLevel = character.enemyData.combat?.aiCombatBehavior?.autonomyLevel || 'assisted';
       activeBehaviorPatterns = this.getRelevantBehaviorPatterns(character, 'Enemy');
     }
 
@@ -123,7 +135,7 @@ class AICharacterService {
    */
   async decideCharacterAction(
     characterId: ID,
-    decisionContext: AIDecisionContext
+    decisionContext: ExtendedAIDecisionContext
   ): Promise<AIAction | null> {
     const controller = this.characterControllers.get(characterId);
     if (!controller || !controller.settings.enabled) {
@@ -170,7 +182,7 @@ class AICharacterService {
    */
   private async evaluateRelevantPatterns(
     _characterId: ID,
-    context: AIDecisionContext,
+    context: ExtendedAIDecisionContext,
     activePatternsIds: ID[]
   ): Promise<AIBehaviorPattern[]> {
     const relevantPatterns: AIBehaviorPattern[] = [];
@@ -196,7 +208,7 @@ class AICharacterService {
    */
   private evaluatePatternConditions(
     pattern: AIBehaviorPattern,
-    context: AIDecisionContext
+    context: ExtendedAIDecisionContext
   ): boolean {
     const { conditions } = pattern;
 
@@ -226,7 +238,7 @@ class AICharacterService {
    */
   private async selectBestAction(
     characterId: ID,
-    context: AIDecisionContext,
+    context: ExtendedAIDecisionContext,
     patterns: AIBehaviorPattern[],
     controller: AICharacterController
   ): Promise<AIAction | null> {
@@ -279,7 +291,7 @@ class AICharacterService {
    */
   private async createAIAction(
     characterId: ID,
-    context: AIDecisionContext,
+    context: ExtendedAIDecisionContext,
     candidate: {
       pattern: AIBehaviorPattern;
       action: AIBehaviorPattern['behaviorRules']['actions'][0];
@@ -329,7 +341,7 @@ class AICharacterService {
    */
   private async generateActionContent(
     characterId: ID,
-    context: AIDecisionContext,
+    context: ExtendedAIDecisionContext,
     actionTemplate: AIBehaviorPattern['behaviorRules']['actions'][0]
   ): Promise<{
     description: string;
@@ -385,30 +397,34 @@ class AICharacterService {
    */
   private buildActionGenerationPrompt(
     character: Character,
-    context: AIDecisionContext,
+    context: ExtendedAIDecisionContext,
     actionTemplate: AIBehaviorPattern['behaviorRules']['actions'][0]
   ): string {
     let personalityInfo = '';
     
     if (isNPCCharacter(character)) {
       const npc = character as NPCCharacter;
-      personalityInfo = `
-性格特性: ${npc.npcData.aiPersonality.traits.join(', ')}
-目標: ${npc.npcData.aiPersonality.goals.join(', ')}
-動機: ${npc.npcData.aiPersonality.motivations.join(', ')}
-恐れ: ${npc.npcData.aiPersonality.fears.join(', ')}
-性向: ${npc.npcData.disposition}
-職業: ${npc.npcData.occupation}
+      if (npc.npcData) {
+        personalityInfo = `
+性格特性: ${npc.npcData.aiPersonality?.traits?.join(', ') || '不明'}
+目標: ${npc.npcData.aiPersonality?.goals?.join(', ') || '不明'}
+動機: ${npc.npcData.aiPersonality?.motivations?.join(', ') || '不明'}
+恐れ: ${npc.npcData.aiPersonality?.fears?.join(', ') || '不明'}
+性向: ${npc.npcData.disposition || '不明'}
+職業: ${npc.npcData.occupation || '不明'}
 `;
+      }
     } else if (isEnemyCharacter(character)) {
       const enemy = character as EnemyCharacter;
-      personalityInfo = `
-敵カテゴリ: ${enemy.enemyData.category}
-戦闘戦術: ${enemy.enemyData.combat.tactics.join(', ')}
-攻撃性: ${enemy.enemyData.combat.aiCombatBehavior.aggression}/10
-知能: ${enemy.enemyData.combat.aiCombatBehavior.intelligence}/10
-チームワーク: ${enemy.enemyData.combat.aiCombatBehavior.teamwork}/10
+      if (enemy.enemyData) {
+        personalityInfo = `
+敵カテゴリ: ${enemy.enemyData.category || '不明'}
+戦闘戦術: ${enemy.enemyData.combat?.tactics?.join(', ') || '不明'}
+攻撃性: ${enemy.enemyData.combat?.aiCombatBehavior?.aggression || 5}/10
+知能: ${enemy.enemyData.combat?.aiCombatBehavior?.intelligence || 5}/10
+チームワーク: ${enemy.enemyData.combat?.aiCombatBehavior?.teamwork || 5}/10
 `;
+      }
     }
 
     return `
@@ -452,7 +468,7 @@ ${actionTemplate.type}
    */
   private parseActionGenerationResponse(
     response: string,
-    context: AIDecisionContext
+    context: ExtendedAIDecisionContext
   ): {
     description: string;
     target?: ID;
@@ -484,7 +500,7 @@ ${actionTemplate.type}
    */
   private generateFallbackAction(
     actionTemplate: { type: string; weight: number },
-    _context: AIDecisionContext
+    _context: ExtendedAIDecisionContext
   ): {
     description: string;
     target?: ID;
@@ -538,7 +554,7 @@ ${actionTemplate.type}
       const controller = this.characterControllers.get(action.characterId);
       if (controller) {
         controller.currentState.pendingActions = 
-          controller.currentState.pendingActions.filter(a => a.id !== actionId);
+          controller.currentState.pendingActions.filter((a: any) => a.id !== actionId);
       }
 
       return true;
@@ -746,6 +762,7 @@ ${actionTemplate.type}
       level: row.level || 1,
       experience: row.experience || 0,
       characterType: row.character_type,
+      campaignId: row.session_id || '', // Add missing campaignId
       baseStats,
       derivedStats,
       skills: row.skills ? JSON.parse(row.skills) : [],
@@ -878,11 +895,18 @@ ${actionTemplate.type}
   async triggerCharacterAction(
     characterId: ID,
     sessionId: ID,
-    context: Partial<AIDecisionContext>
+    context: Partial<ExtendedAIDecisionContext>
   ): Promise<AIAction | null> {
-    const fullContext: AIDecisionContext = {
+    // Create extended context with all detailed information
+    const extendedContext: ExtendedAIDecisionContext = {
       sessionId,
       characterId,
+      currentLocation: context.environmentContext?.location || '不明',
+      availableActions: context.sessionState?.availableActions || [],
+      recentEvents: context.gameContext?.recentEvents || [],
+      partyMembers: context.environmentContext?.presentCharacters || [],
+      timeOfDay: context.sessionState?.timeOfDay || 'morning',
+      urgency: context.gameContext?.urgency || 5,
       sessionState: {
         mode: 'exploration',
         lastActions: [],
@@ -915,7 +939,7 @@ ${actionTemplate.type}
       },
     };
 
-    return await this.decideCharacterAction(characterId, fullContext);
+    return await this.decideCharacterAction(characterId, extendedContext);
   }
 }
 

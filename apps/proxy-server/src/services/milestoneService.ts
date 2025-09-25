@@ -92,13 +92,15 @@ export class MilestoneService {
     const milestone: Milestone = {
       id,
       campaignId: milestoneData.campaignId!,
+      name: milestoneData.title || '',
       title: milestoneData.title || '',
       description: milestoneData.description || '',
       category: milestoneData.category || 'custom',
       status: milestoneData.status || 'not_started',
-      importance: milestoneData.importance || 'minor',
+      importance: typeof milestoneData.importance === 'number' ? milestoneData.importance : 1,
       progress: milestoneData.progress || 0,
       requirements: milestoneData.requirements || [],
+      conditions: milestoneData.requirements || [],
       rewards: milestoneData.rewards || {
         experience: 0,
         currency: 0,
@@ -107,12 +109,13 @@ export class MilestoneService {
         storyProgression: [],
         unlockedContent: []
       },
+      order: 0,
       prerequisites: milestoneData.prerequisites || [],
       unlocks: milestoneData.unlocks || [],
       dependencies: milestoneData.dependencies || [],
       estimatedTimeToComplete: milestoneData.estimatedTimeToComplete || 60,
       estimatedTime: milestoneData.estimatedTime || 60,
-      difficulty: milestoneData.difficulty || 'medium',
+      difficulty: typeof milestoneData.difficulty === 'number' ? milestoneData.difficulty : 2,
       tags: milestoneData.tags || [],
       createdAt: now,
       updatedAt: now,
@@ -164,6 +167,7 @@ export class MilestoneService {
     return rows.map((row): Milestone => ({
       id: row.id,
       campaignId: row.campaign_id,
+      name: row.title,
       title: row.title,
       description: row.description,
       category: row.category,
@@ -171,18 +175,19 @@ export class MilestoneService {
       importance: row.importance,
       progress: row.progress,
       requirements: JSON.parse(row.requirements),
+      conditions: JSON.parse(row.requirements),
       rewards: JSON.parse(row.rewards),
+      order: 0,
       prerequisites: JSON.parse(row.dependencies || '[]'),
       unlocks: JSON.parse(row.tags || '[]'),
       dependencies: JSON.parse(row.dependencies || '[]'),
       estimatedTimeToComplete: row.estimated_time || 60,
       estimatedTime: row.estimated_time || 60,
-      difficulty: 'medium' as const,
+      difficulty: 2,
       tags: JSON.parse(row.tags || '[]'),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       completedAt: row.completed_at,
-      deadline: row.deadline,
       createdBy: row.created_by,
     }));
   }
@@ -243,6 +248,7 @@ export class MilestoneService {
     return {
       id: row.id,
       campaignId: row.campaign_id,
+      name: row.title,
       title: row.title,
       description: row.description,
       category: row.category,
@@ -250,18 +256,19 @@ export class MilestoneService {
       importance: row.importance,
       progress: row.progress,
       requirements: JSON.parse(row.requirements),
+      conditions: JSON.parse(row.requirements),
       rewards: JSON.parse(row.rewards),
+      order: 0,
       prerequisites: JSON.parse(row.dependencies || '[]'),
       unlocks: JSON.parse(row.tags || '[]'),
       dependencies: JSON.parse(row.dependencies || '[]'),
       estimatedTimeToComplete: row.estimated_time || 60,
       estimatedTime: row.estimated_time || 60,
-      difficulty: 'medium' as const,
+      difficulty: 2,
       tags: JSON.parse(row.tags || '[]'),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       completedAt: row.completed_at,
-      deadline: row.deadline,
       createdBy: row.created_by
     };
   }
@@ -333,7 +340,9 @@ export class MilestoneService {
 
     // カテゴリ別進捗
     const categoryProgress: Record<string, any> = {};
-    const categories = [...new Set(milestones.map(m => m.category))];
+    const categoriesSet = new Set(milestones.map(m => m.category));
+    const categories: string[] = [];
+    categoriesSet.forEach(cat => cat && categories.push(cat));
     
     categories.forEach(category => {
       const categoryMilestones = milestones.filter(m => m.category === category);
@@ -366,11 +375,12 @@ export class MilestoneService {
     };
 
     const statistics = {
-      averageProgressPerMilestone: totalMilestones > 0 ? Math.round(milestones.reduce((sum, m) => sum + m.progress, 0) / totalMilestones) : 0,
-      mostActiveCategory: Object.entries(categoryProgress).reduce((max, [cat, data]) => 
-        (data as any).completed > (categoryProgress[max] as any)?.completed ? cat : max, 
-        Object.keys(categoryProgress)[0] || 'story'
-      ),
+      averageProgressPerMilestone: totalMilestones > 0 ? Math.round(milestones.reduce((sum, m) => sum + (m.progress || 0), 0) / totalMilestones) : 0,
+      mostActiveCategory: Object.entries(categoryProgress).reduce((max, [cat, data]) => {
+        if (!max) return cat;
+        const maxData = categoryProgress[max] as any;
+        return (data as any).completed > (maxData?.completed || 0) ? cat : max;
+      }, Object.keys(categoryProgress)[0] || 'story'),
     };
 
     const stmt = this.db.prepare(`
@@ -531,7 +541,7 @@ export class MilestoneService {
       finalCharacterLevels: {},
     };
 
-    const achievements = progressTracker.recentAchievements.map(a => `${a.milestoneId}: ${a.experience} exp`);
+    const achievements = progressTracker.recentAchievements.map((a: any) => `${a.milestoneId}: ${a.experience} exp`);
 
     const completion: CampaignCompletion = {
       id,

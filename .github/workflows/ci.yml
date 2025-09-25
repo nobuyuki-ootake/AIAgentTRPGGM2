@@ -1,0 +1,620 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+env:
+  NODE_VERSION: '18'
+  PNPM_VERSION: '8.6.2'
+
+jobs:
+  # ===================================================================
+  # Setup and Validation
+  # ===================================================================
+  setup:
+    name: Setup & Validation
+    runs-on: ubuntu-latest
+    outputs:
+      cache-key: ${{ steps.cache-key.outputs.key }}
+      should-run-tests: ${{ steps.changes.outputs.should-run }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      
+      - name: Generate cache key
+        id: cache-key
+        run: |
+          echo "key=node-modules-${{ hashFiles('**/pnpm-lock.yaml') }}" >> $GITHUB_OUTPUT
+      
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.pnpm-store
+            node_modules
+            apps/*/node_modules
+            packages/*/node_modules
+          key: ${{ steps.cache-key.outputs.key }}
+          restore-keys: |
+            node-modules-
+      
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet HEAD~1 HEAD -- '*.ts' '*.tsx' '*.js' '*.jsx' '*.json' 'package.json' 'pnpm-lock.yaml'; then
+            echo "should-run=false" >> $GITHUB_OUTPUT
+          else
+            echo "should-run=true" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Validate project structure
+        run: |
+          echo "Validating project structure..."
+          test -f package.json
+          test -f apps/frontend/package.json
+          test -f apps/proxy-server/package.json
+          test -f packages/types/package.json
+          echo "✓ Project structure valid"
+
+  # ===================================================================
+  # Code Quality Checks
+  # ===================================================================
+  code-quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    needs: setup
+    if: needs.setup.outputs.should-run-tests == 'true'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js & pnpm
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      
+      - name: Restore dependencies cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.pnpm-store
+            node_modules
+            apps/*/node_modules
+            packages/*/node_modules
+          key: ${{ needs.setup.outputs.cache-key }}
+      
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      
+      - name: Type checking
+        run: pnpm typecheck
+      
+      - name: Linting
+        run: pnpm lint
+      
+      - name: Format checking
+        run: pnpm format:check
+      
+      - name: Security audit
+        run: pnpm audit --audit-level moderate
+        continue-on-error: true
+
+  # ===================================================================
+  # Unit Tests
+  # ===================================================================
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: setup
+    if: needs.setup.outputs.should-run-tests == 'true'
+    
+    strategy:
+      matrix:
+        node-version: ['18', '20']
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      
+      - name: Restore dependencies cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.pnpm-store
+            node_modules
+            apps/*/node_modules
+            packages/*/node_modules
+          key: ${{ needs.setup.outputs.cache-key }}
+      
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      
+      - name: Setup test environment
+        run: ./scripts/test-env-setup.sh
+      
+      - name: Run unit tests
+        run: ./scripts/test-runner.sh --unit --coverage --ci
+        env:
+          NODE_ENV: test
+          CI: true
+      
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-unit-node${{ matrix.node-version }}
+          path: coverage/
+          retention-days: 7
+      
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-results-unit-node${{ matrix.node-version }}
+          path: |
+            test-logs/
+            test-artifacts/
+          retention-days: 7
+
+  # ===================================================================
+  # Integration Tests
+  # ===================================================================
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: setup
+    if: needs.setup.outputs.should-run-tests == 'true'
+    
+    services:
+      # Test database service
+      sqlite:
+        image: alpine:latest
+        options: >-
+          --name sqlite-test
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      
+      - name: Restore dependencies cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.pnpm-store
+            node_modules
+            apps/*/node_modules
+            packages/*/node_modules
+          key: ${{ needs.setup.outputs.cache-key }}
+      
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      
+      - name: Setup test environment
+        run: ./scripts/test-env-setup.sh
+      
+      - name: Initialize test database
+        run: ./scripts/test-db-init.sh
+      
+      - name: Seed test database
+        run: ./scripts/test-db-seed.sh
+      
+      - name: Run integration tests
+        run: ./scripts/test-runner.sh --integration --coverage --ci
+        env:
+          NODE_ENV: test
+          CI: true
+      
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-integration
+          path: coverage/
+          retention-days: 7
+      
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-results-integration
+          path: |
+            test-logs/
+            test-artifacts/
+          retention-days: 7
+
+  # ===================================================================
+  # E2E Tests
+  # ===================================================================
+  e2e-tests:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    needs: setup
+    if: needs.setup.outputs.should-run-tests == 'true'
+    
+    strategy:
+      matrix:
+        browser: [chromium, firefox, webkit]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      
+      - name: Restore dependencies cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.pnpm-store
+            node_modules
+            apps/*/node_modules
+            packages/*/node_modules
+          key: ${{ needs.setup.outputs.cache-key }}
+      
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      
+      - name: Install Playwright browsers
+        run: cd apps/frontend && pnpm playwright install ${{ matrix.browser }} --with-deps
+      
+      - name: Setup Docker environment
+        run: |
+          docker --version
+          docker-compose --version
+      
+      - name: Setup test environment
+        run: ./scripts/test-env-setup.sh
+      
+      - name: Run E2E tests
+        run: ./scripts/test-runner.sh --e2e --docker --ci
+        env:
+          NODE_ENV: test
+          CI: true
+          PLAYWRIGHT_BROWSER: ${{ matrix.browser }}
+      
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: e2e-results-${{ matrix.browser }}
+          path: |
+            apps/frontend/test-results/
+            apps/frontend/playwright-report/
+            test-logs/
+            test-artifacts/screenshots/
+            test-artifacts/videos/
+          retention-days: 7
+
+  # ===================================================================
+  # Performance Tests
+  # ===================================================================
+  performance-tests:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    needs: setup
+    if: needs.setup.outputs.should-run-tests == 'true'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      
+      - name: Restore dependencies cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.pnpm-store
+            node_modules
+            apps/*/node_modules
+            packages/*/node_modules
+          key: ${{ needs.setup.outputs.cache-key }}
+      
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      
+      - name: Setup test environment
+        run: ./scripts/test-env-setup.sh
+      
+      - name: Run performance tests
+        run: ./scripts/test-runner.sh --performance --ci
+        env:
+          NODE_ENV: test
+          CI: true
+      
+      - name: Upload performance results
+        uses: actions/upload-artifact@v3
+        with:
+          name: performance-results
+          path: test-artifacts/performance/
+          retention-days: 30
+
+  # ===================================================================
+  # Docker Build & Test
+  # ===================================================================
+  docker-tests:
+    name: Docker Build & Test
+    runs-on: ubuntu-latest
+    needs: setup
+    if: needs.setup.outputs.should-run-tests == 'true'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      
+      - name: Build Docker images
+        run: |
+          docker-compose -f docker-compose.yml build
+      
+      - name: Run Docker health checks
+        run: |
+          docker-compose -f docker-compose.yml up -d
+          sleep 30
+          docker-compose -f docker-compose.yml ps
+          
+          # Test frontend health
+          curl -f http://localhost:3000/health || exit 1
+          
+          # Test proxy-server health
+          curl -f http://localhost:5000/health || exit 1
+      
+      - name: Run smoke tests in Docker
+        run: ./scripts/test-runner.sh --smoke --docker --ci
+        env:
+          NODE_ENV: test
+          CI: true
+      
+      - name: Cleanup Docker
+        if: always()
+        run: |
+          docker-compose down --volumes --remove-orphans
+          docker system prune -f
+
+  # ===================================================================
+  # Coverage Aggregation
+  # ===================================================================
+  coverage:
+    name: Coverage Aggregation
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests]
+    if: always() && needs.setup.outputs.should-run-tests == 'true'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      
+      - name: Download coverage artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: coverage-artifacts/
+      
+      - name: Merge coverage reports
+        run: ./scripts/coverage-merger.sh
+      
+      - name: Generate coverage report
+        run: ./scripts/coverage-reporter.sh
+      
+      - name: Upload merged coverage
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-merged
+          path: coverage/
+          retention-days: 30
+      
+      - name: Comment coverage on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const path = './coverage/reports/summary.txt';
+            
+            if (fs.existsSync(path)) {
+              const coverage = fs.readFileSync(path, 'utf8');
+              
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: `## 📊 Test Coverage Report\n\n\`\`\`\n${coverage}\n\`\`\``
+              });
+            }
+
+  # ===================================================================
+  # Test Report Generation
+  # ===================================================================
+  test-reports:
+    name: Test Reports
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests, e2e-tests, performance-tests]
+    if: always() && needs.setup.outputs.should-run-tests == 'true'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download all test artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: all-artifacts/
+      
+      - name: Generate comprehensive test report
+        run: |
+          mkdir -p test-logs test-artifacts
+          find all-artifacts/ -name "*.log" -exec cp {} test-logs/ \; || true
+          find all-artifacts/ -type f -exec cp {} test-artifacts/ \; || true
+          ./scripts/test-report-generator.sh
+      
+      - name: Collect all artifacts
+        run: ./scripts/test-artifacts-collector.sh
+        env:
+          CREATE_ARCHIVE: true
+      
+      - name: Upload final test report
+        uses: actions/upload-artifact@v3
+        with:
+          name: final-test-report
+          path: |
+            test-artifacts/
+            *.tar.gz
+          retention-days: 90
+      
+      - name: Publish test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Test Results
+          path: 'test-artifacts/ci-outputs/*junit*.xml'
+          reporter: java-junit
+          fail-on-error: false
+
+  # ===================================================================
+  # Deployment (if tests pass)
+  # ===================================================================
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: [code-quality, unit-tests, integration-tests, e2e-tests, docker-tests]
+    if: >
+      always() &&
+      github.ref == 'refs/heads/main' &&
+      needs.code-quality.result == 'success' &&
+      needs.unit-tests.result == 'success' &&
+      needs.integration-tests.result == 'success' &&
+      needs.e2e-tests.result == 'success' &&
+      needs.docker-tests.result == 'success'
+    
+    environment: production
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      
+      - name: Build applications
+        run: pnpm build
+      
+      - name: Deploy to production
+        run: |
+          echo "🚀 Deploying to production..."
+          # Add your deployment logic here
+          # ./scripts/deploy-production.sh
+      
+      - name: Notify deployment success
+        run: |
+          echo "✅ Deployment completed successfully!"
+
+  # ===================================================================
+  # Cleanup
+  # ===================================================================
+  cleanup:
+    name: Cleanup
+    runs-on: ubuntu-latest
+    needs: [test-reports, deploy]
+    if: always()
+    
+    steps:
+      - name: Cleanup workflow artifacts
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId,
+            });
+            
+            // Keep only the final test report and coverage
+            const keepArtifacts = ['final-test-report', 'coverage-merged'];
+            
+            for (const artifact of artifacts.data.artifacts) {
+              if (!keepArtifacts.includes(artifact.name)) {
+                await github.rest.actions.deleteArtifact({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  artifact_id: artifact.id,
+                });
+              }
+            }

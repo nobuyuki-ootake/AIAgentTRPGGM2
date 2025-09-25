@@ -24,31 +24,35 @@ export class TopDownGeneratorService {
     
     return {
       themeId,
-      allowedEntityTypes: isPeacefulTheme 
-        ? ['event', 'npc', 'item', 'quest'] 
-        : ['enemy', 'event', 'npc', 'item', 'quest'],
-      restrictedEntityTypes: isPeacefulTheme ? ['enemy'] : [],
-      specializations: [
-        {
-          entityType: 'event',
-          categories: isPeacefulTheme ? ['daily_life', 'social', 'crafting'] : ['combat', 'exploration', 'mystery'],
-          examples: ['conversation', 'discovery', 'challenge'],
-          generationHints: isPeacefulTheme ? ['Focus on peaceful interactions'] : ['Include action and mystery']
-        },
-        {
-          entityType: 'npc',
-          categories: isPeacefulTheme ? ['villager', 'merchant', 'craftsman'] : ['ally', 'rival', 'informant'],
-          examples: ['helpful character', 'quest giver', 'information source'],
-          generationHints: isPeacefulTheme ? ['Create friendly, approachable characters'] : ['Mix helpful and challenging personalities']
-        }
-      ],
-      contentModifiers: [
-        {
-          type: 'tone',
-          value: isPeacefulTheme ? 'peaceful' : 'adventurous',
-          description: isPeacefulTheme ? '平和で穏やかな雰囲気' : '冒険的で挑戦的な雰囲気'
-        }
-      ]
+      adaptations: {
+        allowedEntityTypes: isPeacefulTheme 
+          ? ['event', 'npc', 'item', 'quest'] 
+          : ['enemy', 'event', 'npc', 'item', 'quest'],
+        restrictedEntityTypes: isPeacefulTheme ? ['enemy'] : [],
+        specializations: [
+          {
+            entityType: 'event',
+            categories: isPeacefulTheme ? ['daily_life', 'social', 'crafting'] : ['combat', 'exploration', 'mystery'],
+            examples: ['conversation', 'discovery', 'challenge'],
+            generationHints: isPeacefulTheme ? ['Focus on peaceful interactions'] : ['Include action and mystery']
+          },
+          {
+            entityType: 'npc',
+            categories: isPeacefulTheme ? ['villager', 'merchant', 'craftsman'] : ['ally', 'rival', 'informant'],
+            examples: ['helpful character', 'quest giver', 'information source'],
+            generationHints: isPeacefulTheme ? ['Create friendly, approachable characters'] : ['Mix helpful and challenging personalities']
+          }
+        ],
+        contentModifiers: [
+          {
+            type: 'tone',
+            value: isPeacefulTheme ? 'peaceful' : 'adventurous',
+            description: isPeacefulTheme ? '平和で穏やかな雰囲気' : '冒険的で挑戦的な雰囲気'
+          }
+        ]
+      },
+      playerFeedback: [],
+      effectivenessScore: 0.8
     };
   }
 
@@ -60,7 +64,7 @@ export class TopDownGeneratorService {
     request: MilestoneGenerationRequest,
     themeAdaptation: ThemeAdaptation
   ): Promise<any[]> {
-    logger.info('📋 マイルストーン概要生成開始', { milestoneCount: request.milestoneCount });
+    logger.info('📋 マイルストーン概要生成開始', { theme: request.theme });
 
     const aiService = getAIService();
     
@@ -68,10 +72,9 @@ export class TopDownGeneratorService {
       // Phase 5の特化メソッドを使用
       const result = await aiService.generateMilestoneOutlines({
         provider: 'google-gemini',
-        campaignContext: { themeId: request.themeId },
-        sessionDuration: request.sessionDuration,
-        themeAdaptation,
-        milestoneCount: request.milestoneCount
+        campaignOverview: { theme: request.theme },
+        sessionStructure: { estimatedDuration: 240 },
+        themeConstraints: themeAdaptation
       });
       
       logger.info('✅ マイルストーン概要生成完了（AI Service使用）', { 
@@ -84,15 +87,15 @@ export class TopDownGeneratorService {
       
       // フォールバック実装
       const allowedTypes = ['特定エネミー討伐', '特定イベントクリア', '特定NPCとの特定コミュニケーション', 'キーアイテム取得', 'クエストクリア'];
-      const restrictedTypes = themeAdaptation.restrictedEntityTypes || [];
+      const restrictedTypes = themeAdaptation.adaptations?.restrictedEntityTypes || [];
       const availableTypes = allowedTypes.filter(type => !restrictedTypes.includes(type as any));
       
-      return Array.from({ length: request.milestoneCount || 3 }, (_, i) => ({
+      return Array.from({ length: 3 }, (_, i) => ({
         id: `milestone-${i + 1}`,
         title: `マイルストーン ${i + 1}`,
-        description: `テーマ「${request.themeId}」に関連した目標 ${i + 1}`,
+        description: `テーマ「${request.theme}」に関連した目標 ${i + 1}`,
         type: availableTypes[i % availableTypes.length],
-        estimatedDuration: Math.floor((request.sessionDuration?.estimatedPlayTime || 60) / (request.milestoneCount || 3)),
+        estimatedDuration: Math.floor(240 / 3),
         difficulty: ['easy', 'medium', 'hard'][i] || 'medium'
       }));
     }
@@ -135,8 +138,8 @@ export class TopDownGeneratorService {
         item: { count: 1, contribution: 30, role: 'evidence_tool' }
       },
       constraints: {
-        allowedTypes: themeAdaptation.allowedEntityTypes,
-        restrictedTypes: themeAdaptation.restrictedEntityTypes,
+        allowedTypes: themeAdaptation.adaptations?.allowedEntityTypes || [],
+        restrictedTypes: themeAdaptation.adaptations?.restrictedEntityTypes || [],
         themeCompliance: true
       }
     }));
@@ -163,7 +166,7 @@ export class TopDownGeneratorService {
       const result = await aiService.generateCoreEntities({
         provider: 'google-gemini',
         coreEntityRequirements,
-        campaignContext: { themeId: request.themeId },
+        campaignContext: { theme: request.theme },
         themeAdaptation
       });
       
@@ -219,7 +222,8 @@ export class TopDownGeneratorService {
    */
   async generateBonusEntities(
     request: MilestoneGenerationRequest,
-    coreEntities: any
+    coreEntities: any,
+    themeAdaptation: ThemeAdaptation
   ): Promise<any> {
     logger.info('🎁 追加エンティティ生成開始');
 
@@ -230,8 +234,8 @@ export class TopDownGeneratorService {
       const result = await aiService.generateBonusEntities({
         provider: 'google-gemini',
         coreEntities,
-        campaignContext: { themeId: request.themeId },
-        themeAdaptation: { themeId: request.themeId } // 簡易的なthemeAdaptation
+        campaignContext: { theme: request.theme },
+        themeAdaptation
       });
       
       logger.info('✅ 追加エンティティ生成完了（AI Service使用）', {
@@ -294,16 +298,16 @@ export class TopDownGeneratorService {
       // Phase 5の特化メソッドを使用
       const result = await aiService.generateLocationMapping({
         provider: 'google-gemini',
-        coreEntities,
-        bonusEntities,
-        sessionContext: { gameType: 'TRPG' }
+        entityMappingRequirements: { coreEntities, bonusEntities },
+        availableLocations: [],
+        distributionStrategy: { gameType: 'TRPG' }
       });
       
       logger.info('✅ 場所エンティティマッピング生成完了（AI Service使用）', { 
-        mappingsCount: result.generatedLocationMapping?.length || 0
+        mappingsCount: Array.isArray(result.generatedMapping) ? result.generatedMapping.length : 0
       });
       
-      return result.generatedLocationMapping || [];
+      return Array.isArray(result.generatedMapping) ? result.generatedMapping : [];
     } catch (error) {
       logger.warn('🔄 AI生成失敗、フォールバック使用', { error });
       
@@ -367,24 +371,21 @@ export class TopDownGeneratorService {
 
       return {
         id: outline.id,
-        campaignId: '', // 後で設定
-        sessionId: '', // 後で設定
-        title: outline.title,
+        name: outline.title,
         description: outline.description,
-        type: outline.type,
-        targetEntityIds,
-        progressContributions,
-        targetDetails: [{
-          entityId: targetEntityIds[0] || '',
-          entityType: 'event',
-          specificConditions: outline.title,
-          progressContribution: progressContributions[0] || 0
-        }],
-        status: 'pending' as const,
-        progress: 0,
-        hiddenFromPlayer: true,
-        requiredConditions: outline.prerequisiteIds || [],
-        reward: {
+        type: outline.type === '特定エネミー討伐' ? 'combat' :
+              outline.type === '特定イベントクリア' ? 'exploration' :
+              outline.type === '特定NPCとの特定コミュニケーション' ? 'social' : 'story',
+        conditions: [
+          {
+            type: 'simple',
+            field: 'target_entity',
+            operator: 'equals',
+            value: targetEntityIds[0] || '',
+            description: outline.title
+          }
+        ],
+        rewards: {
           experiencePoints: Math.floor(progressContributions.reduce((sum, c) => sum + c, 0) * 2),
           items: [],
           characterBenefits: {
@@ -394,8 +395,10 @@ export class TopDownGeneratorService {
           },
           storyProgression: outline.title
         },
-        createdAt: new Date().toISOString(),
-        completedAt: undefined
+        difficulty: outline.difficulty === 'easy' ? 3 :
+                   outline.difficulty === 'medium' ? 5 :
+                   outline.difficulty === 'hard' ? 7 : 5,
+        estimatedTime: outline.estimatedDuration || 80
       };
     });
 

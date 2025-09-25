@@ -1,40 +1,35 @@
-import { Router, Request, Response } from 'express';
-import { asyncHandler } from '../middleware/asyncHandler';
-import { locationService, CreateLocationData, MoveCharacterData } from '../services/locationService';
-import { ValidationError } from '../middleware/errorHandler';
-import { APIResponse, LocationQuery, Location, LocationMovement, LocationInteraction } from '@ai-agent-trpg/types';
+import { Router } from 'express';
+import { Location, APIResponse, PaginatedResponse } from '@ai-agent-trpg/types';
+import { locationService, CreateLocationData, MoveCharacterData, LocationSearchQuery } from '../services/locationService';
+import { asyncHandler, NotFoundError } from '../middleware/errorHandler';
+import { logger } from '../utils/logger';
 
-const locationRouter = Router();
-
-// ==========================================
-// 場所管理
-// ==========================================
+const router = Router();
 
 /**
- * 場所一覧を取得
+ * 場所一覧の取得
  */
-locationRouter.get('/', asyncHandler(async (req: Request, res: Response) => {
-  const query: LocationQuery = {
+router.get('/', asyncHandler(async (req, res) => {
+  const query: LocationSearchQuery = {
     name: req.query.name as string,
-    type: req.query.type ? (req.query.type as string).split(',') as any : undefined,
+    type: req.query.type ? (Array.isArray(req.query.type) ? req.query.type : [req.query.type]) as string[] : undefined,
     parentLocationId: req.query.parentLocationId as string,
-    hasCharacter: req.query.hasCharacter as string,
-    hasNPC: req.query.hasNPC as string,
-    hasEnemy: req.query.hasEnemy as string,
-    hasEvent: req.query.hasEvent as string,
-    isAccessible: req.query.isAccessible ? req.query.isAccessible === 'true' : undefined,
     isKnown: req.query.isKnown ? req.query.isKnown === 'true' : undefined,
-    maxDistance: req.query.maxDistance ? parseInt(req.query.maxDistance as string) : undefined,
-    fromLocationId: req.query.fromLocationId as string,
-    page: req.query.page ? parseInt(req.query.page as string) : undefined,
-    limit: req.query.limit ? parseInt(req.query.limit as string) : undefined,
+    page: req.query.page ? parseInt(req.query.page as string, 10) : 1,
+    limit: req.query.limit ? parseInt(req.query.limit as string, 10) : 20,
   };
 
-  const locations = await locationService.getLocations(query);
+  const result = await locationService.getLocations(query);
+  
+  logger.info('Locations retrieved successfully', {
+    component: 'locations-api',
+    query,
+    totalCount: result.totalCount
+  });
 
-  const response: APIResponse<typeof locations> = {
+  const response: APIResponse<PaginatedResponse<Location>> = {
     success: true,
-    data: locations,
+    data: result,
     timestamp: new Date().toISOString(),
   };
 
@@ -42,15 +37,21 @@ locationRouter.get('/', asyncHandler(async (req: Request, res: Response) => {
 }));
 
 /**
- * 特定の場所を取得
+ * 特定の場所の詳細取得
  */
-locationRouter.get('/:id', asyncHandler(async (req: Request, res: Response) => {
+router.get('/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
-  
   const location = await locationService.getLocationById(id);
+
   if (!location) {
-    throw new ValidationError('Location not found');
+    throw new NotFoundError('Location', id);
   }
+
+  logger.info('Location retrieved successfully', {
+    component: 'locations-api',
+    locationId: id,
+    locationName: location.name
+  });
 
   const response: APIResponse<Location> = {
     success: true,
@@ -62,16 +63,17 @@ locationRouter.get('/:id', asyncHandler(async (req: Request, res: Response) => {
 }));
 
 /**
- * 新しい場所を作成
+ * 新しい場所の作成
  */
-locationRouter.post('/', asyncHandler(async (req: Request, res: Response) => {
+router.post('/', asyncHandler(async (req, res) => {
   const locationData: CreateLocationData = req.body;
-
-  if (!locationData.name || !locationData.type || !locationData.environment) {
-    throw new ValidationError('Name, type, and environment are required');
-  }
-
   const location = await locationService.createLocation(locationData);
+
+  logger.info('Location created successfully', {
+    component: 'locations-api',
+    locationId: location.id,
+    locationName: location.name
+  });
 
   const response: APIResponse<Location> = {
     success: true,
@@ -83,20 +85,27 @@ locationRouter.post('/', asyncHandler(async (req: Request, res: Response) => {
 }));
 
 /**
- * 場所を更新
+ * 場所の更新
  */
-locationRouter.put('/:id', asyncHandler(async (req: Request, res: Response) => {
+router.put('/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
   const updates = req.body;
+  
+  const location = await locationService.updateLocation(id, updates);
 
-  const updatedLocation = await locationService.updateLocation(id, updates);
-  if (!updatedLocation) {
-    throw new ValidationError('Location not found');
+  if (!location) {
+    throw new NotFoundError('Location', id);
   }
+
+  logger.info('Location updated successfully', {
+    component: 'locations-api',
+    locationId: id,
+    locationName: location.name
+  });
 
   const response: APIResponse<Location> = {
     success: true,
-    data: updatedLocation,
+    data: location,
     timestamp: new Date().toISOString(),
   };
 
@@ -104,266 +113,26 @@ locationRouter.put('/:id', asyncHandler(async (req: Request, res: Response) => {
 }));
 
 /**
- * 場所を削除
+ * キャラクターの移動
  */
-locationRouter.delete('/:id', asyncHandler(async (req: Request, res: Response) => {
-  const { id } = req.params;
-
-  const success = await locationService.deleteLocation(id);
-  if (!success) {
-    throw new ValidationError('Location not found');
-  }
-
-  const response: APIResponse<{ success: boolean }> = {
-    success: true,
-    data: { success: true },
-    timestamp: new Date().toISOString(),
-  };
-
-  res.json(response);
-}));
-
-// ==========================================
-// 場所での存在情報
-// ==========================================
-
-/**
- * 場所にいるキャラクターを取得
- */
-locationRouter.get('/:id/characters', asyncHandler(async (req: Request, res: Response) => {
-  const { id } = req.params;
-
-  const characters = await locationService.getCharactersInLocation(id);
-
-  const response: APIResponse<typeof characters> = {
-    success: true,
-    data: characters,
-    timestamp: new Date().toISOString(),
-  };
-
-  res.json(response);
-}));
-
-/**
- * 場所で発生するイベントを取得
- */
-locationRouter.get('/:id/events', asyncHandler(async (req: Request, res: Response) => {
-  const { id } = req.params;
-
-  const events = await locationService.getEventsInLocation(id);
-
-  const response: APIResponse<typeof events> = {
-    success: true,
-    data: events,
-    timestamp: new Date().toISOString(),
-  };
-
-  res.json(response);
-}));
-
-/**
- * 接続されている場所を取得
- */
-locationRouter.get('/:id/connections', asyncHandler(async (req: Request, res: Response) => {
-  const { id } = req.params;
-
-  const connectedLocations = await locationService.getConnectedLocations(id);
-
-  const response: APIResponse<typeof connectedLocations> = {
-    success: true,
-    data: connectedLocations,
-    timestamp: new Date().toISOString(),
-  };
-
-  res.json(response);
-}));
-
-/**
- * 近くの場所を取得
- */
-locationRouter.get('/:id/nearby', asyncHandler(async (req: Request, res: Response) => {
-  const { id } = req.params;
-  const maxDistance = req.query.maxDistance ? parseInt(req.query.maxDistance as string) : 5;
-
-  const nearbyLocations = await locationService.findNearbyLocations(id, maxDistance);
-
-  const response: APIResponse<typeof nearbyLocations> = {
-    success: true,
-    data: nearbyLocations,
-    timestamp: new Date().toISOString(),
-  };
-
-  res.json(response);
-}));
-
-// ==========================================
-// キャラクター移動
-// ==========================================
-
-/**
- * キャラクターを移動
- */
-locationRouter.post('/move', asyncHandler(async (req: Request, res: Response) => {
+router.post('/move', asyncHandler(async (req, res) => {
   const moveData: MoveCharacterData = req.body;
-
-  if (!moveData.characterId || !moveData.toLocationId) {
-    throw new ValidationError('Character ID and target location ID are required');
-  }
-
   const movement = await locationService.moveCharacter(moveData);
 
-  const response: APIResponse<LocationMovement> = {
+  logger.info('Character moved successfully', {
+    component: 'locations-api',
+    characterId: moveData.characterId,
+    fromLocation: movement.fromLocation,
+    toLocation: movement.toLocation
+  });
+
+  const response: APIResponse<any> = {
     success: true,
     data: movement,
     timestamp: new Date().toISOString(),
   };
 
-  res.json(response);
-}));
-
-// ==========================================
-// 場所での相互作用
-// ==========================================
-
-/**
- * 場所での相互作用を作成
- */
-locationRouter.post('/:id/interactions', asyncHandler(async (req: Request, res: Response) => {
-  const { id } = req.params;
-  const { characterId, interactionType, details, context } = req.body;
-
-  if (!characterId || !interactionType || !details) {
-    throw new ValidationError('Character ID, interaction type, and details are required');
-  }
-
-  const interaction = await locationService.createLocationInteraction(
-    id,
-    characterId,
-    interactionType,
-    details,
-    context || {}
-  );
-
-  const response: APIResponse<LocationInteraction> = {
-    success: true,
-    data: interaction,
-    timestamp: new Date().toISOString(),
-  };
-
   res.status(201).json(response);
 }));
 
-/**
- * 場所での相互作用履歴を取得
- */
-locationRouter.get('/:id/interactions', asyncHandler(async (req: Request, res: Response) => {
-  const { id } = req.params;
-  const characterId = req.query.characterId as string;
-  const interactionType = req.query.interactionType as LocationInteraction['interactionType'];
-
-  const interactions = await locationService.getLocationInteractions(
-    id,
-    characterId,
-    interactionType
-  );
-
-  const response: APIResponse<typeof interactions> = {
-    success: true,
-    data: interactions,
-    timestamp: new Date().toISOString(),
-  };
-
-  res.json(response);
-}));
-
-// ==========================================
-// 便利なエンドポイント
-// ==========================================
-
-/**
- * デフォルトの場所を作成（開発用）
- */
-locationRouter.post('/seed/default', asyncHandler(async (_req: Request, res: Response) => {
-  const defaultLocations = [
-    {
-      name: '冒険者の街',
-      description: '多くの冒険者が集まる賑やかな街',
-      type: 'settlement' as const,
-      environment: {
-        lighting: 'bright' as const,
-        temperature: 'comfortable' as const,
-        weather: 'clear' as const,
-        terrain: 'urban' as const,
-        hazards: [],
-        resources: ['宿屋', '商店', '酒場', '武器屋'],
-      },
-      properties: {
-        isRestArea: true,
-        hasShops: true,
-        hasTeleporter: false,
-        isSecret: false,
-        isDangerous: false,
-        magicLevel: 'low' as const,
-        sanctity: 'neutral' as const,
-      },
-      aiData: {
-        atmosphere: '活気に満ちた冒険者の街',
-        suggestedActions: ['買い物をする', '情報収集', '仲間を探す'],
-        narrativeHooks: ['新しい依頼の掲示板', '怪しい商人', '酒場での噂話'],
-        ambientDescriptions: [
-          '街の中央広場では商人たちが活発に商売をしている',
-          '冒険者たちが酒場で今日の成果を語り合っている',
-          '武器屋から金属を打つ音が響いている',
-        ],
-      },
-    },
-    {
-      name: '暗い森',
-      description: '古い木々に覆われた薄暗い森',
-      type: 'wilderness' as const,
-      environment: {
-        lighting: 'dim' as const,
-        temperature: 'cool' as const,
-        weather: 'cloudy' as const,
-        terrain: 'forest' as const,
-        hazards: ['野生動物', '迷いやすい道'],
-        resources: ['薬草', '木材', '野生果実'],
-      },
-      properties: {
-        isRestArea: false,
-        hasShops: false,
-        hasTeleporter: false,
-        isSecret: false,
-        isDangerous: true,
-        magicLevel: 'medium' as const,
-        sanctity: 'neutral' as const,
-      },
-      aiData: {
-        atmosphere: '神秘的で少し危険な森',
-        suggestedActions: ['探索する', '薬草を採取', '隠れ場所を探す'],
-        narrativeHooks: ['古い遺跡の噂', '森の精霊の目撃情報', '行方不明者の手がかり'],
-        ambientDescriptions: [
-          '木漏れ日が森の床を斑模様に照らしている',
-          '遠くで何かの鳴き声が聞こえる',
-          '足元の落ち葉がサクサクと音を立てる',
-        ],
-      },
-    },
-  ];
-
-  const createdLocations = [];
-  for (const locationData of defaultLocations) {
-    const location = await locationService.createLocation(locationData);
-    createdLocations.push(location);
-  }
-
-  const response: APIResponse<typeof createdLocations> = {
-    success: true,
-    data: createdLocations,
-    timestamp: new Date().toISOString(),
-  };
-
-  res.json(response);
-}));
-
-export { locationRouter };
+export default router;

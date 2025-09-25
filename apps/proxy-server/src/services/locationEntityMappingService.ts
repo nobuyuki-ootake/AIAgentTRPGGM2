@@ -1,10 +1,24 @@
 import { Database } from 'better-sqlite3';
 import { randomUUID } from 'crypto';
-import { 
-  LocationEntityMapping
-} from '@ai-agent-trpg/types';
 import { getDatabase } from '../database/database';
 import { logger } from '../utils/logger';
+
+/**
+ * データベース用の拡張LocationEntityMapping型
+ */
+export interface DatabaseLocationEntityMapping {
+  id?: string;
+  sessionId: string;
+  locationId: string;
+  entityId: string;
+  entityType: 'core' | 'bonus';
+  entityCategory: 'enemy' | 'event' | 'npc' | 'item' | 'quest' | 'practical' | 'trophy' | 'mystery';
+  timeConditions?: string[];
+  prerequisiteEntities?: string[];
+  isAvailable?: boolean;
+  discoveredAt?: string;
+  createdAt?: string;
+}
 
 /**
  * エンティティ参照型（場所で利用可能なエンティティ一覧用）
@@ -45,7 +59,7 @@ export interface PrerequisiteResult {
 export interface ExplorationResult {
   success: boolean;
   locationId: string;
-  characterId: string;
+  _characterId: string;
   explorationLevel: number; // 0-100 この探索での達成レベル
   totalExplorationLevel: number; // 0-100 場所の総探索レベル
   
@@ -91,7 +105,7 @@ export class LocationEntityMappingService {
   /**
    * 複数のマッピングを一括作成
    */
-  async createMappings(sessionId: string, mappings: Omit<LocationEntityMapping, 'id' | 'created_at'>[]): Promise<void> {
+  async createMappings(sessionId: string, mappings: Omit<DatabaseLocationEntityMapping, 'id' | 'created_at'>[]): Promise<void> {
     logger.debug('📍 場所エンティティマッピング一括作成開始', { 
       sessionId, 
       mappingsCount: mappings.length 
@@ -136,7 +150,7 @@ export class LocationEntityMappingService {
   /**
    * 特定場所のマッピング取得
    */
-  async getMappingsByLocation(locationId: string, sessionId: string): Promise<LocationEntityMapping[]> {
+  async getMappingsByLocation(locationId: string, sessionId: string): Promise<DatabaseLocationEntityMapping[]> {
     logger.debug('🔍 場所別マッピング取得', { locationId, sessionId });
 
     const stmt = this.db.prepare(`
@@ -159,7 +173,7 @@ export class LocationEntityMappingService {
   /**
    * 特定エンティティのマッピング取得
    */
-  async getMappingsByEntity(entityId: string): Promise<LocationEntityMapping[]> {
+  async getMappingsByEntity(entityId: string): Promise<DatabaseLocationEntityMapping[]> {
     logger.debug('🔍 エンティティ別マッピング取得', { entityId });
 
     const stmt = this.db.prepare(`
@@ -248,7 +262,7 @@ export class LocationEntityMappingService {
     
     for (const mapping of mappings) {
       // 時間条件チェック
-      const timeCheck = await this.checkTimeConditions(mapping.timeConditions);
+      const timeCheck = await this.checkTimeConditions(mapping.timeConditions || []);
       if (!timeCheck.isValid) {
         logger.debug('⏰ 時間条件不適合でスキップ', { 
           entityId: mapping.entityId, 
@@ -277,10 +291,10 @@ export class LocationEntityMappingService {
       const entityReference: EntityReference = {
         id: mapping.entityId,
         name: await this.getEntityName(mapping.entityId, mapping.entityCategory),
-        type: mapping.entityType,
+        type: mapping.entityType as 'core' | 'bonus',
         category: mapping.entityCategory,
         description: await this.getEntityDescription(mapping.entityId, mapping.entityCategory),
-        isAvailable: mapping.isAvailable,
+        isAvailable: Boolean(mapping.isAvailable),
         timeConditions: mapping.timeConditions,
         prerequisiteEntities: mapping.prerequisiteEntities,
         discoveredAt: mapping.discoveredAt
@@ -398,7 +412,7 @@ export class LocationEntityMappingService {
 
     for (const mapping of mappings) {
       // 時間条件チェック
-      const timeCheck = await this.checkTimeConditions(mapping.timeConditions);
+      const timeCheck = await this.checkTimeConditions(mapping.timeConditions || []);
       
       // 前提条件チェック
       const prerequisiteCheck = await this.checkPrerequisites(mapping.prerequisiteEntities || [], sessionId);
@@ -407,7 +421,7 @@ export class LocationEntityMappingService {
       const newAvailability = timeCheck.isValid && prerequisiteCheck.isValid;
       
       // 状態が変更された場合のみ更新
-      if (mapping.isAvailable !== newAvailability) {
+      if (mapping.isAvailable !== newAvailability && mapping.id) {
         await this.updateAvailability(mapping.id, newAvailability);
         updatedCount++;
         
@@ -435,7 +449,7 @@ export class LocationEntityMappingService {
   /**
    * データベース行をLocationEntityMappingに変換
    */
-  private rowToLocationEntityMapping(row: any): LocationEntityMapping {
+  private rowToLocationEntityMapping(row: any): DatabaseLocationEntityMapping {
     return {
       id: row.id,
       sessionId: row.session_id,
@@ -454,7 +468,7 @@ export class LocationEntityMappingService {
   /**
    * 発見済みエンティティ一覧取得
    */
-  private async getDiscoveredEntities(sessionId: string): Promise<LocationEntityMapping[]> {
+  private async getDiscoveredEntities(sessionId: string): Promise<DatabaseLocationEntityMapping[]> {
     const stmt = this.db.prepare(`
       SELECT * FROM location_entity_mappings 
       WHERE session_id = ? AND discovered_at IS NOT NULL
@@ -499,11 +513,11 @@ export class LocationEntityMappingService {
    */
   async exploreLocation(
     locationId: string, 
-    characterId: string, 
+    _characterId: string, 
     sessionId: string,
     explorationIntensity: 'light' | 'thorough' | 'exhaustive' = 'thorough'
   ): Promise<ExplorationResult> {
-    logger.info(`🔍 探索アクション開始`, { locationId, characterId, explorationIntensity });
+    logger.info(`🔍 探索アクション開始`, { locationId, _characterId, explorationIntensity });
     
     try {
       // 1. 場所の未発見エンティティを取得
@@ -519,7 +533,7 @@ export class LocationEntityMappingService {
         const discoveryChance = this.calculateDiscoveryChance(entity, baseDiscoveryRate);
         if (Math.random() < discoveryChance) {
           // エンティティ発見！
-          await this.markEntityDiscovered(entity.id, characterId);
+          await this.markEntityDiscovered(entity.id, _characterId);
           
           discoveredEntities.push({
             entity,
@@ -547,7 +561,7 @@ export class LocationEntityMappingService {
       const result: ExplorationResult = {
         success: true,
         locationId,
-        characterId,
+        _characterId,
         explorationLevel,
         totalExplorationLevel,
         discoveredEntities,
@@ -571,7 +585,7 @@ export class LocationEntityMappingService {
       return result;
       
     } catch (error) {
-      logger.error(`❌ 探索エラー`, { locationId, characterId, error });
+      logger.error(`❌ 探索エラー`, { locationId, _characterId, error });
       throw new Error(`探索に失敗しました: ${error instanceof Error ? error.message : '不明なエラー'}`);
     }
   }
@@ -598,8 +612,8 @@ export class LocationEntityMappingService {
     const entities = [];
     for (const mapping of mappings) {
       // 時間条件・前提条件チェック
-      const timeCheck = await this.checkTimeConditions(mapping.id);
-      const prereqCheck = await this.checkPrerequisites(mapping.id);
+      const timeCheck = await this.checkTimeConditions(mapping.timeConditions || []);
+      const prereqCheck = await this.checkPrerequisites(mapping.prerequisiteEntities || [], sessionId);
       
       if (timeCheck.isValid && prereqCheck.isValid) {
         entities.push({
@@ -609,7 +623,7 @@ export class LocationEntityMappingService {
           category: mapping.entityCategory as any,
           description: await this.getEntityDescription(mapping.entityId, mapping.entityCategory),
           isAvailable: true,
-          timeConditions: mapping.discoveryConditions,
+          timeConditions: mapping.timeConditions || [],
           prerequisiteEntities: mapping.prerequisiteEntities
         });
       }
@@ -669,7 +683,7 @@ export class LocationEntityMappingService {
   /**
    * エンティティを発見済みとしてマーク
    */
-  private async markEntityDiscovered(entityId: string, characterId: string): Promise<void> {
+  private async markEntityDiscovered(entityId: string, _characterId: string): Promise<void> {
     const stmt = this.db.prepare(`
       UPDATE location_entity_mappings 
       SET discovered_at = ?
@@ -682,7 +696,7 @@ export class LocationEntityMappingService {
   /**
    * 発見メッセージを生成
    */
-  private async generateDiscoveryMessage(entity: EntityReference, locationId: string): Promise<string> {
+  private async generateDiscoveryMessage(entity: EntityReference, _locationId: string): Promise<string> {
     // Phase 1実装：シンプルなメッセージ
     // Phase 2でAI生成に拡張予定
     const messages = {
@@ -732,8 +746,8 @@ export class LocationEntityMappingService {
    * 場所の総探索レベルを更新
    */
   private async updateLocationExplorationLevel(
-    locationId: string,
-    sessionId: string,
+    _locationId: string,
+    _sessionId: string,
     additionalLevel: number
   ): Promise<number> {
     // Phase 1実装：単純な計算
@@ -757,7 +771,7 @@ export class LocationEntityMappingService {
    * 物語的描写を生成
    */
   private async generateNarrativeDescription(
-    locationId: string,
+    _locationId: string,
     intensity: 'light' | 'thorough' | 'exhaustive',
     discoveries: any[]
   ): Promise<string> {
@@ -779,7 +793,7 @@ export class LocationEntityMappingService {
   /**
    * 探索ヒントを生成
    */
-  private async generateExplorationHints(locationId: string, remainingHidden: number): Promise<string[]> {
+  private async generateExplorationHints(_locationId: string, remainingHidden: number): Promise<string[]> {
     // Phase 1実装：シンプルなヒント
     // Phase 2でAI生成に拡張予定
     const hints = [];

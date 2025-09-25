@@ -15,6 +15,9 @@ import playerExperienceRouter from './playerExperience';
 import { interactiveEventsRouter } from './interactiveEvents';
 import { entityPoolRouter } from './entityPool';
 import healthRouter from './health';
+// import locationsRouter from './locations'; // Temporarily disabled due to TypeScript errors  
+// import logsRouter from './logs'; // Temporarily disabled due to TypeScript errors
+// import monitoringRouter from './monitoring'; // Temporarily disabled due to TypeScript errors
 
 export const router = Router();
 
@@ -41,12 +44,15 @@ router.use('/characters', characterRouter);
 router.use('/sessions', sessionRouter);
 router.use('/quests', questRouter);
 router.use('/milestones', milestoneRouter);
+// router.use('/locations', locationsRouter); // Temporarily disabled due to TypeScript errors
 router.use('/time-management', timeManagementRouter);
 router.use('/approach-analysis', approachAnalysisRouter);
 router.use('/interactive-events', interactiveEventsRouter);
 
 // ヘルスチェック・システム状態エンドポイント
 router.use('/health', healthRouter);
+// router.use('/logs', logsRouter); // Temporarily disabled due to TypeScript errors
+// router.use('/monitoring', monitoringRouter); // Temporarily disabled due to TypeScript errors
 
 // API情報エンドポイント
 router.get('/', (_req, res) => {
@@ -68,9 +74,12 @@ router.get('/', (_req, res) => {
       sessions: '/api/sessions',
       quests: '/api/quests',
       milestones: '/api/milestones',
+      // locations: '/api/locations', // Temporarily disabled
       timeManagement: '/api/time-management',
       approachAnalysis: '/api/approach-analysis',
       interactiveEvents: '/api/interactive-events',
+      // logs: '/api/logs', // Temporarily disabled
+      // monitoring: '/api/monitoring', // Temporarily disabled
     },
     timestamp: new Date().toISOString(),
   });

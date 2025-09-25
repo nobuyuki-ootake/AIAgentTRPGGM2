@@ -419,24 +419,18 @@ export class PlayerExperienceService {
     const row = stmt.get(milestoneId) as any;
     if (!row) return null;
 
-    return {
+    const milestone: AIMilestone = {
       id: row.id,
-      campaignId: row.campaign_id,
-      sessionId: row.session_id,
-      title: row.title,
+      name: row.title,
       description: row.description,
-      type: row.type,
-      targetEntityIds: JSON.parse(row.target_entity_ids || '[]'),
-      targetDetails: JSON.parse(row.target_details),
-      progressContributions: JSON.parse(row.progress_contributions || '[]'),
-      status: row.status,
-      progress: row.progress,
-      hiddenFromPlayer: Boolean(row.hidden_from_player),
-      requiredConditions: JSON.parse(row.required_conditions || '[]'),
-      reward: JSON.parse(row.reward),
-      createdAt: row.created_at,
-      completedAt: row.completed_at
+      type: row.type as ('story' | 'combat' | 'exploration' | 'social'),
+      conditions: JSON.parse(row.required_conditions || '[]'),
+      rewards: JSON.parse(row.reward || '{}'),
+      difficulty: row.difficulty || 5,
+      estimatedTime: row.estimated_time || 30
     };
+    
+    return milestone;
   }
 
   /**

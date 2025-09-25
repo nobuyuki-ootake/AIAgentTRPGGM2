@@ -151,7 +151,8 @@ class AICharacterGenerationService {
         setting: description,
         mood: 'dramatic',
         difficulty: 'normal',
-        style: 'balanced'
+        style: 'balanced',
+        keyElements: [description]
       },
       characterType,
     });
@@ -231,11 +232,11 @@ class AICharacterGenerationService {
 あなたはTRPGキャラクター生成の専門家です。以下の設定に基づいて、魅力的なキャラクターを1体生成してください。
 
 ## テーマ設定
-- ジャンル: ${theme.genre}
-- 世界観: ${theme.setting}
-- 雰囲気: ${theme.mood}
-- 難易度: ${theme.difficulty}
-- スタイル: ${theme.style}
+- ジャンル: ${theme.genre || 'fantasy'}
+- 世界観: ${theme.description}
+- 雰囲気: ${theme.mood || 'balanced'}
+- 難易度: ${"balanced"}
+- スタイル: ${"standard"}
 ${theme.keyElements ? `- 重要要素: ${theme.keyElements.join(', ')}` : ''}
 
 ## キャラクター要件
@@ -243,35 +244,46 @@ ${theme.keyElements ? `- 重要要素: ${theme.keyElements.join(', ')}` : ''}
 ${role ? `- 役割: ${role}` : ''}
 
 ## 出力形式（JSON）
-以下のJSON形式で回答してください：
+**必ず以下の形式に厳密に従ってください。追加のフィールドや構造を含めないでください：**
 
 \`\`\`json
 {
-  "name": "田中太郎",
-  "characterClass": "戦士",
+  "name": "[テーマに適したユニークな名前]",
+  "characterClass": "[指定された職業]",
   "description": "外見や特徴の詳細な説明（100文字程度）",
   "background": "背景設定や経歴（100文字程度）",
   "personality": "性格や行動傾向（100文字程度）",
-  "alignment": "善/中立/悪の属性",
+  "alignment": "秩序にして善",
   "baseStats": {
-    "strength": 10-18,
-    "dexterity": 10-18,
-    "constitution": 10-18,
-    "intelligence": 10-18,
-    "wisdom": 10-18,
-    "charisma": 10-18
+    "strength": 16,
+    "dexterity": 12,
+    "constitution": 14,
+    "intelligence": 10,
+    "wisdom": 11,
+    "charisma": 13
   },
-  "level": 1-5,
-  "maxHitPoints": 20-80,
-  "maxMagicPoints": 10-50
+  "level": 1,
+  "maxHitPoints": 40,
+  "maxMagicPoints": 0
 }
 \`\`\`
 
+## 重要な注意事項
+- **上記のJSON形式を厳密に守ってください**
+- **追加のフィールドや入れ子構造（traits, flaws, ideals等）を含めないでください**
+- **数値は範囲ではなく具体的な数値を入れてください**
+- **JSONの構文エラーがないよう注意してください**
+
 ## 注意事項
 - ${characterType === 'PC' ? 'プレイヤーが操作する主人公' : characterType === 'NPC' ? '協力的な仲間キャラクター' : '敵対的なキャラクター'}として設計してください
-- **キャラクター名は必ず日本語名**（ひらがな、カタカナ、漢字）を使用してください
+- **キャラクター名は${theme.genre}テーマに適したユニークな名前**を使用してください
+  - クラシックファンタジー: カタカナ表記の西洋風の名前（創造的で多様な組み合わせで）
+  - 和風ファンタジー: 日本語名（創造的で多様な組み合わせで）
+  - SF: 未来的な名前（創造的で多様な組み合わせで）
+  - 現代: 現代的な名前（創造的で多様な組み合わせで）
+- **毎回まったく異なる名前を考案してください**
 - テーマの${theme.genre}ジャンルに適した日本語の名前と設定にしてください
-- ステータスは${theme.difficulty}難易度に適したバランスにしてください
+- ステータスは${"balanced"}難易度に適したバランスにしてください
 - **JSON内で二重引用符を使用する場合は必ずエスケープ（\\"）してください**
 - すべて日本語で回答してください
 `;
@@ -283,15 +295,23 @@ ${role ? `- 役割: ${role}` : ''}
    * キャラクター概要プロンプト構築（バッチ処理用）
    */
   private buildCharacterConceptPrompt(theme: GameTheme): string {
+    // ランダム性を高めるためのタイムスタンプとランダムシード
+    const randomSeed = Math.floor(Math.random() * 1000000);
+    const timestamp = Date.now();
+    
     const conceptPrompt = `
 あなたはTRPGキャラクター企画の専門家です。以下のテーマに基づいて、3体のキャラクター概要を生成してください。
 
+[ランダムシード: ${randomSeed}, タイムスタンプ: ${timestamp}]
+**重要: 毎回まったく異なるユニークなキャラクター名を考案してください。過去に生成した名前は一切使用しないでください。**
+
 ## テーマ設定
-- ジャンル: ${theme.genre}
-- 世界観: ${theme.setting}
-- 雰囲気: ${theme.mood}
-- 難易度: ${theme.difficulty}
-- スタイル: ${theme.style}
+- ジャンル: ${theme.genre || 'fantasy'}
+- 世界観: ${theme.description}
+- 設定: ${theme.setting || theme.name}
+- 雰囲気: ${theme.mood || 'balanced'}
+- 難易度: ${theme.difficulty || 'normal'}
+- スタイル: ${theme.style || 'balanced'}
 ${theme.keyElements ? `- 重要要素: ${theme.keyElements.join(', ')}` : ''}
 
 ## 生成要件
@@ -300,27 +320,27 @@ ${theme.keyElements ? `- 重要要素: ${theme.keyElements.join(', ')}` : ''}
 3つ目: プレイヤーキャラクター（技能・支援タイプ）
 
 ## 出力形式（JSON）
-以下のJSON形式で回答してください（小さなJSONで構文エラーを避けるため）：
+以下のJSON形式で回答してください。**毎回異なるユニークな名前**を生成してください：
 
 \`\`\`json
 {
   "characters": [
     {
-      "name": "田中武",
+      "name": "[${theme.genre}テーマに適したユニークな名前1]",
       "role": "勇敢な戦士タイプ。剣と盾で前線に立ち、仲間を守る",
       "characterClass": "戦士",
       "characterType": "PC",
       "brief": "勇敢で頼りになる前衛戦士"
     },
     {
-      "name": "佐藤美咲",
+      "name": "[${theme.genre}テーマに適したユニークな名前2]",
       "role": "知恵豊かな魔法使いタイプ。魔法と知識で冒険をサポート",
       "characterClass": "魔法使い",
       "characterType": "PC",
       "brief": "聡明で魔法に長けた後衛"
     },
     {
-      "name": "山田敏",
+      "name": "[${theme.genre}テーマに適したユニークな名前3]",
       "role": "身軽な盗賊タイプ。技と素早さで危険を回避し、宝を見つける",
       "characterClass": "盗賊",
       "characterType": "PC",
@@ -330,9 +350,18 @@ ${theme.keyElements ? `- 重要要素: ${theme.keyElements.join(', ')}` : ''}
 }
 \`\`\`
 
-## 注意事項
-- **キャラクター名は必ず日本語名**（ひらがな、カタカナ、漢字）を使用してください
-- ${theme.genre}ジャンルに適した日本語の名前と職業を設定してください
+## 重要: 名前生成要件
+- **毎回完全に異なるユニークなキャラクター名を生成**してください
+- **決して同じ名前を再利用しないでください**
+- **キャラクター名は${theme.genre}テーマに適した多様な名前**を使用してください
+  - クラシックファンタジー: カタカナ表記の西洋風の名前（多様な組み合わせで）
+  - 和風ファンタジー: 日本語名（多様な組み合わせで）
+  - SF: 未来的な名前（多様な組み合わせで）
+  - 現代: 現代的な名前（多様な組み合わせで）
+- **創造性を発揮して、毎回新しい名前を考案してください**
+
+## その他の注意事項  
+- ${theme.genre}ジャンルに適した名前と職業を設定してください
 - 3つの異なるプレイスタイル（戦士系、魔法系、技能系）のキャラクターを作成してください
 - **全てのキャラクターは "characterType": "PC" として生成してください**（プレイヤー選択用）
 - プレイヤーが選択しやすいよう、明確に特徴を分けてください
@@ -352,11 +381,11 @@ ${theme.keyElements ? `- 重要要素: ${theme.keyElements.join(', ')}` : ''}
 あなたはTRPGキャラクター詳細設計の専門家です。以下の概要に基づいて、詳細なキャラクターを1体生成してください。
 
 ## テーマ設定
-- ジャンル: ${theme.genre}
-- 世界観: ${theme.setting}
-- 雰囲気: ${theme.mood}
-- 難易度: ${theme.difficulty}
-- スタイル: ${theme.style}
+- ジャンル: ${theme.genre || 'fantasy'}
+- 世界観: ${theme.description}
+- 雰囲気: ${theme.mood || 'balanced'}
+- 難易度: ${"balanced"}
+- スタイル: ${"standard"}
 ${theme.keyElements ? `- 重要要素: ${theme.keyElements.join(', ')}` : ''}
 
 ## キャラクター概要
@@ -395,7 +424,7 @@ ${theme.keyElements ? `- 重要要素: ${theme.keyElements.join(', ')}` : ''}
 - 指定された日本語名前と職業を必ず使用してください
 - ${concept.role}としての特徴を反映してください
 - ${theme.genre}ジャンルに適した日本語の設定にしてください
-- ステータスは${theme.difficulty}難易度に適したバランスにしてください
+- ステータスは${"balanced"}難易度に適したバランスにしてください
 - **JSON内で二重引用符を使用する場合は必ずエスケープ（\\"）してください**
 - すべて日本語で回答してください
 - JSONの構文エラーがないよう十分注意してください
@@ -804,33 +833,10 @@ ${theme.keyElements ? `- 重要要素: ${theme.keyElements.join(', ')}` : ''}
       },
       skills: [],
       feats: [],
-      equipment: {
-        weapon: null,
-        armor: null,
-        shield: null,
-        accessories: [],
-        inventory: [],
-        totalWeight: 0,
-        carryingCapacity: 50,
-      },
+      equipment: [],
       statusEffects: [],
-      appearance: {
-        height: '170cm',
-        weight: '70kg',
-        eyeColor: 'Brown',
-        hairColor: 'Black',
-        skinColor: 'Light',
-        distinguishingFeatures: 'None',
-      },
-      background: {
-        backstory: aiResponse.background || 'Unknown background.',
-        personality: aiResponse.personality || 'A unique personality.',
-        ideals: 'Justice and righteousness',
-        bonds: 'Loyal to companions',
-        flaws: 'Sometimes too trusting',
-        languages: ['Common'],
-        proficiencies: ['Basic combat'],
-      },
+      appearance: aiResponse.description || 'A mysterious figure.',
+      background: aiResponse.background || 'Unknown background.',
       currentLocationId: undefined,
       locationHistory: [],
       createdAt: new Date().toISOString(),

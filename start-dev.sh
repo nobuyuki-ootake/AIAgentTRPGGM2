@@ -118,6 +118,11 @@ if [ ! -d "node_modules" ]; then
     pnpm install
 fi
 
+# TypeScript型定義ファイルのビルド
+log_info "TypeScript型定義ファイルをビルド中..."
+pnpm build:typescript
+log_success "TypeScript型定義ファイルのビルドが完了しました"
+
 if [ "$USE_DOCKER" = true ]; then
     log_info "Docker開発環境を起動中..."
     
@@ -132,10 +137,14 @@ if [ "$USE_DOCKER" = true ]; then
     
     if [ "$DOCKER_BUILD" = true ]; then
         log_info "Dockerイメージをビルド中..."
+        # WSL環境でのDocker認証問題を回避
+        export DOCKER_BUILDKIT=0
         docker-compose build --no-cache
     fi
     
     log_info "Dockerコンテナを起動中..."
+    # WSL環境でのDocker認証問題を回避
+    export DOCKER_BUILDKIT=0
     docker-compose up --remove-orphans
 else
     log_info "ローカル開発環境を起動中..."

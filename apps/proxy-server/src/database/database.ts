@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
-import path from 'path';
-import fs from 'fs';
+import * as path from 'path';
+import * as fs from 'fs';
 import { logger } from '../utils/logger';
 import { DatabaseError } from '../middleware/errorHandler';
 
@@ -11,10 +11,15 @@ let db: Database.Database | null = null;
 
 export async function initializeDatabase(): Promise<void> {
   try {
+    logger.info(`Database path: ${DB_PATH}`);
+    logger.info(`Database directory: ${DB_DIR}`);
+    
     // データベースディレクトリを作成
     if (!fs.existsSync(DB_DIR)) {
       fs.mkdirSync(DB_DIR, { recursive: true });
       logger.info(`Created database directory: ${DB_DIR}`);
+    } else {
+      logger.info(`Database directory already exists: ${DB_DIR}`);
     }
 
     // データベース接続
@@ -22,18 +27,25 @@ export async function initializeDatabase(): Promise<void> {
     logger.info(`Connected to database: ${DB_PATH}`);
 
     // WALモードを有効化（Litestreamとの互換性）
-    db.exec('PRAGMA journal_mode = WAL;');
-    db.exec('PRAGMA synchronous = NORMAL;');
-    db.exec('PRAGMA temp_store = memory;');
-    db.exec('PRAGMA mmap_size = 268435456;'); // 256MB
+    if (db) {
+      db.exec('PRAGMA journal_mode = WAL;');
+      db.exec('PRAGMA synchronous = NORMAL;');
+      db.exec('PRAGMA temp_store = memory;');
+      db.exec('PRAGMA mmap_size = 268435456;'); // 256MB
+    }
 
     // データベーススキーマの作成
     await createTables();
     
     logger.info('Database initialized successfully');
   } catch (error) {
-    logger.error('Failed to initialize database:', error);
-    logger.error('Error details:', JSON.stringify(error));
+    logger.error('Failed to initialize database:', { error });
+    if (error instanceof Error) {
+      logger.error('Error message:', { message: error.message });
+      logger.error('Error stack:', { stack: error.stack });
+    } else {
+      logger.error('Error details:', { error });
+    }
     throw new DatabaseError('Failed to initialize database', { error });
   }
 }
@@ -458,6 +470,59 @@ async function createTables(): Promise<void> {
       expires_at TEXT, -- 一時的配置の場合
       FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
       FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE
+    )`,
+
+    // AI戦術設定テーブル - AI Agent可視化・制御システム
+    `CREATE TABLE IF NOT EXISTS ai_tactics_settings (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      agent_type TEXT NOT NULL, -- 'gm' | 'character'
+      settings TEXT NOT NULL,   -- JSON format settings
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE CASCADE
+    )`,
+
+    // パーティ移動提案テーブル - パーティ統一移動システム
+    `CREATE TABLE IF NOT EXISTS party_movement_proposals (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      proposer_id TEXT NOT NULL,
+      target_location_id TEXT NOT NULL,
+      movement_method TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      estimated_time INTEGER NOT NULL,
+      estimated_cost TEXT NOT NULL, -- JSON
+      status TEXT NOT NULL, -- 'pending', 'voting', 'approved', 'rejected', 'executing', 'completed', 'failed'
+      created_at TEXT NOT NULL,
+      voting_deadline TEXT,
+      urgency TEXT NOT NULL, -- 'low', 'medium', 'high'
+      difficulty TEXT NOT NULL, -- 'easy', 'normal', 'hard', 'dangerous'
+      tags TEXT NOT NULL, -- JSON array
+      FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE CASCADE,
+      FOREIGN KEY (proposer_id) REFERENCES characters (id) ON DELETE CASCADE,
+      FOREIGN KEY (target_location_id) REFERENCES locations (id) ON DELETE CASCADE
+    )`,
+
+    // パーティ移動投票テーブル - パーティ統一移動システム
+    `CREATE TABLE IF NOT EXISTS party_movement_votes (
+      id TEXT PRIMARY KEY,
+      proposal_id TEXT NOT NULL,
+      voter_id TEXT NOT NULL,
+      choice TEXT NOT NULL, -- 'approve', 'reject', 'abstain'
+      reason TEXT,
+      timestamp TEXT NOT NULL,
+      FOREIGN KEY (proposal_id) REFERENCES party_movement_proposals (id) ON DELETE CASCADE,
+      FOREIGN KEY (voter_id) REFERENCES characters (id) ON DELETE CASCADE,
+      UNIQUE(proposal_id, voter_id)
+    )`,
+
+    // パーティ合意設定テーブル - パーティ統一移動システム
+    `CREATE TABLE IF NOT EXISTS party_consensus_settings (
+      session_id TEXT PRIMARY KEY,
+      settings TEXT NOT NULL, -- JSON
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE CASCADE
     )`
   ];
 
@@ -504,6 +569,15 @@ async function createTables(): Promise<void> {
     'CREATE INDEX IF NOT EXISTS idx_location_entity_mappings_campaign ON location_entity_mappings(campaign_id)',
     'CREATE INDEX IF NOT EXISTS idx_location_entity_mappings_location ON location_entity_mappings(location_id)',
     'CREATE INDEX IF NOT EXISTS idx_location_entity_mappings_entity ON location_entity_mappings(entity_type, entity_id)',
+    // AI戦術設定テーブルのインデックス - AI Agent可視化・制御システム
+    'CREATE INDEX IF NOT EXISTS idx_ai_tactics_settings_session ON ai_tactics_settings(session_id)',
+    'CREATE INDEX IF NOT EXISTS idx_ai_tactics_settings_agent ON ai_tactics_settings(agent_type)',
+    // パーティ移動システムのインデックス - パーティ統一移動システム
+    'CREATE INDEX IF NOT EXISTS idx_party_movement_proposals_session ON party_movement_proposals(session_id)',
+    'CREATE INDEX IF NOT EXISTS idx_party_movement_proposals_status ON party_movement_proposals(status)',
+    'CREATE INDEX IF NOT EXISTS idx_party_movement_proposals_proposer ON party_movement_proposals(proposer_id)',
+    'CREATE INDEX IF NOT EXISTS idx_party_movement_votes_proposal ON party_movement_votes(proposal_id)',
+    'CREATE INDEX IF NOT EXISTS idx_party_movement_votes_voter ON party_movement_votes(voter_id)',
     // 'CREATE INDEX IF NOT EXISTS idx_characters_location ON characters(current_location_id)',
     // 'CREATE INDEX IF NOT EXISTS idx_events_location ON events(location_id)',
     // 'CREATE INDEX IF NOT EXISTS idx_location_movements_character ON location_movements(character_id)',

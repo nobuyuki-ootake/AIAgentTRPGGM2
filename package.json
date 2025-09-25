@@ -11,27 +11,83 @@
     "build": "turbo run build",
     "build:frontend": "turbo run build --filter=frontend",
     "build:proxy": "turbo run build --filter=proxy-server",
+    "build:typescript": "cd packages/types && pnpm build",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
-    "test": "turbo run test",
-    "test:e2e": "cd apps/frontend && pnpm playwright test",
+    "typecheck": "turbo run typecheck",
+    
+    "test": "./scripts/test-runner.sh",
+    "test:unit": "./scripts/test-runner.sh --unit",
+    "test:integration": "./scripts/test-runner.sh --integration",
+    "test:e2e": "./scripts/test-runner.sh --e2e",
+    "test:all": "./scripts/test-runner.sh --all",
+    "test:watch": "./scripts/test-runner.sh --watch",
+    "test:coverage": "./scripts/test-runner.sh --coverage",
+    "test:ci": "./scripts/test-runner.sh --ci",
+    "test:parallel": "./scripts/test-runner.sh --parallel",
+    "test:smoke": "./scripts/test-runner.sh --smoke",
+    "test:performance": "./scripts/test-runner.sh --performance",
+    
+    "test:setup": "./scripts/test-setup.sh",
+    "test:teardown": "./scripts/test-teardown.sh",
+    "test:env:setup": "./scripts/test-env-setup.sh",
+    "test:env:teardown": "./scripts/test-env-teardown.sh",
+    "test:db:init": "./scripts/test-db-init.sh",
+    "test:db:seed": "./scripts/test-db-seed.sh",
+    "test:db:clean": "./scripts/test-db-clean.sh",
+    
+    "test:report": "./scripts/test-report-generator.sh",
+    "test:artifacts": "./scripts/test-artifacts-collector.sh",
+    "test:coverage:merge": "./scripts/coverage-merger.sh",
+    "test:coverage:report": "./scripts/coverage-reporter.sh",
+    
     "test:e2e:ui": "cd apps/frontend && pnpm playwright test --ui",
     "test:trpg-session": "cd apps/frontend && pnpm playwright test e2e/pages/trpg-session-page.spec.ts",
     "test:ai-enhanced": "cd apps/frontend && pnpm playwright test e2e/ai-enhanced/",
+    
     "storybook": "cd apps/frontend && pnpm storybook",
     "build-storybook": "cd apps/frontend && pnpm build-storybook",
-    "clean": "turbo run clean && rm -rf node_modules"
+    "clean": "turbo run clean && rm -rf node_modules",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "migrate": "cd apps/proxy-server && pnpm migrate",
+    "migrate:up": "cd apps/proxy-server && pnpm migrate:up",
+    "migrate:down": "cd apps/proxy-server && pnpm migrate:down",
+    "migrate:status": "cd apps/proxy-server && pnpm migrate:status",
+    "migrate:validate": "cd apps/proxy-server && pnpm migrate:validate",
+    "litestream:start": "./scripts/litestream-manager.sh start-daemon",
+    "litestream:stop": "./scripts/litestream-manager.sh stop-daemon",
+    "litestream:status": "./scripts/litestream-manager.sh status",
+    "litestream:backup": "./scripts/litestream-manager.sh backup",
+    "litestream:restore": "./scripts/litestream-manager.sh restore",
+    "prepare": "husky install"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^5.57.0",
     "@typescript-eslint/parser": "^5.57.0",
     "eslint": "^8.37.0",
+    "husky": "^9.0.0",
+    "lint-staged": "^15.0.0",
+    "prettier": "^3.0.0",
     "turbo": "^1.10.12",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "jest-junit": "^16.0.0",
+    "lcov-result-merger": "^3.1.0",
+    "cross-env": "^7.0.3",
+    "concurrently": "^8.2.0"
   },
   "engines": {
     "node": ">=18.0.0",
     "pnpm": ">=8.0.0"
   },
-  "packageManager": "pnpm@8.6.2"
+  "packageManager": "pnpm@8.6.2",
+  "lint-staged": {
+    "*.{js,ts,tsx}": [
+      "prettier --write",
+      "eslint --fix"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write"
+    ]
+  }
 }

@@ -13,6 +13,10 @@ import {
   Alert,
   LinearProgress,
   Fade,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import {
   SportsEsportsRounded,
@@ -21,6 +25,7 @@ import {
   PlayArrowRounded,
   PersonAddRounded,
   ImportExportRounded,
+  ErrorRounded,
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useRecoilState, useRecoilValue, useSetRecoilState } from 'recoil';
@@ -31,10 +36,11 @@ import {
   characterLoadingAtom,
   appModeAtom,
 } from '@/store/atoms';
-import { characterAPI, sessionAPI } from '@/api';
+import { characterAPI, sessionAPI, campaignAPI } from '@/api';
 import { Character, TRPGCharacter } from '@ai-agent-trpg/types';
 import { CustomCharacterGenerationForm } from '@/components/characters/CustomCharacterGenerationForm';
 import { CharacterImportExport } from '@/components/characters/CharacterImportExport';
+import { aiCharacterGenerationAPI } from '@/api/aiCharacterGeneration';
 
 const PlayerCharacterSelectPage: React.FC = () => {
   console.log('🔧 PlayerCharacterSelectPage レンダリング開始');
@@ -64,6 +70,10 @@ const PlayerCharacterSelectPage: React.FC = () => {
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
   const [customGenDialogOpen, setCustomGenDialogOpen] = useState(false);
   const [importExportDialogOpen, setImportExportDialogOpen] = useState(false);
+  const [errorDialogOpen, setErrorDialogOpen] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string>('');
+  const [isGeneratingCharacters, setIsGeneratingCharacters] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState({ current: 0, total: 0, message: '' });
 
   // ユーザーモードでない場合はリダイレクト
   useEffect(() => {
@@ -76,23 +86,116 @@ const PlayerCharacterSelectPage: React.FC = () => {
   // キャラクター一覧の読み込み
   useEffect(() => {
     const loadCharacters = async () => {
-      if (!campaignId) return;
+      if (!campaignId || !currentCampaign) return;
 
       setCharacterLoading(true);
       try {
         console.log(`Loading characters for campaign: ${campaignId}`);
         const characterResponse = await characterAPI.getCharactersByCampaign(campaignId);
         console.log(`Loaded ${characterResponse.length} characters:`, characterResponse);
-        setCharacters(characterResponse);
+        
+        // プレイヤーキャラクター（PC）のみフィルタリング
+        const playableChars = characterResponse.filter(character => 
+          character.characterType === 'PC'
+        );
+        
+        if (playableChars.length === 0) {
+          console.log('🎭 No playable characters found, auto-generating characters for player mode...');
+          await autoGenerateCharacters();
+        } else {
+          setCharacters(characterResponse);
+        }
       } catch (error) {
         console.error('Failed to load characters:', error);
+        handleCharacterGenerationError('キャラクター読み込み中にエラーが発生しました');
       } finally {
         setCharacterLoading(false);
       }
     };
 
     loadCharacters();
-  }, [campaignId]);
+  }, [campaignId, currentCampaign]);
+
+  // AI自動キャラクター生成処理（プレイヤーモード用）
+  const autoGenerateCharacters = async () => {
+    if (!campaignId || !currentCampaign) return;
+
+    try {
+      setIsGeneratingCharacters(true);
+      console.log('🎭 Starting automatic character generation for player mode...');
+      
+      // キャンペーンのテーマを取得（デフォルトはクラシックファンタジー）
+      const theme = currentCampaign.theme || 'クラシックファンタジー';
+      
+      // AIにキャラクターを自動生成してもらう
+      const generatedCharacters = await aiCharacterGenerationAPI.generateCharactersBatch(
+        campaignId,
+        theme as any,
+        'google',
+        (current, total, currentCharacter) => {
+          console.log(`🎭 Character generation progress: ${current}/${total} - ${currentCharacter}`);
+          setGenerationProgress({ current, total, message: currentCharacter });
+        }
+      );
+
+      console.log(`🎭 Generated ${generatedCharacters.length} characters:`, generatedCharacters);
+
+      if (generatedCharacters.length === 0) {
+        throw new Error('AI character generation returned no characters');
+      }
+
+      // 生成されたキャラクターをデータベースに保存
+      const savedCharacters: Character[] = [];
+      for (const character of generatedCharacters) {
+        try {
+          const savedCharacter = await characterAPI.createCharacter(character);
+          savedCharacters.push(savedCharacter);
+        } catch (error) {
+          console.error('Failed to save generated character:', character.name, error);
+        }
+      }
+
+      if (savedCharacters.length === 0) {
+        throw new Error('Failed to save any generated characters');
+      }
+
+      // プレイヤーキャラクター（PC）のみ取得
+      const pcCharacters = savedCharacters.filter(char => char.characterType === 'PC');
+      
+      if (pcCharacters.length === 0) {
+        throw new Error('No playable characters (PC) were generated');
+      }
+
+      // Recoil stateを更新
+      setCharacters(savedCharacters);
+      console.log(`🎭 Successfully generated and saved ${pcCharacters.length} playable characters`);
+
+    } catch (error) {
+      console.error('🎭 Character auto-generation failed:', error);
+      handleCharacterGenerationError(
+        `キャラクター自動生成に失敗しました: ${error instanceof Error ? error.message : String(error)}`
+      );
+    } finally {
+      setIsGeneratingCharacters(false);
+    }
+  };
+
+  // キャラクター生成エラー処理（キャンペーン削除とホーム遷移）
+  const handleCharacterGenerationError = async (message: string) => {
+    setErrorMessage(message);
+    setErrorDialogOpen(true);
+  };
+
+  // エラーダイアログでOKを押した時の処理
+  const handleErrorDialogClose = async () => {
+    setErrorDialogOpen(false);
+    
+    // ⚠️ キャンペーン削除処理を削除 - キャラクターの保持を確保
+    console.log('ℹ️ Error dialog closed - preserving campaign and characters');
+    
+    // ホームページに戻る
+    navigate('/');
+  };
 
   // プレイ可能なキャラクター（PCのみ）
   const playableCharacters = characters.filter(character => 
@@ -467,6 +570,74 @@ const PlayerCharacterSelectPage: React.FC = () => {
           campaignId={campaignId}
         />
       )}
+
+      {/* エラーダイアログ */}
+      <Dialog
+        open={errorDialogOpen}
+        onClose={() => {}} // 自動では閉じない
+        aria-labelledby="error-dialog-title"
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle id="error-dialog-title" sx={{ color: 'error.main', display: 'flex', alignItems: 'center' }}>
+          <ErrorRounded sx={{ mr: 1 }} />
+          キャラクター生成エラー
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" sx={{ mb: 2 }}>
+            {errorMessage}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            このキャンペーンは削除され、ホーム画面に戻ります。
+            別のテーマで再度キャンペーンを作成してください。
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleErrorDialogClose} variant="contained" color="primary">
+            了解
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* キャラクター生成進捗モーダル */}
+      <Dialog
+        open={isGeneratingCharacters}
+        onClose={() => {}} // 自動では閉じない
+        aria-labelledby="character-generation-progress-title"
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle id="character-generation-progress-title">
+          AIキャラクター生成中
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            プレイヤーモード用のキャラクターが存在しないため、AIが自動的にキャラクターを生成しています。
+          </Alert>
+          
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="body2" color="text.secondary">
+              {generationProgress.message || 'キャラクター生成準備中...'}
+            </Typography>
+          </Box>
+          
+          <LinearProgress 
+            variant={generationProgress.total > 0 ? "determinate" : "indeterminate"}
+            value={generationProgress.total > 0 ? (generationProgress.current / generationProgress.total) * 100 : 0}
+            sx={{ height: 8, borderRadius: 4 }}
+          />
+          
+          {generationProgress.total > 0 && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1, textAlign: 'center' }}>
+              {generationProgress.current} / {generationProgress.total} 完了
+            </Typography>
+          )}
+          
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+            しばらくお待ちください...
+          </Typography>
+        </DialogContent>
+      </Dialog>
 
     </Container>
   );

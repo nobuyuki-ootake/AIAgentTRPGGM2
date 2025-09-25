@@ -1,13 +1,18 @@
 FROM node:18-bullseye-slim
 
-# Install build dependencies for better-sqlite3
+# Install build dependencies for better-sqlite3 and Litestream
 RUN apt-get update && apt-get install -y \
     python3 \
     make \
     g++ \
     sqlite3 \
     libsqlite3-dev \
+    curl \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Litestream
+RUN curl -sf https://litestream.io/install.sh | sh
 
 # Install pnpm globally
 RUN npm install -g pnpm
@@ -32,8 +37,11 @@ COPY . .
 # Build types package first
 RUN cd packages/types && pnpm build
 
-# Create data directory
-RUN mkdir -p /app/apps/proxy-server/data
+# Create data and backup directories
+RUN mkdir -p /app/data /app/backup
+
+# Copy Litestream configuration
+COPY litestream.yml /app/litestream.yml
 
 # Set working directory to proxy-server
 WORKDIR /app/apps/proxy-server
@@ -41,5 +49,39 @@ WORKDIR /app/apps/proxy-server
 # Expose port
 EXPOSE 4001
 
-# Start development server
-CMD ["pnpm", "dev"]
+# Copy entrypoint script
+COPY scripts/docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
+
+# Multi-stage build for production
+FROM node:18-bullseye-slim AS production
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Litestream
+RUN curl -sf https://litestream.io/install.sh | sh
+
+# Copy built application
+COPY --from=0 /app /app
+
+# Create non-root user
+RUN groupadd -g 1001 appuser && \
+    useradd -r -u 1001 -g appuser appuser && \
+    chown -R appuser:appuser /app && \
+    chmod +x /app/docker-entrypoint.sh
+
+# Switch to non-root user
+USER appuser
+
+# Set working directory
+WORKDIR /app/apps/proxy-server
+
+# Expose port
+EXPOSE 4001
+
+# Development/Production conditional start
+CMD ["/app/docker-entrypoint.sh"]

@@ -40,19 +40,9 @@ export class BalanceAdjusterService {
 
     // 4. エンティティプール構造の最終化
     const entityPool: EntityPoolCollection = {
-      coreEntities: {
-        enemies: balancedCoreEntities.enemies || [],
-        events: balancedCoreEntities.events || [],
-        npcs: balancedCoreEntities.npcs || [],
-        items: balancedCoreEntities.items || [],
-        quests: balancedCoreEntities.quests || []
-      },
-      bonusEntities: {
-        practicalRewards: balancedBonusEntities.practicalRewards || [],
-        trophyItems: balancedBonusEntities.trophyItems || [],
-        mysteryItems: balancedBonusEntities.mysteryItems || []
-      },
-      // 後方互換性のため
+      coreEntities: balancedCoreEntities,
+      bonusEntities: balancedBonusEntities,
+      // 後方互換性のための直接アクセス
       enemies: balancedCoreEntities.enemies || [],
       events: balancedCoreEntities.events || [],
       npcs: balancedCoreEntities.npcs || [],
@@ -62,9 +52,9 @@ export class BalanceAdjusterService {
 
     logger.info('✅ システムバランス調整完了', {
       finalMilestonesCount: finalMilestones.length,
-      totalExperiencePoints: finalMilestones.reduce((sum, m) => sum + (m.reward?.experiencePoints || 0), 0),
-      coreEntitiesBalance: this.calculateEntityBalance(entityPool.coreEntities),
-      bonusEntitiesBalance: this.calculateEntityBalance(entityPool.bonusEntities)
+      totalExperiencePoints: finalMilestones.reduce((sum: number, m: AIMilestone) => sum + (m.rewards?.experiencePoints || 0), 0),
+      coreEntitiesBalance: this.calculateEntityBalance(balancedCoreEntities),
+      bonusEntitiesBalance: this.calculateEntityBalance(balancedBonusEntities)
     });
 
     return {
@@ -79,24 +69,13 @@ export class BalanceAdjusterService {
    */
   private adjustMilestoneProgressBalance(milestones: AIMilestone[]): AIMilestone[] {
     return milestones.map(milestone => {
-      const contributions = milestone.progressContributions || [];
-      const total = contributions.reduce((sum, c) => sum + c, 0);
+      // AIMilestoneにはprogressContributionsプロパティがないため、
+      // difficultyを正規化
+      const difficultyFactor = milestone.difficulty || 5;
       
-      // 進捗合計が100%になるよう正規化
-      const normalizedContributions = total > 0 
-        ? contributions.map(c => Math.round((c / total) * 100))
-        : [33, 33, 34]; // デフォルト配分
-
-      // 端数調整
-      const normalizedTotal = normalizedContributions.reduce((sum, c) => sum + c, 0);
-      if (normalizedTotal !== 100) {
-        const diff = 100 - normalizedTotal;
-        normalizedContributions[normalizedContributions.length - 1] += diff;
-      }
-
       return {
         ...milestone,
-        progressContributions: normalizedContributions
+        difficulty: Math.max(1, Math.min(10, difficultyFactor)) // 1-10の範囲に正規化
       };
     });
   }
@@ -157,7 +136,7 @@ export class BalanceAdjusterService {
    * セッション時間に応じて経験値を調整
    */
   private adjustExperienceBalance(milestones: AIMilestone[]): AIMilestone[] {
-    const currentTotal = milestones.reduce((sum, m) => sum + (m.reward?.experiencePoints || 0), 0);
+    const currentTotal = milestones.reduce((sum: number, m: AIMilestone) => sum + (m.rewards?.experiencePoints || 0), 0);
     const targetTotal = milestones.length * 100; // マイルストーンあたり100XP目安
     
     if (currentTotal === 0) return milestones;
@@ -166,9 +145,9 @@ export class BalanceAdjusterService {
     
     return milestones.map(milestone => ({
       ...milestone,
-      reward: {
-        ...milestone.reward,
-        experiencePoints: Math.round((milestone.reward?.experiencePoints || 0) * adjustmentRatio)
+      rewards: {
+        ...milestone.rewards,
+        experiencePoints: Math.round((milestone.rewards?.experiencePoints || 0) * adjustmentRatio)
       }
     }));
   }
@@ -261,12 +240,12 @@ export class BalanceAdjusterService {
         trophyItems: adjustCategory(entityPool.bonusEntities?.trophyItems || []),
         mysteryItems: adjustCategory(entityPool.bonusEntities?.mysteryItems || [])
       },
-      // 後方互換性のため
-      enemies: adjustCategory(entityPool.coreEntities?.enemies || []),
-      events: adjustCategory(entityPool.coreEntities?.events || []),
-      npcs: adjustCategory(entityPool.coreEntities?.npcs || []),
-      items: adjustCategory(entityPool.coreEntities?.items || []),
-      quests: adjustCategory(entityPool.coreEntities?.quests || [])
+      // 後方互換性のための直接エンティティアクセス
+      enemies: adjustCategory(entityPool.enemies || []),
+      events: adjustCategory(entityPool.events || []),
+      npcs: adjustCategory(entityPool.npcs || []),
+      items: adjustCategory(entityPool.items || []),
+      quests: adjustCategory(entityPool.quests || [])
     };
   }
 }

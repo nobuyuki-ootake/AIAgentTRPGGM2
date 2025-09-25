@@ -62,20 +62,67 @@ export default defineConfig({
       testMatch: /.*\.setup\.ts/,
     },
     
-    /* Chrome - メインテスト環境 */
+    /* Critical Priority Tests - 基本機能（常時実行） */
     {
-      name: 'chromium',
+      name: 'critical',
+      testMatch: /.*\/(core|pages)\/.*\.spec\.ts$/,
       use: { 
         ...devices['Desktop Chrome'],
-        // TRPGアプリに適したビューポート
         viewport: { width: 1920, height: 1080 }
       },
       dependencies: ['setup'],
     },
 
-    /* Firefox - クロスブラウザ検証 */
+    /* AI Integration Tests - AI機能（長時間実行を考慮） */
     {
-      name: 'firefox',
+      name: 'ai-integration',
+      testMatch: /.*\/ai-integration\/.*\.e2e\.spec\.ts$/,
+      use: { 
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1920, height: 1080 }
+      },
+      dependencies: ['setup'],
+      timeout: 120000, // AI処理のため2分に延長
+    },
+
+    /* WebSocket Tests - リアルタイム機能 */
+    {
+      name: 'websocket',
+      testMatch: /.*\/websocket\/.*\.e2e\.spec\.ts$/,
+      use: { 
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1920, height: 1080 }
+      },
+      dependencies: ['setup'],
+      timeout: 90000, // WebSocket接続テストのため1.5分
+    },
+
+    /* Error Handling Tests - エラー処理 */
+    {
+      name: 'error-handling',
+      testMatch: /.*\/error-handling\/.*\.e2e\.spec\.ts$/,
+      use: { 
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1920, height: 1080 }
+      },
+      dependencies: ['setup'],
+    },
+
+    /* Feature Tests - その他機能テスト */
+    {
+      name: 'features',
+      testMatch: /.*\/features\/.*\.spec\.ts$/,
+      use: { 
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1920, height: 1080 }
+      },
+      dependencies: ['setup'],
+    },
+
+    /* Cross-browser Tests - クロスブラウザ検証（重要なテストのみ） */
+    {
+      name: 'firefox-critical',
+      testMatch: /.*\/(core|pages)\/.*\.spec\.ts$/,
       use: { 
         ...devices['Desktop Firefox'],
         viewport: { width: 1920, height: 1080 }
@@ -83,9 +130,9 @@ export default defineConfig({
       dependencies: ['setup'],
     },
 
-    /* Safari - クロスブラウザ検証 */
     {
-      name: 'webkit',
+      name: 'webkit-critical',
+      testMatch: /.*\/(core|pages)\/.*\.spec\.ts$/,
       use: { 
         ...devices['Desktop Safari'],
         viewport: { width: 1920, height: 1080 }
@@ -93,15 +140,17 @@ export default defineConfig({
       dependencies: ['setup'],
     },
 
-    /* モバイル検証 */
+    /* Mobile Tests - モバイル対応確認 */
     {
-      name: 'Mobile Chrome',
+      name: 'mobile-chrome',
+      testMatch: /.*\/(core|pages)\/.*\.spec\.ts$/,
       use: { ...devices['Pixel 5'] },
       dependencies: ['setup'],
     },
 
     {
-      name: 'Mobile Safari',
+      name: 'mobile-safari',
+      testMatch: /.*\/(core|pages)\/.*\.spec\.ts$/,
       use: { ...devices['iPhone 12'] },
       dependencies: ['setup'],
     },

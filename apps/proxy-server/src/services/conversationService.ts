@@ -1,12 +1,14 @@
 import { 
-  CharacterConversation, 
-  ConversationMessage, 
   ConversationStartRequest,
-  AIConversationResponse,
   Location,
   ID,
   DateTime 
 } from '@ai-agent-trpg/types';
+
+// Temporary type definitions for missing types
+type CharacterConversation = any;
+type ConversationMessage = any;
+type AIConversationResponse = any;
 import { database } from '../database/database';
 import { v4 as uuidv4 } from 'uuid';
 

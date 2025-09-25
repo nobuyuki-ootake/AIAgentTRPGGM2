@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Shared TypeScript type definitions for TRPG entities",
   "main": "dist/index.js",
+  "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
     "dist"
@@ -16,6 +17,7 @@
   },
   "devDependencies": {
     "@types/jest": "^29.5.0",
+    "@types/node": "^20.0.0",
     "@typescript-eslint/eslint-plugin": "^5.57.0",
     "@typescript-eslint/parser": "^5.57.0",
     "eslint": "^8.37.0",

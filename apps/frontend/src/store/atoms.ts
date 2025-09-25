@@ -1,5 +1,5 @@
 import { atom } from 'recoil';
-import { TRPGCampaign, Character, SessionState } from '@ai-agent-trpg/types';
+import { TRPGCampaign, Character, SessionState, GMNotification } from '@ai-agent-trpg/types';
 
 // ==========================================
 // キャンペーン関連の状態
@@ -185,9 +185,11 @@ export const playerCharacterAtom = atom<Character | null>({
 
 interface Notification {
   id: string;
-  type: 'success' | 'error' | 'warning' | 'info';
+  type: 'success' | 'error' | 'warning' | 'info' | '404-error';
   message: string;
   timestamp: string;
+  persistent?: boolean; // 表示時間制限なしフラグ
+  details?: string; // エラー詳細情報
 }
 
 export const notificationsAtom = atom<Notification[]>({
@@ -248,4 +250,179 @@ export const formDirtyAtom = atom<boolean>({
 export const unsavedChangesAtom = atom<boolean>({
   key: 'unsavedChanges',
   default: false,
+});
+
+// ==========================================
+// Phase 4-1: GM通知システム関連の状態
+// ==========================================
+
+export const gmNotificationsAtom = atom<GMNotification[]>({
+  key: 'gmNotifications',
+  default: [],
+});
+
+export const gmNotificationUnreadCountAtom = atom<number>({
+  key: 'gmNotificationUnreadCount',
+  default: 0,
+});
+
+export const gmNotificationSettingsAtom = atom<{
+  enableSound: boolean;
+  enableDesktop: boolean;
+  autoMarkAsRead: boolean;
+  priorityFilter: ('high' | 'medium' | 'low')[];
+}>({
+  key: 'gmNotificationSettings',
+  default: {
+    enableSound: true,
+    enableDesktop: true,
+    autoMarkAsRead: false,
+    priorityFilter: ['high', 'medium', 'low'],
+  },
+});
+
+export const gmNotificationLoadingAtom = atom<boolean>({
+  key: 'gmNotificationLoading',
+  default: false,
+});
+
+export const gmNotificationErrorAtom = atom<string | null>({
+  key: 'gmNotificationError',
+  default: null,
+});
+
+// ==========================================
+// Phase 4-4.2: ナラティブフィードバック関連の状態
+// ==========================================
+
+export interface NarrativeFeedback {
+  id: string;
+  sessionId: string;
+  milestoneName: string;
+  mainNarrative: {
+    title: string;
+    content: string;
+    tone: 'dramatic' | 'triumphant' | 'mysterious' | 'contemplative' | 'tense';
+    length: 'brief' | 'standard' | 'detailed';
+  };
+  narrativeWeight: 'minor' | 'significant' | 'major' | 'pivotal';
+  timestamp: string;
+  isDetailedFeedback: boolean;
+  isRead: boolean;
+}
+
+export const narrativeFeedbacksAtom = atom<NarrativeFeedback[]>({
+  key: 'narrativeFeedbacks',
+  default: [],
+});
+
+export const narrativeFeedbackUnreadCountAtom = atom<number>({
+  key: 'narrativeFeedbackUnreadCount',
+  default: 0,
+});
+
+export const narrativeFeedbackSettingsAtom = atom<{
+  enableDetailedDisplay: boolean;
+  enableChatIntegration: boolean;
+  enableSoundForMajor: boolean;
+  weightFilter: ('minor' | 'significant' | 'major' | 'pivotal')[];
+  tonePreference: ('dramatic' | 'triumphant' | 'mysterious' | 'contemplative' | 'tense')[];
+}>({
+  key: 'narrativeFeedbackSettings',
+  default: {
+    enableDetailedDisplay: true,
+    enableChatIntegration: true,
+    enableSoundForMajor: true,
+    weightFilter: ['minor', 'significant', 'major', 'pivotal'],
+    tonePreference: ['dramatic', 'triumphant', 'mysterious', 'contemplative', 'tense'],
+  },
+});
+
+export const narrativeFeedbackLoadingAtom = atom<boolean>({
+  key: 'narrativeFeedbackLoading',
+  default: false,
+});
+
+export const narrativeFeedbackErrorAtom = atom<string | null>({
+  key: 'narrativeFeedbackError',
+  default: null,
+});
+
+// ==========================================
+// セッション初期化3層構造進捗システム
+// ==========================================
+
+export type SessionInitializationPhase = 'scenario' | 'milestone' | 'entity';
+
+export interface SessionInitializationProgressDetail {
+  phase: SessionInitializationPhase;
+  phaseName: string;
+  progress: number; // 0-100
+  status: 'pending' | 'in_progress' | 'completed' | 'error';
+  currentTask: string;
+  completedTasks: string[];
+  totalTasks: number;
+  estimatedTimeRemaining: number; // seconds
+  startTime?: string;
+  endTime?: string;
+  error?: string;
+}
+
+export interface SessionInitializationProgress {
+  isInitializing: boolean;
+  currentPhase: SessionInitializationPhase | null;
+  overallProgress: number; // 0-100
+  phases: {
+    scenario: SessionInitializationProgressDetail;
+    milestone: SessionInitializationProgressDetail;
+    entity: SessionInitializationProgressDetail;
+  };
+  sessionId: string | null;
+  campaignId: string | null;
+  startTime?: string;
+  endTime?: string;
+  error?: string;
+}
+
+export const sessionInitializationProgressAtom = atom<SessionInitializationProgress>({
+  key: 'sessionInitializationProgress',
+  default: {
+    isInitializing: false,
+    currentPhase: null,
+    overallProgress: 0,
+    phases: {
+      scenario: {
+        phase: 'scenario',
+        phaseName: 'シナリオ生成',
+        progress: 0,
+        status: 'pending',
+        currentTask: '',
+        completedTasks: [],
+        totalTasks: 0,
+        estimatedTimeRemaining: 0,
+      },
+      milestone: {
+        phase: 'milestone',
+        phaseName: 'マイルストーン生成',
+        progress: 0,
+        status: 'pending',
+        currentTask: '',
+        completedTasks: [],
+        totalTasks: 0,
+        estimatedTimeRemaining: 0,
+      },
+      entity: {
+        phase: 'entity',
+        phaseName: 'エンティティ生成',
+        progress: 0,
+        status: 'pending',
+        currentTask: '',
+        completedTasks: [],
+        totalTasks: 0,
+        estimatedTimeRemaining: 0,
+      },
+    },
+    sessionId: null,
+    campaignId: null,
+  },
 });

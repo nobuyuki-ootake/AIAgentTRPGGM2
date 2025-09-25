@@ -69,9 +69,11 @@ export class TimeManagementService {
   // デフォルトのターン設定
   private getDefaultTurnSettings(): TurnSettings {
     return {
-      maxActionsPerDay: 4,
-      maxDays: 30,
+      actionsPerDay: 4,
+      totalDays: 30,
       dayPeriods: this.getDefaultDayPeriods(),
+      maxActionsPerDay: 4, // 互換性のため
+      maxDays: 30, // 互換性のため
       autoProgressDay: true,
       restRequired: true,
       simultaneousTurns: false,
@@ -94,8 +96,10 @@ export class TimeManagementService {
     let finalSettings: TurnSettings;
     if (sessionConfig) {
       const configSettings: Partial<TurnSettings> = {
-        maxActionsPerDay: sessionConfig.actionsPerDay,
-        maxDays: sessionConfig.totalDays,
+        actionsPerDay: sessionConfig.actionsPerDay,
+        totalDays: sessionConfig.totalDays,
+        maxActionsPerDay: sessionConfig.actionsPerDay, // 互換性のため
+        maxDays: sessionConfig.totalDays, // 互換性のため
         dayPeriods: this.generateDayPeriods(sessionConfig),
       };
       finalSettings = { ...defaultSettings, ...configSettings, ...settings };
@@ -108,11 +112,15 @@ export class TimeManagementService {
       sessionId,
       campaignId,
       currentDay: 1,
-      maxDays: finalSettings.maxDays,
-      currentPhase: 'planning',
-      turnOrder: [],
-      phaseStartTime: now,
-      settings: finalSettings,
+      currentPeriod: 'morning',
+      totalDays: finalSettings.totalDays,
+      actionsPerDay: finalSettings.actionsPerDay,
+      dayPeriods: finalSettings.dayPeriods,
+      maxDays: finalSettings.maxDays, // 互換性のため
+      currentPhase: 'planning', // 互換性のため
+      turnOrder: [], // 互換性のため
+      phaseStartTime: now, // 互換性のため
+      settings: finalSettings, // 互換性のため
       createdAt: now,
       updatedAt: now,
     };
@@ -152,17 +160,22 @@ export class TimeManagementService {
     
     if (!row) return null;
 
+    const settings = JSON.parse(row.settings);
     return {
       id: row.id,
       sessionId: row.session_id,
       campaignId: row.campaign_id,
       currentDay: row.current_day,
-      maxDays: row.max_days,
-      currentPhase: row.current_phase,
-      activeCharacterId: row.active_character_id,
-      turnOrder: JSON.parse(row.turn_order),
-      phaseStartTime: row.phase_start_time,
-      settings: JSON.parse(row.settings),
+      currentPeriod: row.current_period || 'morning',
+      totalDays: settings?.totalDays || row.max_days || 30,
+      actionsPerDay: settings?.actionsPerDay || 4,
+      dayPeriods: settings?.dayPeriods || this.getDefaultDayPeriods(),
+      maxDays: row.max_days, // 互換性のため
+      currentPhase: row.current_phase, // 互換性のため
+      activeCharacterId: row.active_character_id, // 互換性のため
+      turnOrder: JSON.parse(row.turn_order), // 互換性のため
+      phaseStartTime: row.phase_start_time, // 互換性のため
+      settings: settings, // 互換性のため
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
@@ -220,7 +233,9 @@ export class TimeManagementService {
       campaignId,
       sessionId,
       dayNumber: newDayNumber,
-      currentDayPeriod: 0, // 現在の日単位分割（新フィールド名）
+      currentPeriod: 'morning',
+      completedPeriods: [],
+      currentDayPeriod: 0, // 互換性のため
       actionsRemaining: 4, // デフォルト
       isComplete: false,
       events: [],
@@ -297,10 +312,12 @@ export class TimeManagementService {
       campaignId: row.campaign_id,
       sessionId: row.session_id,
       dayNumber: row.day_number,
-      currentDayPeriod: row.current_time_slot, // DBの古いカラム名から新フィールド名にマッピング
+      currentPeriod: row.current_period || 'morning',
+      completedPeriods: JSON.parse(row.completed_periods || '[]'),
+      currentDayPeriod: row.current_time_slot, // 互換性のため
       actionsRemaining: row.actions_remaining,
       isComplete: row.is_complete === 1,
-      events: JSON.parse(row.events),
+      events: JSON.parse(row.events || '[]'),
       createdAt: row.created_at,
       completedAt: row.completed_at,
     };
@@ -318,7 +335,7 @@ export class TimeManagementService {
       throw new Error('No active game day found');
     }
 
-    if (currentDay.actionsRemaining <= 0) {
+    if ((currentDay.actionsRemaining || 0) <= 0) {
       return {
         success: false,
         actionsRemaining: 0,
@@ -340,7 +357,7 @@ export class TimeManagementService {
     await this.addDayEvent(currentDay.id, event);
 
     // 行動回数を減らす
-    const newActionsRemaining = currentDay.actionsRemaining - 1;
+    const newActionsRemaining = (currentDay.actionsRemaining || 0) - 1;
     await this.updateGameDay(currentDay.id, {
       actionsRemaining: newActionsRemaining,
     });
@@ -360,9 +377,10 @@ export class TimeManagementService {
     }
 
     const turnState = await this.getTurnStateByCompaign(campaignId);
-    const dayPeriods = turnState?.settings.dayPeriods || this.getDefaultDayPeriods();
+    const dayPeriods = turnState?.settings?.dayPeriods || this.getDefaultDayPeriods();
 
-    let newDayPeriod = currentDay.currentDayPeriod + 1;
+    const currentDayPeriodNum = typeof currentDay.currentDayPeriod === 'number' ? currentDay.currentDayPeriod : 0;
+    let newDayPeriod = currentDayPeriodNum + 1;
     let newDay: number | undefined;
     let message = '';
 
@@ -377,7 +395,7 @@ export class TimeManagementService {
       newDay = currentDay.dayNumber + 1;
       
       // 最大日数チェック
-      if (turnState && newDay > turnState.maxDays) {
+      if (turnState && newDay > (turnState.maxDays || turnState.totalDays)) {
         message = 'キャンペーン期間が終了しました！';
         return { newDayPeriod: 0, newDay, message };
       }
@@ -407,8 +425,9 @@ export class TimeManagementService {
     }
 
     const turnState = await this.getTurnStateByCompaign(campaignId);
-    const dayPeriods = turnState?.settings.dayPeriods || this.getDefaultDayPeriods();
-    const currentPeriod = dayPeriods.find(period => period.order === currentDay.currentDayPeriod);
+    const dayPeriods = turnState?.settings?.dayPeriods || this.getDefaultDayPeriods();
+    const currentDayPeriodNum = typeof currentDay.currentDayPeriod === 'number' ? currentDay.currentDayPeriod : 0;
+    const currentPeriod = dayPeriods.find(period => period.order === currentDayPeriodNum);
 
     if (!currentPeriod?.isRestPeriod) {
       return {
@@ -442,17 +461,22 @@ export class TimeManagementService {
     
     if (!row) return null;
 
+    const settings = JSON.parse(row.settings);
     return {
       id: row.id,
       sessionId: row.session_id,
       campaignId: row.campaign_id,
       currentDay: row.current_day,
-      maxDays: row.max_days,
-      currentPhase: row.current_phase,
-      activeCharacterId: row.active_character_id,
-      turnOrder: JSON.parse(row.turn_order),
-      phaseStartTime: row.phase_start_time,
-      settings: JSON.parse(row.settings),
+      currentPeriod: row.current_period || 'morning',
+      totalDays: settings?.totalDays || row.max_days || 30,
+      actionsPerDay: settings?.actionsPerDay || 4,
+      dayPeriods: settings?.dayPeriods || this.getDefaultDayPeriods(),
+      maxDays: row.max_days, // 互換性のため
+      currentPhase: row.current_phase, // 互換性のため
+      activeCharacterId: row.active_character_id, // 互換性のため
+      turnOrder: JSON.parse(row.turn_order), // 互換性のため
+      phaseStartTime: row.phase_start_time, // 互換性のため
+      settings: settings, // 互換性のため
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
@@ -514,10 +538,11 @@ export class TimeManagementService {
       return { isEnded: false };
     }
 
-    if (turnState.currentDay > turnState.maxDays) {
+    const maxDays = turnState.maxDays || turnState.totalDays;
+    if (turnState.currentDay > maxDays) {
       return { 
         isEnded: true, 
-        reason: `期間終了（${turnState.maxDays}日経過）`
+        reason: `期間終了（${maxDays}日経過）`
       };
     }
 

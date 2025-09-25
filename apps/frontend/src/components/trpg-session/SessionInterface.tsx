@@ -34,8 +34,9 @@ import {
   Flag as MilestoneIcon,
   AccessTime as TimeIcon,
   RefreshRounded,
+  Search as SearchIcon,
 } from '@mui/icons-material';
-import { SessionState, Character, Quest, Milestone, ProgressTracker, LevelUpEvent, CampaignCompletion, ID, SessionDurationConfig } from '@ai-agent-trpg/types';
+import { SessionState, Character, Quest, Milestone, ProgressTracker, LevelUpEvent, CampaignCompletion, ID, SessionDurationConfig, PartyLocation } from '@ai-agent-trpg/types';
 import { CharacterCard } from './CharacterCard';
 import { ChatPanel } from './ChatPanel';
 import { DiceRollUI } from './DiceRollUI';
@@ -48,12 +49,22 @@ import { MilestonePanel } from './MilestonePanel';
 import LocationDisplay from '../locations/LocationDisplay';
 import CharacterMovement from '../locations/CharacterMovement';
 import ConversationPanel from '../conversations/ConversationPanel';
+import { ExplorationActionPanel } from '../exploration/ExplorationActionPanel';
+import { LocationEntityDisplay } from '../locations/LocationEntityDisplay';
+import { PartyMovementDialog } from '../party-movement/PartyMovementDialog';
 import { useLocations, useLocation } from '../../hooks/useLocations';
 import { SessionDurationDialog } from './SessionDurationDialog';
 import { TimeManagementPanel } from './TimeManagementPanel';
 import { timeManagementAPI } from '../../api/timeManagement';
 import { aiGameMasterAPI, SessionInitializationResult } from '../../api/aiGameMaster';
+import { aiAgentAPI } from '../../api/aiAgent';
 import { useConversationalTRPG } from '../../hooks/useConversationalTRPG';
+import { useAIEntityManagement } from '../../hooks/useAIEntityManagement';
+import usePartyMovement from '../../hooks/usePartyMovement';
+import { useNarrativeFeedbackChatIntegration } from '../../hooks/useNarrativeFeedbackChatIntegration';
+import { NarrativeFeedbackDisplay } from '../narrative/NarrativeFeedbackDisplay';
+import { useSessionInitialization } from '../../hooks/useSessionInitialization';
+import { SessionInitializationModal } from './SessionInitializationModal';
 
 interface SessionInterfaceProps {
   session: SessionState;
@@ -113,17 +124,34 @@ export const SessionInterface: React.FC<SessionInterfaceProps> = ({
   const [characterToMove, setCharacterToMove] = useState<Character | null>(null);
   const [currentLocationId, setCurrentLocationId] = useState<string | null>(null);
   const [durationDialogOpen, setDurationDialogOpen] = useState(false);
+  const [partyMovementDialogOpen, setPartyMovementDialogOpen] = useState(false);
   
   // セッション初期化状態
-  const [isInitializing, setIsInitializing] = useState(false);
+  const sessionInitialization = useSessionInitialization();
   const [, setInitializationResult] = useState<SessionInitializationResult | null>(null);
-  const [initializationError, setInitializationError] = useState<string | null>(null);
   const [lastDurationConfig, setLastDurationConfig] = useState<SessionDurationConfig | null>(null);
   
   // 時間管理状態
   const [turnState, setTurnState] = useState<any>(null);
   const [currentDay, setCurrentDay] = useState<any>(null);
   const [, setTimeManagementLoading] = useState(false);
+
+  // パーティ位置管理状態
+  const [partyLocation, setPartyLocation] = useState<PartyLocation>({
+    sessionId: session.id,
+    currentLocationId: session.partyLocation?.currentLocationId || 'starting_location',
+    memberIds: characters.map(c => c.id),
+    lastMoveTime: new Date().toISOString(),
+    movementHistory: []
+  });
+  const [isAIControlActive, setIsAIControlActive] = useState(false);
+
+  // パーティ移動システム（一時的に無効化）
+  const partyMovement = usePartyMovement({
+    sessionId: session.id,
+    autoRefresh: false, // 無効化
+    refreshInterval: 60000 // 60秒間隔に延長
+  });
 
   // 会話ベースのTRPGフック
   const {
@@ -141,6 +169,15 @@ export const SessionInterface: React.FC<SessionInterfaceProps> = ({
     onSendMessage,
     onRollDice
   );
+
+  // AIエンティティ管理フック（一時的に無効化）
+  const aiEntityManagement = useAIEntityManagement({
+    autoRefresh: false, // 無効化
+    refreshInterval: 300000, // 5分間隔に延長
+    enableCache: true,
+    debug: false // 開発環境でのデバッグログ
+  });
+
 
 
   // Default progress tracker when not provided
@@ -271,22 +308,64 @@ export const SessionInterface: React.FC<SessionInterfaceProps> = ({
     onSendMessage(`場所で「${actionType}」を実行しました`, 'ic');
   };
 
+  // パーティ移動完了時のハンドラー
+  const handlePartyLocationChange = (newLocationId: string) => {
+    // パーティ位置を更新
+    setPartyLocation(prev => ({
+      ...prev,
+      currentLocationId: newLocationId,
+      lastMoveTime: new Date().toISOString()
+    }));
+    
+    // 現在の場所表示も更新
+    setCurrentLocationId(newLocationId);
+    
+    // チャットに移動完了メッセージを送信
+    onSendMessage(`🚶 パーティが ${newLocationId} に移動しました！`, 'ooc');
+  };
+
+  // Phase 0: シームレスAI GM制御システム
   const handleStartSessionClick = () => {
     setDurationDialogOpen(true);
   };
 
   const handleDurationConfirm = async (config: SessionDurationConfig) => {
     setDurationDialogOpen(false);
-    setIsInitializing(true);
-    setInitializationError(null);
+    sessionInitialization.startInitialization();
     setLastDurationConfig(config);
+    
+    // デバッグ: 送信するconfigの内容を確認
+    console.log('🔍 Sending SessionDurationConfig:', JSON.stringify(config, null, 2));
+    console.log('🔍 Config validation check:', {
+      hasTotalDays: !!config.totalDays,
+      hasActionsPerDay: !!config.actionsPerDay,
+      hasMilestoneCount: !!config.milestoneCount,
+      totalDays: config.totalDays,
+      actionsPerDay: config.actionsPerDay,
+      milestoneCount: config.milestoneCount
+    });
     
     try {
       // 1. セッションを開始
       onStartSession(config);
       
-      // 2. AI自動生成を実行
+      // 2. パーティ位置を初期化
+      const initialLocation = partyLocation.currentLocationId;
+      console.log(`📍 パーティ初期位置: ${initialLocation}`);
+      
+      // 3. エンティティプール生成段階
+      sessionInitialization.updateStage('entities', {
+        details: 'エネミー、NPC、アイテム、イベントを生成中...',
+        progress: 10,
+      });
+      
       console.log('🎯 セッション自動初期化開始...');
+      console.log('🔍 Characters debug:', {
+        characters,
+        characterCount: characters.length,
+        characterIds: characters.map(c => c.id),
+        firstCharacter: characters[0]
+      });
       const result = await aiGameMasterAPI.initializeSessionWithDefaults(
         session.id,
         session.campaignId,
@@ -295,28 +374,114 @@ export const SessionInterface: React.FC<SessionInterfaceProps> = ({
         'クラシックファンタジー' // デフォルトテーマ
       );
       
+      console.log('🔍 API Response result:', result);
+      
+      // 4. ゲーム概要生成段階
+      sessionInitialization.updateStage('overview', {
+        details: 'セッション導入シーンを準備完了',
+        progress: 100,
+      });
+      sessionInitialization.nextStage();
+      
+      // 5. マイルストーン生成段階
+      const milestoneCount = result?.milestones?.length || 0;
+      sessionInitialization.updateStage('milestones', {
+        details: `${milestoneCount}個のマイルストーンを生成完了`,
+        progress: 100,
+      });
+      sessionInitialization.nextStage();
+      
+      // 6. エンティティプール生成完了（null安全性チェック付き）
+      const entities = result?.entityPool?.entities?.coreEntities;
+      const enemyCount = entities?.enemies?.length || 0;
+      const npcCount = entities?.npcs?.length || 0;
+      const itemCount = entities?.items?.length || 0;
+      
+      console.log('🔍 Entity counts:', { enemyCount, npcCount, itemCount });
+      
+      sessionInitialization.updateStage('entities', {
+        details: `${enemyCount}体のエネミー、${npcCount}人のNPC、${itemCount}個のアイテムを生成完了`,
+        progress: 100,
+      });
+      
       setInitializationResult(result);
-      setInitializationError(null);
       console.log('✅ セッション自動初期化完了:', result);
       
-      // 3. 成功メッセージを表示
+      // 4. 初期化完了をマーク（AIチェーンより前に）
+      sessionInitialization.completeInitialization();
+      
+      // 5. AI GM制御を自動開始
+      setIsAIControlActive(true);
+      console.log('🤖 AI GM制御システム開始...');
+      
+      // 6. 初回AIチェーンを実行（個別のエラーハンドリング）
+      let chainResponse = null;
+      try {
+        const initialMessage = `セッションが開始されました。冒険を始めましょう！`;
+        chainResponse = await aiAgentAPI.triggerChain({
+          sessionId: session.id,
+          playerMessage: initialMessage,
+          currentLocationId: initialLocation,
+          participants: characters.map(c => c.id),
+          triggerType: 'session_start',
+          context: {
+            sessionConfig: config,
+            partySize: characters.length,
+            timeOfDay: 'morning',
+            weather: 'clear',
+            dangerLevel: 20
+          }
+        });
+        
+        console.log('🎭 AI GM初回応答:', chainResponse);
+      } catch (chainError) {
+        console.warn('⚠️ 初回AIチェーンエラー（セッション初期化は成功）:', chainError);
+        
+        // AIチェーンエラーをユーザーに通知（初期化は成功済み）
+        onSendMessage(
+          `⚠️ AI GM制御の開始に失敗しましたが、セッション初期化は完了しています。API設定を確認してから手動でゲームを進めてください。`,
+          'ooc'
+        );
+      }
+      
+      // 8. 成功メッセージを表示
       onSendMessage(
         `🎮 セッションの初期化が完了しました！${result.milestones.length}個のマイルストーンと豊富なエンティティプールが生成されました。`,
         'ooc'
       );
       
+      // 9. AI GMからの初回メッセージを表示（成功時のみ）
+      if (chainResponse && chainResponse.gmResponse && chainResponse.gmResponse.message) {
+        onSendMessage(chainResponse.gmResponse.message, 'ic');
+      }
+      
+      // 10. 利用可能なエンティティ情報を表示（成功時のみ）
+      if (chainResponse && chainResponse.contextAnalysis && chainResponse.contextAnalysis.availableEntities.length > 0) {
+        const entitySummary = chainResponse.contextAnalysis.availableEntities
+          .slice(0, 3)
+          .map(e => e.name)
+          .join('、');
+        onSendMessage(
+          `🏰 現在の場所で利用可能: ${entitySummary}など`,
+          'ooc'
+        );
+      }
+      
+      console.log('✅ シームレスAI GM制御システム開始完了');
+      
     } catch (error) {
       console.error('❌ セッション初期化エラー:', error);
       const errorMessage = error instanceof Error ? error.message : '不明なエラーが発生しました';
-      setInitializationError(errorMessage);
+      sessionInitialization.failInitialization(errorMessage);
       
       // エラーを明確に表示
       onSendMessage(
         `❌ セッション初期化に失敗しました: ${errorMessage}`,
         'ooc'
       );
-    } finally {
-      setIsInitializing(false);
+      
+      // AI制御も無効化
+      setIsAIControlActive(false);
     }
   };
 
@@ -330,7 +495,7 @@ export const SessionInterface: React.FC<SessionInterfaceProps> = ({
       
       // 初期化状態をリセット
       setInitializationResult(null);
-      setInitializationError(null);
+      sessionInitialization.resetInitialization();
       setLastDurationConfig(null);
       
       // 時間管理データをリセット
@@ -376,6 +541,13 @@ export const SessionInterface: React.FC<SessionInterfaceProps> = ({
     }
   }, [onRollDice, awaitingDiceRoll, playerCharacter]);
 
+  // 🆕 Phase 4-4.2: ナラティブフィードバックチャット統合
+  const narrativeFeedbackChatIntegration = useNarrativeFeedbackChatIntegration({
+    sessionId: session.id,
+    onSendMessage: handleSendMessage,
+    enabled: session.status === 'active',
+  });
+
   // セッション初期化のリトライ
   const handleRetryInitialization = async () => {
     if (!lastDurationConfig) {
@@ -383,40 +555,7 @@ export const SessionInterface: React.FC<SessionInterfaceProps> = ({
       return;
     }
 
-    setIsInitializing(true);
-    setInitializationError(null);
-    
-    try {
-      console.log('🔄 セッション初期化リトライ開始...');
-      const result = await aiGameMasterAPI.initializeSessionWithDefaults(
-        session.id,
-        session.campaignId,
-        lastDurationConfig,
-        characters,
-        'クラシックファンタジー'
-      );
-      
-      setInitializationResult(result);
-      setInitializationError(null);
-      console.log('✅ セッション初期化リトライ成功:', result);
-      
-      onSendMessage(
-        `🎮 セッション初期化が成功しました！${result.milestones.length}個のマイルストーンと豊富なエンティティプールが生成されました。`,
-        'ooc'
-      );
-      
-    } catch (error) {
-      console.error('❌ セッション初期化リトライ失敗:', error);
-      const errorMessage = error instanceof Error ? error.message : '不明なエラーが発生しました';
-      setInitializationError(errorMessage);
-      
-      onSendMessage(
-        `❌ セッション初期化リトライに失敗しました: ${errorMessage}`,
-        'ooc'
-      );
-    } finally {
-      setIsInitializing(false);
-    }
+    await handleDurationConfirm(lastDurationConfig);
   };
   
   // 時間管理データの読み込み
@@ -639,6 +778,23 @@ ${specificPrompt}
                 size="small"
                 variant="outlined"
               />
+              {/* パーティ位置表示 */}
+              <Chip
+                icon={<LocationIcon />}
+                label={`パーティ位置: ${partyLocation.currentLocationId}`}
+                size="small"
+                variant="outlined"
+                color="primary"
+              />
+              {/* AI GM制御状態表示 */}
+              {isAIControlActive && (
+                <Chip
+                  icon={<AssistantRounded />}
+                  label="AI GM制御中"
+                  size="small"
+                  color="secondary"
+                />
+              )}
               <Typography variant="caption" color="text.secondary">
                 GM: {session.gamemaster}
               </Typography>
@@ -646,13 +802,24 @@ ${specificPrompt}
           </Box>
           
           <Stack direction="row" spacing={1}>
-            {session.status === 'preparing' && (
+            {(() => {
+              const shouldShow = session.status === 'preparing' || session.status === 'completed' || (sessionInitialization.isInitialized && !isAIControlActive);
+              console.log('🔍 Button Display Logic:', {
+                sessionStatus: session.status,
+                isInitialized: sessionInitialization.isInitialized,
+                isAIControlActive,
+                shouldShow,
+                isInitializing: sessionInitialization.isInitializing
+              });
+              return shouldShow;
+            })() && (
               <Button
                 variant="contained"
                 startIcon={<PlayArrowRounded />}
                 onClick={handleStartSessionClick}
+                disabled={sessionInitialization.isInitializing}
               >
-                セッション開始
+                {sessionInitialization.isInitializing ? 'ゲーム開始中...' : 'ゲーム開始 (AI GM制御)'}
               </Button>
             )}
             {session.status === 'active' && (
@@ -688,57 +855,6 @@ ${specificPrompt}
           </Stack>
         </Box>
 
-        {/* セッション初期化状態表示 */}
-        {session.status === 'active' && (isInitializing || initializationError) && (
-          <Box sx={{ mt: 2 }}>
-            {isInitializing && (
-              <Alert severity="info" sx={{ mb: 1 }}>
-                <Box display="flex" alignItems="center" gap={1}>
-                  <CircularProgress size={16} />
-                  セッションを初期化中です...マイルストーンとエンティティプールを生成しています。
-                </Box>
-              </Alert>
-            )}
-            
-            {initializationError && !isInitializing && (
-              <Alert 
-                severity="error" 
-                sx={{ mb: 1 }}
-                action={
-                  <Stack direction="row" spacing={1}>
-                    <Button 
-                      color="inherit" 
-                      size="small" 
-                      onClick={handleRetryInitialization}
-                      startIcon={<RefreshRounded />}
-                    >
-                      リトライ
-                    </Button>
-                    <Button 
-                      color="inherit" 
-                      size="small" 
-                      onClick={() => setInitializationError(null)}
-                    >
-                      閉じる
-                    </Button>
-                  </Stack>
-                }
-              >
-                <Box>
-                  <Typography variant="subtitle2" gutterBottom>
-                    セッション初期化エラー
-                  </Typography>
-                  <Typography variant="body2">
-                    {initializationError}
-                  </Typography>
-                  <Typography variant="body2" sx={{ mt: 1 }}>
-                    「リトライ」ボタンでもう一度試すか、手動でセッションを進行してください。
-                  </Typography>
-                </Box>
-              </Alert>
-            )}
-          </Box>
-        )}
       </Paper>
 
       {/* メインコンテンツ */}
@@ -882,6 +998,7 @@ ${specificPrompt}
                 <Tab icon={<SecurityRounded />} label="戦闘" />
                 <Tab icon={<TimeIcon />} label="時間管理" />
                 <Tab icon={<LocationIcon />} label="場所" />
+                <Tab icon={<SearchIcon />} label="探索" />
                 <Tab icon={<QuestIcon />} label="クエスト" />
                 <Tab icon={<MilestoneIcon />} label="マイルストーン" />
                 {!isPlayerMode && <Tab icon={<AssistantRounded />} label="AI" />}
@@ -938,6 +1055,42 @@ ${specificPrompt}
                       </Alert>
                     )}
 
+                    {/* パーティ移動システム */}
+                    <Box sx={{ mb: 3 }}>
+                      <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                        🚶 パーティ移動
+                      </Typography>
+                      
+                      {/* シンプルな移動ボタン */}
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        onClick={() => setPartyMovementDialogOpen(true)}
+                        disabled={session.status !== 'active'}
+                        data-testid="party-movement-button"
+                        sx={{ mb: 1 }}
+                      >
+                        パーティ移動を提案
+                      </Button>
+                      
+                      {/* 進行中の提案がある場合の簡易表示 */}
+                      {partyMovement.activeProposal && (
+                        <Alert severity="info" sx={{ mt: 1 }}>
+                          <Typography variant="body2">
+                            移動提案中: {locations.find(loc => loc.id === partyMovement.activeProposal?.targetLocationId)?.name || '不明な場所'}
+                          </Typography>
+                          {partyMovement.votingSummary && (
+                            <Typography variant="caption" color="text.secondary">
+                              投票状況: {partyMovement.votingSummary.currentApprovals}/{partyMovement.votingSummary.requiredApprovals}
+                              {partyMovement.votingSummary.consensusReached && ' ✅ 合意成立'}
+                            </Typography>
+                          )}
+                        </Alert>
+                      )}
+                    </Box>
+
+                    <Divider sx={{ mb: 2 }} />
+
                     {/* 場所選択 */}
                     <Box sx={{ mb: 2 }}>
                       <Typography variant="subtitle2" gutterBottom>
@@ -958,7 +1111,7 @@ ${specificPrompt}
                       </Select>
                     </Box>
 
-                    {/* キャラクター移動ボタン */}
+                    {/* 個別キャラクター移動ボタン */}
                     <Box sx={{ mb: 2 }}>
                       <Typography variant="subtitle2" gutterBottom>
                         キャラクター移動
@@ -979,6 +1132,43 @@ ${specificPrompt}
                       </Stack>
                     </Box>
 
+                    {/* 場所エンティティ表示 */}
+                    {currentLocationId && (
+                      <Box sx={{ mb: 3 }}>
+                        <LocationEntityDisplay
+                          sessionId={session.id}
+                          locationId={currentLocationId}
+                          locationName={currentLocation?.name || '現在の場所'}
+                          onEntitySelect={(entity) => {
+                            console.log('🎯 Selected entity:', entity);
+                            // TODO: エンティティ選択時の処理（詳細表示や探索アクションとの連携）
+                          }}
+                          onEntityAction={(entityId, actionType) => {
+                            console.log('⚡ Entity action:', entityId, actionType);
+                            // TODO: エンティティアクション実行（探索システムとの統合）
+                          }}
+                          onLocationChanged={(oldLocationId, newLocationId) => {
+                            console.log('📍 Location changed in entity display:', {
+                              from: oldLocationId,
+                              to: newLocationId,
+                              locationName: currentLocation?.name
+                            });
+                            
+                            // チャットにメッセージを投稿
+                            onSendMessage(
+                              `📍 場所が変更されました: ${currentLocation?.name || newLocationId}`,
+                              'ooc'
+                            );
+                          }}
+                          autoRefresh={false}
+                          refreshInterval={20000}
+                          compact={false}
+                          disabled={session.status !== 'active'}
+                          showLocationChangeIndicator={true}
+                        />
+                      </Box>
+                    )}
+
                     {/* キャラクター間会話 */}
                     {currentLocationId && charactersInLocation.length > 1 && (
                       <Box sx={{ mt: 3 }}>
@@ -991,7 +1181,30 @@ ${specificPrompt}
                     )}
                   </Box>
                 )}
+                
+                {/* 探索タブ */}
                 {((isPlayerMode && activeTab === 3) || (!isPlayerMode && activeTab === 4)) && (
+                  <Box p={2} sx={{ height: '100%', overflow: 'auto' }}>
+                    <Typography variant="h6" gutterBottom>
+                      探索アクション
+                    </Typography>
+                    
+                    <ExplorationActionPanel
+                      sessionId={session.id}
+                      currentLocationId={partyLocation.currentLocationId}
+                      currentCharacterId={pcCharacters[0]?.id || ''} // 最初のPCを使用
+                      currentCharacterName={pcCharacters[0]?.name || ''}
+                      onChatMessage={(message) => {
+                        // チャットメッセージをChatPanelに転送
+                        // TODO: ChatPanelとの統合実装
+                        console.log('Exploration chat message:', message);
+                      }}
+                      disabled={session.status !== 'active'}
+                    />
+                  </Box>
+                )}
+                
+                {((isPlayerMode && activeTab === 4) || (!isPlayerMode && activeTab === 5)) && (
                   <QuestPanel
                     campaignId={session.campaignId}
                     sessionId={session.id}
@@ -1000,7 +1213,7 @@ ${specificPrompt}
                     onCreateQuest={onCreateQuest || (() => {})}
                   />
                 )}
-                {((isPlayerMode && activeTab === 4) || (!isPlayerMode && activeTab === 5)) && (
+                {((isPlayerMode && activeTab === 5) || (!isPlayerMode && activeTab === 6)) && (
                   <MilestonePanel
                     campaignId={session.campaignId}
                     milestones={milestones}
@@ -1011,7 +1224,7 @@ ${specificPrompt}
                     onCreateMilestone={onCreateMilestone || (() => {})}
                   />
                 )}
-                {!isPlayerMode && activeTab === 6 && (
+                {!isPlayerMode && activeTab === 7 && (
                   <Box sx={{ height: '100%', overflow: 'auto' }}>
                     {/* AIゲームマスター強化システム */}
                     <AIGameMasterPanel
@@ -1022,7 +1235,28 @@ ${specificPrompt}
                       quests={quests}
                       milestones={milestones}
                       onEventGenerate={handleStartChatBasedEvent}
+                      aiEntityManagement={aiEntityManagement}
                     />
+                    
+                    <Divider sx={{ my: 2 }} />
+                    
+                    {/* 🆕 Phase 4-4.2: ナラティブフィードバック表示 */}
+                    <Box p={2}>
+                      <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        📜 物語フィードバック
+                        {narrativeFeedbackChatIntegration.isIntegrationEnabled && (
+                          <Chip label="チャット統合有効" size="small" color="success" />
+                        )}
+                      </Typography>
+                      
+                      <Box sx={{ mb: 3, maxHeight: 400, overflow: 'auto' }}>
+                        <NarrativeFeedbackDisplay 
+                          sessionId={session.id}
+                          compact={false}
+                          maxItems={5}
+                        />
+                      </Box>
+                    </Box>
                     
                     <Divider sx={{ my: 2 }} />
                     
@@ -1127,11 +1361,41 @@ ${specificPrompt}
         />
       )}
 
+      {/* パーティ移動ダイアログ */}
+      <PartyMovementDialog
+        open={partyMovementDialogOpen}
+        onClose={() => setPartyMovementDialogOpen(false)}
+        sessionId={session.id}
+        currentLocationId={partyLocation.currentLocationId}
+        currentLocationName={currentLocation?.name || partyLocation.currentLocationId}
+        availableLocations={locations.map(loc => ({
+          id: loc.id,
+          name: loc.name,
+          distance: 1, // 簡略化：全ての場所を距離1とする
+          dangerLevel: loc.type === 'dungeon' ? 'dangerous' : 
+                     loc.type === 'wilderness' ? 'moderate' : 'safe'
+        }))}
+        currentCharacterId={playerCharacter?.id || pcCharacters[0]?.id}
+        onLocationChange={handlePartyLocationChange}
+        onChatMessage={handleSendMessage}
+      />
+
       {/* セッション時間設定ダイアログ */}
       <SessionDurationDialog
         open={durationDialogOpen}
         onClose={() => setDurationDialogOpen(false)}
         onConfirm={handleDurationConfirm}
+      />
+
+      {/* セッション初期化進捗モーダル */}
+      <SessionInitializationModal
+        open={sessionInitialization.isInitializing || !!sessionInitialization.error}
+        onClose={() => sessionInitialization.resetInitialization()}
+        onRetry={handleRetryInitialization}
+        stages={sessionInitialization.stages}
+        currentStage={sessionInitialization.currentStage}
+        overallProgress={sessionInitialization.overallProgress}
+        canClose={!sessionInitialization.isInitializing}
       />
 
     </Box>

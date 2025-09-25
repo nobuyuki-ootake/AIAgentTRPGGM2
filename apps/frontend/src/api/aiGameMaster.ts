@@ -215,13 +215,34 @@ interface PlayerActionResponseRequest {
   model?: string;
 }
 
-// セッション初期化関連の型定義
-interface EntityPool {
+// セッション初期化関連の型定義（バックエンドと一致させる）
+interface EntityPoolCollection {
+  coreEntities: CoreEntityCollection;
+  bonusEntities?: any;
+  // 後方互換性のための直接エンティティアクセス（オプション）
+  enemies?: EntityPoolEnemy[];
+  events?: EntityPoolEvent[];
+  npcs?: EntityPoolNPC[];
+  items?: EntityPoolItem[];
+  quests?: EntityPoolQuest[];
+}
+
+interface CoreEntityCollection {
   enemies: EntityPoolEnemy[];
   events: EntityPoolEvent[];
   npcs: EntityPoolNPC[];
   items: EntityPoolItem[];
   quests: EntityPoolQuest[];
+}
+
+interface EntityPool {
+  id: ID;
+  campaignId: ID;
+  sessionId: ID;
+  themeId?: ID;
+  entities: EntityPoolCollection;
+  generatedAt: string;
+  lastUpdated: string;
 }
 
 interface EntityPoolEnemy {
@@ -286,6 +307,24 @@ interface SessionInitializationRequest {
   campaignTheme?: string;
   provider?: string;
   model?: string;
+}
+
+interface SessionInitializationProgressUpdate {
+  phase: 'scenario' | 'milestone' | 'entity';
+  progress: number;
+  status: 'in_progress' | 'completed' | 'error';
+  currentTask: string;
+  completedTasks: string[];
+  totalTasks: number;
+  estimatedTimeRemaining: number;
+  error?: string;
+}
+
+interface SessionInitializationCallbacks {
+  onProgress?: (update: SessionInitializationProgressUpdate) => void;
+  onPhaseChange?: (phase: 'scenario' | 'milestone' | 'entity', progress: number) => void;
+  onComplete?: (result: SessionInitializationResult) => void;
+  onError?: (error: string) => void;
 }
 
 interface SessionInitializationResult {
@@ -579,7 +618,61 @@ export const aiGameMasterAPI = {
       timestamp: string;
     }>('/ai-game-master/initialize-session', request);
 
-    return response.data;
+    console.log('🔍 Initialize session raw response:', response);
+    console.log('🔍 Response structure check:', {
+      hasResponse: !!response,
+      hasData: !!response?.data,
+      hasSuccess: !!response?.success,
+      responseKeys: response ? Object.keys(response) : [],
+      dataKeys: response?.data ? Object.keys(response.data) : []
+    });
+
+    // レスポンス構造をチェックして正しいデータを返す
+    if (response && response.data && response.success) {
+      console.log('✅ Using response.data structure');
+      return response.data;
+    } else if (response && response.data) {
+      console.log('✅ Using response.data as SessionInitializationResult');
+      return response.data as SessionInitializationResult;
+    } else if (response) {
+      console.log('✅ Using response as SessionInitializationResult');
+      return response as unknown as SessionInitializationResult;
+    } else {
+      console.error('❌ Invalid response structure:', response);
+      throw new Error('Invalid response structure from initialize-session API');
+    }
+  },
+
+  /**
+   * セッション初期化（進捗コールバック付き）
+   */
+  async initializeSessionWithProgress(
+    request: SessionInitializationRequest,
+    callbacks?: SessionInitializationCallbacks
+  ): Promise<SessionInitializationResult> {
+    // WebSocketを使用した場合の進捗更新は useSessionInitialization フックで処理
+    // ここでは通常のAPI呼び出しとして実装
+    try {
+      callbacks?.onProgress?.({
+        phase: 'scenario',
+        progress: 0,
+        status: 'in_progress',
+        currentTask: 'セッション初期化を開始しています...',
+        completedTasks: [],
+        totalTasks: 16,
+        estimatedTimeRemaining: 500,
+      });
+
+      const result = await this.initializeSession(request);
+      
+      callbacks?.onComplete?.(result);
+      
+      return result;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'セッション初期化中にエラーが発生しました';
+      callbacks?.onError?.(errorMessage);
+      throw error;
+    }
   },
 
   /**
@@ -627,4 +720,6 @@ export type {
   EntityPoolQuest,
   SessionInitializationRequest,
   SessionInitializationResult,
+  SessionInitializationProgressUpdate,
+  SessionInitializationCallbacks,
 };

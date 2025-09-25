@@ -61,7 +61,7 @@ class CampaignService {
       };
       
     } catch (error) {
-      logger.error('Failed to get campaigns:', error);
+      logger.error('Failed to get campaigns:', { error });
       throw new DatabaseError('Failed to retrieve campaigns', { error });
     }
   }
@@ -79,7 +79,7 @@ class CampaignService {
       return this.mapRowToCampaign(row);
       
     } catch (error) {
-      logger.error(`Failed to get campaign ${id}:`, error);
+      logger.error(`Failed to get campaign ${id}:`, { error, campaignId: id });
       throw new DatabaseError('Failed to retrieve campaign', { error, campaignId: id });
     }
   }
@@ -90,40 +90,66 @@ class CampaignService {
       id: uuidv4(),
       name: campaignData.name!,
       description: campaignData.description || '',
-      settings: campaignData.settings!,
       status: campaignData.status || 'planning',
+      
+      // 設定情報（必須フィールド）
+      system: campaignData.system || 'D&D 5e',
+      theme: campaignData.theme || 'ファンタジー',
+      setting: campaignData.setting || '未設定',
+      settings: campaignData.settings || {},
+      level: campaignData.level || 1,
       currentLevel: campaignData.currentLevel || 1,
-      startDate: campaignData.startDate,
+      
+      // 参加者（必須フィールド）
+      gameMasterId: campaignData.gameMasterId || 'default-gm',
+      playerIds: campaignData.playerIds || [],
+      characterIds: campaignData.characterIds || [],
+      
+      // 世界設定（必須フィールド）
+      worldSettings: campaignData.worldSettings || {
+        techLevel: 'medieval',
+        magicLevel: 'medium',
+        scale: 'regional',
+        themes: [],
+        restrictions: []
+      },
+      
+      // 進行管理
+      sessions: campaignData.sessions || [],
+      currentSessionId: campaignData.currentSessionId,
+      mainQuestId: campaignData.mainQuestId,
+      
+      // エンティティ管理（データベース互換用）
+      characters: [],
+      quests: [],
+      events: [],
+      locations: [],
+      factions: [],
+      
+      // タイムライン
+      startDate: campaignData.startDate || now,
+      estimatedEndDate: campaignData.estimatedEndDate,
       endDate: campaignData.endDate,
+      lastPlayedDate: campaignData.lastPlayedDate,
       expectedDuration: campaignData.expectedDuration || 10,
+      
+      // 目標設定
       goals: campaignData.goals || {
         mainQuest: '',
         subQuests: [],
         characterGoals: {},
         storyArcs: [],
       },
-      characters: [],
-      quests: [],
-      events: [],
-      sessions: [],
-      locations: [],
-      factions: [],
-      notes: {
-        gm: '',
-        world: '',
-        npcs: '',
-        plot: '',
-        sessions: {},
-      },
-      aiContent: {
-        generatedNPCs: [],
-        generatedEvents: [],
-        generatedQuests: [],
-        seedPrompts: [],
-      },
+      
+      // メタデータ
       createdAt: now,
       updatedAt: now,
-      totalPlayTime: 0,
+      lastPlayedAt: campaignData.lastPlayedAt,
+      totalPlayTime: campaignData.totalPlayTime || 0,
+      notes: campaignData.notes || {},
+      aiContent: campaignData.aiContent || {},
+      tags: campaignData.tags || [],
+      imageUrl: campaignData.imageUrl
     };
 
     return withTransaction((db) => {
@@ -159,11 +185,11 @@ class CampaignService {
           campaign.totalPlayTime
         );
 
-        logger.info(`Campaign created: ${campaign.id} - ${campaign.name}`);
+        logger.info(`Campaign created: ${campaign.id} - ${campaign.name}`, { campaignId: campaign.id, campaignName: campaign.name });
         return campaign;
         
       } catch (error) {
-        logger.error('Failed to create campaign:', error);
+        logger.error('Failed to create campaign:', { error });
         throw new DatabaseError('Failed to create campaign', { error });
       }
     });
@@ -218,11 +244,11 @@ class CampaignService {
         id
       );
 
-      logger.info(`Campaign updated: ${id}`);
+      logger.info(`Campaign updated: ${id}`, { campaignId: id });
       return updatedCampaign;
       
     } catch (error) {
-      logger.error(`Failed to update campaign ${id}:`, error);
+      logger.error(`Failed to update campaign ${id}:`, { error, campaignId: id });
       throw new DatabaseError('Failed to update campaign', { error, campaignId: id });
     }
   }
@@ -247,11 +273,11 @@ class CampaignService {
         return false;
       }
       
-      logger.info(`Campaign deleted: ${id}`);
+      logger.info(`Campaign deleted: ${id}`, { campaignId: id });
       return true;
       
     } catch (error) {
-      logger.error(`Failed to delete campaign ${id}:`, error);
+      logger.error(`Failed to delete campaign ${id}:`, { error, campaignId: id });
       throw new DatabaseError('Failed to delete campaign', { error, campaignId: id });
     }
   }
@@ -262,7 +288,8 @@ class CampaignService {
       return null;
     }
 
-    if (!campaign.characters.includes(characterId)) {
+    if (!campaign.characters?.includes(characterId)) {
+      campaign.characters = campaign.characters || [];
       campaign.characters.push(characterId);
       return this.updateCampaign(campaignId, { characters: campaign.characters });
     }
@@ -276,8 +303,9 @@ class CampaignService {
       return null;
     }
 
-    const index = campaign.characters.indexOf(characterId);
+    const index = campaign.characters?.indexOf(characterId) ?? -1;
     if (index > -1) {
+      campaign.characters = campaign.characters || [];
       campaign.characters.splice(index, 1);
       return this.updateCampaign(campaignId, { characters: campaign.characters });
     }
@@ -290,25 +318,55 @@ class CampaignService {
       id: row.id,
       name: row.name,
       description: row.description,
-      settings: JSON.parse(row.settings),
       status: row.status,
-      currentLevel: row.current_level,
+      
+      // 設定情報（必須フィールド）
+      system: row.system || 'D&D 5e',
+      theme: row.theme || 'ファンタジー',
+      setting: row.setting || '未設定',
+      settings: JSON.parse(row.settings || '{}'),
+      level: row.level || row.current_level || 1,
+      currentLevel: row.current_level || 1,
+      
+      // 参加者（必須フィールド）
+      gameMasterId: row.game_master_id || 'default-gm',
+      playerIds: JSON.parse(row.player_ids || '[]'),
+      characterIds: JSON.parse(row.character_ids || '[]'),
+      
+      // 世界設定（必須フィールド）
+      worldSettings: JSON.parse(row.world_settings || '{"techLevel":"medieval","magicLevel":"medium","scale":"regional","themes":[],"restrictions":[]}'),
+      
+      // 進行管理
+      sessions: JSON.parse(row.sessions || '[]'),
+      currentSessionId: row.current_session_id,
+      mainQuestId: row.main_quest_id,
+      
+      // エンティティ管理
+      characters: JSON.parse(row.characters || '[]'),
+      quests: JSON.parse(row.quests || '[]'),
+      events: JSON.parse(row.events || '[]'),
+      locations: JSON.parse(row.locations || '[]'),
+      factions: JSON.parse(row.factions || '[]'),
+      
+      // タイムライン
       startDate: row.start_date,
+      estimatedEndDate: row.estimated_end_date,
       endDate: row.end_date,
-      expectedDuration: row.expected_duration,
-      goals: JSON.parse(row.goals),
-      characters: JSON.parse(row.characters),
-      quests: JSON.parse(row.quests),
-      events: JSON.parse(row.events),
-      sessions: JSON.parse(row.sessions),
-      locations: JSON.parse(row.locations),
-      factions: JSON.parse(row.factions),
-      notes: JSON.parse(row.notes),
-      aiContent: JSON.parse(row.ai_content),
+      lastPlayedDate: row.last_played_date,
+      expectedDuration: row.expected_duration || 10,
+      
+      // 目標設定
+      goals: JSON.parse(row.goals || '{"mainQuest":"","subQuests":[],"characterGoals":{},"storyArcs":[]}'),
+      
+      // メタデータ
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       lastPlayedAt: row.last_played_at,
-      totalPlayTime: row.total_play_time,
+      totalPlayTime: row.total_play_time || 0,
+      notes: JSON.parse(row.notes || '{}'),
+      aiContent: JSON.parse(row.ai_content || '{}'),
+      tags: JSON.parse(row.tags || '[]'),
+      imageUrl: row.image_url,
     };
   }
 }
